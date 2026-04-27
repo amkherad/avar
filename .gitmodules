@@ -1,0 +1,15 @@
+[submodule "src/third_party/mongoose"]
+	path = src/third_party/mongoose
+	url = git@github.com:cesanta/mongoose.git
+[submodule "src/third_party/cJSON"]
+	path = src/third_party/cJSON
+	url = git@github.com:DaveGamble/cJSON.git
+[submodule "src/third_party/libmicrohttpd"]
+	path = src/third_party/libmicrohttpd
+	url = git@github.com:svn2github/libmicrohttpd.git
+[submodule "src/third_party/curl"]
+	path = src/third_party/curl
+	url = git@github.com:curl/curl.git
+[submodule "src/third_party/libuv"]
+	path = src/third_party/libuv
+	url = git@github.com:libuv/libuv.git

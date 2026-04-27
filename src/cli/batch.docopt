@@ -1,0 +1,10 @@
+Avar Download Manager Batch
+
+Usage:
+  avar queue add <name>
+  avar queue rm <name> [--force]
+  avar queue ls [--list]
+  avar --help
+
+Options:
+  -h --help     Show help for queue command.

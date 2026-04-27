@@ -1,0 +1,22 @@
+Avar Download Manager
+
+Usage:
+  avar <url> [--qn=<queueName>]
+  avar download [--help]
+  avar queue [--help]
+  avar profile [--help]
+  avar scheduler [--help]
+  avar daemon [--help]
+  avar config [--help]
+  avar batch [--help]
+  avar --help
+  avar --version
+  avar --verbose
+
+Options:
+  -h, --help        Show this screen.
+  -v, --version     Show version.
+  --verbose         Sets the log severity to verbose.
+  --name=<name>     Give the download item a name.
+  -q=<queue>
+  -d, --detached    Detach current process and return immediately.

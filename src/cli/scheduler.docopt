@@ -1,0 +1,10 @@
+Avar Download Manager Scheduler
+
+Usage:
+  avar scheduler add <name>
+  avar scheduler rm <name> [--force]
+  avar scheduler ls [--list]
+  avar --help
+
+Options:
+  -h --help     Show help for queue command.

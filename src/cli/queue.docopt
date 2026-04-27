@@ -1,0 +1,11 @@
+Avar Download Manager Queue
+
+Usage:
+  avar queue add <queuename=name>
+  avar queue list1 pers <name>
+  avar queue rm <name> [--force]
+  avar queue ls [--list]
+  avar queue [-h | --help]
+
+Options:
+  -h --help     Show help for queue command.

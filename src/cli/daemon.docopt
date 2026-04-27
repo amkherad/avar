@@ -1,0 +1,10 @@
+Avar Download Manager Daemon
+
+Usage:
+  avar daemon start [--attached,--ports=<ports>,--http,--https]
+  avar daemon stop [--wait|--kill]
+  avar daemon restart
+  avar daemon --help
+
+Options:
+  -h --help     Show help for daemon command.
