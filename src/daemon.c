@@ -7,7 +7,6 @@
 
 #include <avar.h>
 #include <daemon.h>
-#include <daemon_cli_handler.h>
 #include <io.h>
 
 // #include <sys/types.h>
@@ -42,30 +41,6 @@ static void mg_log_to_log(char c, void *param);
 static stringa SOCK_PATH = "/tmp/avar.sock";
 static volatile bool _runDaemon = false;
 static struct mg_mgr g_mg_mgr;
-
-int handle_daemon(int argc, char *argv[]) {
-    if (argc < 3) {
-        fatal("Expected at least 3 parameters");
-    }
-
-    struct daemon_DocoptArgs args = parse_daemon_docopt(argc, argv, /* help */ 1, /* version */ VERSION_STR);
-
-    const char *cmd = argv[2];
-    if (args.start) {
-        return start_daemon();
-    }
-
-    if (args.stop) {
-        return stop_daemon();
-    }
-
-    if (args.restart) {
-        return restart_daemon();
-    }
-
-    LOG_ERROR("Unknown sub command '%s' in 'daemon'", cmd);
-    return EXIT_UNKNOWN_COMMAND;
-}
 
 void set_socket_path(stringa path) {
     SOCK_PATH = path;

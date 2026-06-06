@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "config.h"
 #include "cli.h"
+#include "stdlib.h"
 
 #define STR(x) #x
 #define TOSTR(x) STR(x)

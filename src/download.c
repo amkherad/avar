@@ -1,20 +1,15 @@
 #include <avar.h>
 #include <download.h>
-#include <download_cli_handler.h>
 
-int handle_download(int argc, char *argv[]) {
-    if (argc < 3) {
-        fatal("Expected at least 3 parameters");
+#include <stdio.h>
+
+int transient_download(const char *url, const char *queue, const char *name, bool detached) {
+    (void) name;
+    (void) detached;
+    printf("transient download: %s", url);
+    if (queue != NULL) {
+        printf(" (queue=%s)", queue);
     }
-
-    struct download_DocoptArgs args = parse_download_docopt(argc, argv, /* help */ 1, /* version */ VERSION_STR);
-
-    const char *cmd = argv[2];
-
-    LOG_ERROR("Unknown sub command '%s' in 'download'", cmd);
-    return EXIT_UNKNOWN_COMMAND;
-}
-
-int transient_download() {
+    puts("");
     return EXIT_SUCCESS;
 }

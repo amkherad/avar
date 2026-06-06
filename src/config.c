@@ -4,8 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "avar.h"
-#include "cli.h"
+#include <avar.h>
 
 struct ConfigContext {
     bool initialized;
@@ -23,19 +22,6 @@ struct ConfigPaths {
 static struct ConfigContext _config;
 
 static struct ConfigPaths get_config_path(bool user);
-
-int handle_config(int argc, char *argv[]) {
-    if (argc < 3) {
-        fatal("Expected at least 3 parameters");
-    }
-
-    struct config_DocoptArgs args = parse_config_docopt(argc, argv, /* help */ 1, /* version */ VERSION_STR);
-
-    const char *cmd = argv[2];
-
-    LOG_ERROR("Unknown sub command '%s' in 'config'", cmd);
-    return EXIT_UNKNOWN_COMMAND;
-}
 
 void ensure_initialized() {
     if (_config.initialized) {
@@ -79,17 +65,23 @@ string get_config_or_default(stringa key, string defaultValue) {
 
 string get_config(stringa key) {
     ensure_initialized();
+    (void) key;
+    return nullptr;
 }
 
 void set_config(stringa key, string value) {
     ensure_initialized();
+    (void) key;
+    (void) value;
 }
 
 void save_config(string path) {
     ensure_initialized();
+    (void) path;
 }
 
 static struct ConfigPaths get_config_path(bool user) {
+    (void) user;
     const int PATH_BUFFER_SIZE = 256;
 
     auto path = config_path(APP_ID);
