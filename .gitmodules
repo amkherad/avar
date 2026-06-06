@@ -13,3 +13,6 @@
 [submodule "src/third_party/libuv"]
 	path = src/third_party/libuv
 	url = git@github.com:libuv/libuv.git
+[submodule "src/third_party/criterion"]
+	path = src/third_party/criterion
+	url = https://github.com/Snaipe/Criterion.git

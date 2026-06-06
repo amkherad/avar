@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef VERSION_STR
 #include "avar.h"
+#endif
 
 /* ---------- helper predicates --------------------------------------- */
 static bool is_scheme(const char *s, size_t len)

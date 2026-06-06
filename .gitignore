@@ -15,6 +15,7 @@ out/
 ###########
 cmake-build-debug/
 cmake-build-release/
+cmake-build-test/
 
 # VSCode #
 ###########

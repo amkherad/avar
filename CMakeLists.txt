@@ -1,19 +1,8 @@
 ﻿cmake_minimum_required(VERSION 4.1)
 project(avar C)
-set(CMAKE_C_STANDARD 23)
 
 set(SRC_DIR "${CMAKE_SOURCE_DIR}/src")
 set(THIRD_PARTY_DIR "${SRC_DIR}/third_party")
-
-include_directories(
-        src
-        src/include
-        src/third_party
-        src/third_party/argtable3
-        src/third_party/mongoose
-)
-
-add_definitions(-DMG_ENABLE_CUSTOM_LOG=1)
 
 add_executable(${PROJECT_NAME}
         "${SRC_DIR}/main.c"
@@ -37,6 +26,21 @@ add_executable(${PROJECT_NAME}
         "${SRC_DIR}/third_party/argtable3/argtable3.c"
 )
 
+target_include_directories(${PROJECT_NAME} PRIVATE
+        src
+        src/include
+        src/third_party
+        src/third_party/argtable3
+        src/third_party/mongoose
+)
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE MG_ENABLE_CUSTOM_LOG=1)
+
+set_target_properties(${PROJECT_NAME} PROPERTIES
+        C_STANDARD 23
+        C_STANDARD_REQUIRED ON
+)
+
 if (WIN32)
     target_link_libraries(${PROJECT_NAME} ws2_32)
 elseif(UNIX AND NOT APPLE)
@@ -44,3 +48,20 @@ elseif(UNIX AND NOT APPLE)
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} m pthread)
 endif()
+
+option(BUILD_TESTING "Enable unit tests" ON)
+
+if (BUILD_TESTING)
+    set(CRITERION_DIR "${THIRD_PARTY_DIR}/criterion")
+
+    set(CTESTS OFF CACHE BOOL "" FORCE)
+    set(DEV_BUILD OFF CACHE BOOL "" FORCE)
+    set(I18N OFF CACHE BOOL "" FORCE)
+    set(THEORIES OFF CACHE BOOL "" FORCE)
+    set(LANG_CXX OFF CACHE BOOL "" FORCE)
+
+    add_subdirectory("${CRITERION_DIR}" "${CMAKE_BINARY_DIR}/criterion" EXCLUDE_FROM_ALL)
+
+    enable_testing()
+    add_subdirectory(tests)
+endif ()
