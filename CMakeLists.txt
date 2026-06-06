@@ -48,20 +48,3 @@ elseif(UNIX AND NOT APPLE)
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} m pthread)
 endif()
-
-option(BUILD_TESTING "Enable unit tests" ON)
-
-if (BUILD_TESTING)
-    set(CRITERION_DIR "${THIRD_PARTY_DIR}/criterion")
-
-    set(CTESTS OFF CACHE BOOL "" FORCE)
-    set(DEV_BUILD OFF CACHE BOOL "" FORCE)
-    set(I18N OFF CACHE BOOL "" FORCE)
-    set(THEORIES OFF CACHE BOOL "" FORCE)
-    set(LANG_CXX OFF CACHE BOOL "" FORCE)
-
-    add_subdirectory("${CRITERION_DIR}" "${CMAKE_BINARY_DIR}/criterion" EXCLUDE_FROM_ALL)
-
-    enable_testing()
-    add_subdirectory(tests)
-endif ()

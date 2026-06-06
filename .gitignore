@@ -1,4 +1,6 @@
-﻿# General OS generated files #
+﻿third_party/
+
+# General OS generated files #
 ######################
 .DS_Store
 Thumbs.db
