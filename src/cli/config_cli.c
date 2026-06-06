@@ -1,7 +1,10 @@
+#include <cJSON.h>
+
 #include <avar.h>
 #include <cli.h>
-
+#include <config.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int handle_config_get(int argc, char *argv[]);
@@ -10,6 +13,27 @@ static int handle_config_reset(int argc, char *argv[]);
 static int handle_config_reset_all(int argc, char *argv[]);
 static int handle_config_save(int argc, char *argv[]);
 static int handle_config_load(int argc, char *argv[]);
+
+static void print_config_value(const char *value, const char *format) {
+    if (format != NULL && strcmp(format, "json") == 0) {
+        cJSON *json = cJSON_CreateString(value);
+        if (json == NULL) {
+            fatal("Failed to format config value as JSON");
+        }
+
+        char *printed = cJSON_PrintUnformatted(json);
+        cJSON_Delete(json);
+        if (printed == NULL) {
+            fatal("Failed to format config value as JSON");
+        }
+
+        puts(printed);
+        cJSON_free(printed);
+        return;
+    }
+
+    puts(value);
+}
 
 static void print_config_command_help(void) {
     arg_str_t *format = arg_str0(NULL, "format", "FMT", "output format (e.g. json)");
@@ -89,14 +113,18 @@ static int handle_config_get(int argc, char *argv[]) {
         return parse_rc;
     }
 
-    printf("config get: %s", name->sval[0]);
-    if (format->count > 0) {
-        printf(" (format=%s)", format->sval[0]);
+    const char *default_arg = default_value->count > 0 ? default_value->sval[0] : NULL;
+    char *value = get_config_or_default(name->sval[0], default_arg);
+    if (value == NULL) {
+        LOG_ERROR("Config key not found: %s", name->sval[0]);
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return EXIT_FAILURE;
     }
-    if (default_value->count > 0) {
-        printf(" (default=%s)", default_value->sval[0]);
-    }
-    puts("");
+
+    const char *format_arg = format->count > 0 ? format->sval[0] : NULL;
+    print_config_value(value, format_arg);
+    free(value);
+
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return EXIT_SUCCESS;
 }
@@ -123,7 +151,11 @@ static int handle_config_set(int argc, char *argv[]) {
         return parse_rc;
     }
 
-    printf("config set: %s = %s\n", name->sval[0], value->sval[0]);
+    if (set_config(name->sval[0], value->sval[0]) != 0) {
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return EXIT_FAILURE;
+    }
+
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return EXIT_SUCCESS;
 }
@@ -149,7 +181,11 @@ static int handle_config_reset(int argc, char *argv[]) {
         return parse_rc;
     }
 
-    printf("config reset: %s\n", name->sval[0]);
+    if (reset_config(name->sval[0]) != 0) {
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return EXIT_FAILURE;
+    }
+
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return EXIT_SUCCESS;
 }
@@ -157,7 +193,7 @@ static int handle_config_reset(int argc, char *argv[]) {
 static int handle_config_reset_all(int argc, char *argv[]) {
     int sub_argc = 0;
     char **sub_argv = NULL;
-    if (cli_make_subargv(argc, argv, 2, "avar config reset-all", &sub_argc, &sub_argv) != EXIT_SUCCESS) {
+    if (cli_make_subargv(argc, argv, 3, "avar config reset-all", &sub_argc, &sub_argv) != EXIT_SUCCESS) {
         return EXIT_FAILURE;
     }
 
@@ -174,7 +210,11 @@ static int handle_config_reset_all(int argc, char *argv[]) {
         return parse_rc;
     }
 
-    puts("config reset-all");
+    if (reset_all_config() != 0) {
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return EXIT_FAILURE;
+    }
+
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return EXIT_SUCCESS;
 }
@@ -200,7 +240,11 @@ static int handle_config_save(int argc, char *argv[]) {
         return parse_rc;
     }
 
-    printf("config save: %s\n", path->sval[0]);
+    if (save_config(path->sval[0]) != 0) {
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return EXIT_FAILURE;
+    }
+
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return EXIT_SUCCESS;
 }
@@ -226,7 +270,11 @@ static int handle_config_load(int argc, char *argv[]) {
         return parse_rc;
     }
 
-    printf("config load: %s\n", path->sval[0]);
+    if (load_config(path->sval[0]) != 0) {
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return EXIT_FAILURE;
+    }
+
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return EXIT_SUCCESS;
 }

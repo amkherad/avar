@@ -37,7 +37,7 @@ char *config_path(const char *app_name) {
     return p;
 #else
     const char *xdg = getenv("XDG_CONFIG_HOME");
-    const char *base = xdg ? xdg : user_home();
+    const char *base = xdg ? xdg : get_user_home();
     size_t len = strlen(base) + 1 + strlen(app_name) + 2; /* slash */
     char *p = malloc(len);
     snprintf(p, len, "%s/%s", base, app_name);

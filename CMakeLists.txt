@@ -24,6 +24,7 @@ add_executable(${PROJECT_NAME}
         "${SRC_DIR}/cli/daemon_cli.c"
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/argtable3/argtable3.c"
+        "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -32,6 +33,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         src/third_party
         src/third_party/argtable3
         src/third_party/mongoose
+        src/third_party/cJSON
 )
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE MG_ENABLE_CUSTOM_LOG=1)
