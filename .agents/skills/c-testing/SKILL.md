@@ -16,13 +16,9 @@ Apply this skill whenever:
 
 # Preferred Stack
 
-Test runner:
-
-* CTest
-
 Unit testing:
 
-* Criterion
+* doctest
 
 Dynamic analysis:
 

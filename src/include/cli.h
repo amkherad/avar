@@ -21,6 +21,7 @@ typedef struct {
     const char *queue;
     const char *name;
     bool detached;
+    bool attached;
 } AvarArgs;
 
 int cli_run(int argc, char *argv[]);

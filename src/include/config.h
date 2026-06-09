@@ -26,4 +26,26 @@ int save_config(stringa path);
 /* Replaces the in-memory config from path. Returns 0 on success, -1 on failure. */
 int load_config(stringa path);
 
+/* Array helpers (e.g. dm.items). */
+
+size_t get_config_array_size(stringa key);
+
+/* Returns a newly allocated string for a field inside an array object, or NULL. */
+char *get_config_array_item_field(stringa key, size_t index, stringa field);
+
+/* Appends a JSON object string to an array. Returns 0 on success, -1 on failure. */
+int append_config_array_item(stringa key, stringa json_object);
+
+/* Updates the first array item where match_field == match_value. */
+int update_config_array_item(stringa key, stringa match_field, stringa match_value,
+                             stringa json_object);
+
+/* Removes the first array item where match_field == match_value. */
+int remove_config_array_item(stringa key, stringa match_field, stringa match_value);
+
+#if defined(AVAR_TESTING)
+/* Opens an isolated config file for unit tests. */
+int config_open_at(stringa config_file);
+#endif
+
 #endif

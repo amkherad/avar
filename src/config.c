@@ -12,6 +12,7 @@
 #endif
 
 #include <avar.h>
+#include <utils.h>
 
 struct ConfigContext {
     bool initialized;
@@ -440,3 +441,254 @@ int load_config(stringa path) {
     _config.root = loaded;
     return persist_config(_config.path);
 }
+
+static cJSON *resolve_array_parent(const char *key, bool create, char **leaf_out) {
+    if (key == NULL || leaf_out == NULL) {
+        return NULL;
+    }
+
+    char *leaf = NULL;
+    cJSON *parent = resolve_parent(_config.root, key, create, &leaf);
+    if (parent == NULL || leaf == NULL) {
+        free(leaf);
+        return NULL;
+    }
+
+    cJSON *array = cJSON_GetObjectItemCaseSensitive(parent, leaf);
+    if (array == NULL) {
+        if (!create) {
+            free(leaf);
+            return NULL;
+        }
+        array = cJSON_AddArrayToObject(parent, leaf);
+        if (array == NULL) {
+            free(leaf);
+            return NULL;
+        }
+    } else if (!cJSON_IsArray(array)) {
+        if (!create) {
+            free(leaf);
+            return NULL;
+        }
+        cJSON_ReplaceItemInObjectCaseSensitive(parent, leaf, cJSON_CreateArray());
+        array = cJSON_GetObjectItemCaseSensitive(parent, leaf);
+        if (array == NULL) {
+            free(leaf);
+            return NULL;
+        }
+    }
+
+    *leaf_out = leaf;
+    return array;
+}
+
+size_t get_config_array_size(const char *key) {
+    ensure_initialized();
+
+    char *leaf = NULL;
+    cJSON *array = resolve_array_parent(key, false, &leaf);
+    free(leaf);
+    if (array == NULL) {
+        return 0;
+    }
+
+    return (size_t)cJSON_GetArraySize(array);
+}
+
+char *get_config_array_item_field(const char *key, const size_t index, const char *field) {
+    ensure_initialized();
+
+    if (field == NULL) {
+        return NULL;
+    }
+
+    char *leaf = NULL;
+    cJSON *array = resolve_array_parent(key, false, &leaf);
+    free(leaf);
+    if (array == NULL) {
+        return NULL;
+    }
+
+    const cJSON *item = cJSON_GetArrayItem(array, (int)index);
+    if (item == NULL || !cJSON_IsObject(item)) {
+        return NULL;
+    }
+
+    const cJSON *value = cJSON_GetObjectItemCaseSensitive(item, field);
+    if (value == NULL) {
+        return NULL;
+    }
+
+    if (cJSON_IsString(value) && value->valuestring != NULL) {
+        return strdup(value->valuestring);
+    }
+
+    if (cJSON_IsNumber(value)) {
+        char buffer[32];
+        snprintf(buffer, sizeof buffer, "%.0f", value->valuedouble);
+        return strdup(buffer);
+    }
+
+    return NULL;
+}
+
+int append_config_array_item(const char *key, const char *json_object) {
+    ensure_initialized();
+
+    if (key == NULL || json_object == NULL) {
+        return -1;
+    }
+
+    cJSON *parsed = cJSON_Parse(json_object);
+    if (parsed == NULL || !cJSON_IsObject(parsed)) {
+        cJSON_Delete(parsed);
+        LOG_ERROR("Invalid JSON object for config array item");
+        return -1;
+    }
+
+    char *leaf = NULL;
+    cJSON *array = resolve_array_parent(key, true, &leaf);
+    free(leaf);
+    if (array == NULL) {
+        cJSON_Delete(parsed);
+        return -1;
+    }
+
+    if (!cJSON_AddItemToArray(array, parsed)) {
+        cJSON_Delete(parsed);
+        return -1;
+    }
+
+    return persist_config(_config.path);
+}
+
+int update_config_array_item(const char *key, const char *match_field,
+                             const char *match_value, const char *json_object) {
+    ensure_initialized();
+
+    if (key == NULL || match_field == NULL || match_value == NULL || json_object == NULL) {
+        return -1;
+    }
+
+    cJSON *parsed = cJSON_Parse(json_object);
+    if (parsed == NULL || !cJSON_IsObject(parsed)) {
+        cJSON_Delete(parsed);
+        return -1;
+    }
+
+    char *leaf = NULL;
+    cJSON *array = resolve_array_parent(key, false, &leaf);
+    free(leaf);
+    if (array == NULL) {
+        cJSON_Delete(parsed);
+        return -1;
+    }
+
+    const int size = cJSON_GetArraySize(array);
+    for (int i = 0; i < size; i++) {
+        cJSON *item = cJSON_GetArrayItem(array, i);
+        if (item == NULL || !cJSON_IsObject(item)) {
+            continue;
+        }
+
+        const cJSON *match = cJSON_GetObjectItemCaseSensitive(item, match_field);
+        if (match == NULL || !cJSON_IsString(match) || match->valuestring == NULL) {
+            continue;
+        }
+
+        if (strcmp(match->valuestring, match_value) != 0) {
+            continue;
+        }
+
+        cJSON_ReplaceItemInArray(array, i, parsed);
+        return persist_config(_config.path);
+    }
+
+    cJSON_Delete(parsed);
+    return -1;
+}
+
+int remove_config_array_item(const char *key, const char *match_field, const char *match_value) {
+    ensure_initialized();
+
+    if (key == NULL || match_field == NULL || match_value == NULL) {
+        return -1;
+    }
+
+    char *leaf = NULL;
+    cJSON *array = resolve_array_parent(key, false, &leaf);
+    free(leaf);
+    if (array == NULL) {
+        return -1;
+    }
+
+    const int size = cJSON_GetArraySize(array);
+    for (int i = 0; i < size; i++) {
+        cJSON *item = cJSON_GetArrayItem(array, i);
+        if (item == NULL || !cJSON_IsObject(item)) {
+            continue;
+        }
+
+        const cJSON *match = cJSON_GetObjectItemCaseSensitive(item, match_field);
+        if (match == NULL || !cJSON_IsString(match) || match->valuestring == NULL) {
+            continue;
+        }
+
+        if (strcmp(match->valuestring, match_value) != 0) {
+            continue;
+        }
+
+        cJSON_DeleteItemFromArray(array, i);
+        return persist_config(_config.path);
+    }
+
+    return -1;
+}
+
+#if defined(AVAR_TESTING)
+int config_open_at(const char *config_file) {
+    if (config_file == NULL) {
+        return -1;
+    }
+
+    if (_config.initialized) {
+        cJSON_Delete(_config.root);
+        free(_config.path);
+        free(_config.dir);
+        memset(&_config, 0, sizeof(_config));
+    }
+
+    _config.path = strdup(config_file);
+    if (_config.path == NULL) {
+        return -1;
+    }
+
+    const char *last_sep = strrchr(config_file, PATH_SEPARATOR);
+    if (last_sep != NULL) {
+        _config.dir = strndup(config_file, (size_t)(last_sep - config_file));
+    } else {
+        _config.dir = strdup(".");
+    }
+
+    if (_config.dir == NULL) {
+        free(_config.path);
+        _config.path = NULL;
+        return -1;
+    }
+
+    _config.root = load_json_file(config_file);
+    if (_config.root == NULL) {
+        _config.root = cJSON_CreateObject();
+        if (_config.root == NULL) {
+            free(_config.path);
+            free(_config.dir);
+            _config.path = NULL;
+            _config.dir = NULL;
+            return -1;
+        }
+    }
+
+    _config.initialized = true;
+    return 0;
+}
+#endif

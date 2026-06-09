@@ -28,7 +28,7 @@ Examples:
 ```text
 third_party/openssl/
 third_party/zlib/
-third_party/criterion/
+third_party/doctest/
 ```
 
 Never place third-party code in:
@@ -85,7 +85,7 @@ Expected result:
 third_party/
 ├── openssl/
 ├── zlib/
-└── criterion/
+└── doctest/
 ```
 
 ---
@@ -102,7 +102,7 @@ project/
 ├── third_party/
 │   ├── openssl/
 │   ├── zlib/
-│   └── criterion/
+│   └── doctest/
 ├── .gitmodules
 └── CMakeLists.txt
 ```

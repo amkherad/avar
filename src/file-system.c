@@ -1,12 +1,18 @@
-﻿#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+﻿#include <avar.h>
+#include <config.h>
 #include <file-system.h>
 
+#include <ctype.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
 #if defined(_WIN32)
-    #include <sys/stat.h>
     #include <direct.h>      /* _mkdir()   */
+    #include <sys/stat.h>
+    #include <windows.h>
     #define MKDIR(path) _mkdir(path)
     #define PATH_SEP '\\'
 #else
@@ -118,4 +124,208 @@ int make_dirs_in_path(const char *full_path)
 
     free(path);
     return 0;   /* success */
+}
+
+char *path_join(const char *dir, const char *name) {
+    if (dir == NULL || name == NULL) {
+        return NULL;
+    }
+
+    const size_t dir_len = strlen(dir);
+    const size_t name_len = strlen(name);
+    const bool needs_sep = dir_len > 0 && dir[dir_len - 1] != PATH_SEP && dir[dir_len - 1] != '/'
+                           && dir[dir_len - 1] != '\\';
+
+    const size_t total = dir_len + (needs_sep ? 1 : 0) + name_len + 1;
+    char *out = malloc(total);
+    if (out == NULL) {
+        return NULL;
+    }
+
+    if (needs_sep) {
+        snprintf(out, total, "%s%c%s", dir, PATH_SEPARATOR, name);
+    } else {
+        snprintf(out, total, "%s%s", dir, name);
+    }
+
+    return out;
+}
+
+static char *platform_data_dir(void) {
+#if defined(_WIN32)
+    const char *appdata = getenv("APPDATA");
+    if (appdata == NULL) {
+        appdata = get_user_home();
+    }
+    return path_join(appdata, APP_ID);
+#else
+    const char *xdg = getenv("XDG_DATA_HOME");
+    if (xdg != NULL) {
+        return path_join(xdg, APP_ID);
+    }
+    char *home = path_join(get_user_home(), ".local/share");
+    if (home == NULL) {
+        return NULL;
+    }
+    char *result = path_join(home, APP_ID);
+    free(home);
+    return result;
+#endif
+}
+
+char *default_temp_path(void) {
+    char *configured = get_config("dm.tempPath");
+    if (configured != NULL) {
+        return configured;
+    }
+
+    char *base = platform_data_dir();
+    if (base == NULL) {
+        return NULL;
+    }
+
+    char *temp = path_join(base, "temp");
+    free(base);
+    if (temp != NULL) {
+        (void)make_dirs_in_path(temp);
+    }
+    return temp;
+}
+
+char *default_download_path(void) {
+    char *configured = get_config("dm.downloadPath");
+    if (configured != NULL) {
+        return configured;
+    }
+
+#if defined(_WIN32)
+    const char *profile = getenv("USERPROFILE");
+    if (profile == NULL) {
+        profile = get_user_home();
+    }
+    return path_join(profile, "Downloads");
+#elif defined(__APPLE__)
+    char *home = path_join(get_user_home(), "Downloads");
+    if (home != NULL) {
+        (void)make_dirs_in_path(home);
+    }
+    return home;
+#else
+    const char *xdg_download = getenv("XDG_DOWNLOAD_DIR");
+    if (xdg_download != NULL) {
+        char *path = strdup(xdg_download);
+        if (path != NULL) {
+            (void)make_dirs_in_path(path);
+        }
+        return path;
+    }
+
+    char *home = path_join(get_user_home(), "Downloads");
+    if (home != NULL) {
+        (void)make_dirs_in_path(home);
+    }
+    return home;
+#endif
+}
+
+char *sanitize_filename(const char *name) {
+    if (name == NULL || name[0] == '\0') {
+        return NULL;
+    }
+
+    const size_t len = strlen(name);
+    char *out = malloc(len + 1);
+    if (out == NULL) {
+        return NULL;
+    }
+
+    size_t j = 0;
+    for (size_t i = 0; i < len; i++) {
+        const unsigned char c = (unsigned char)name[i];
+        if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<'
+            || c == '>' || c == '|' || c < 32) {
+            continue;
+        }
+        out[j++] = (char)c;
+    }
+
+    while (j > 0 && (out[j - 1] == ' ' || out[j - 1] == '.')) {
+        j--;
+    }
+
+    if (j == 0) {
+        free(out);
+        return NULL;
+    }
+
+    out[j] = '\0';
+    return out;
+}
+
+bool file_exists(const char *path) {
+    if (path == NULL) {
+        return false;
+    }
+
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+int move_file_atomic(const char *src, const char *dest) {
+    if (src == NULL || dest == NULL) {
+        return -1;
+    }
+
+#if defined(_WIN32)
+    if (MoveFileExA(src, dest, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0) {
+        return -1;
+    }
+    return 0;
+#else
+    if (rename(src, dest) != 0) {
+        if (errno != EXDEV) {
+            return -1;
+        }
+
+        FILE *in = fopen(src, "rb");
+        if (in == NULL) {
+            return -1;
+        }
+
+        FILE *out = fopen(dest, "wb");
+        if (out == NULL) {
+            fclose(in);
+            return -1;
+        }
+
+        char buffer[64 * 1024];
+        size_t n;
+        while ((n = fread(buffer, 1, sizeof buffer, in)) > 0) {
+            if (fwrite(buffer, 1, n, out) != n) {
+                fclose(in);
+                fclose(out);
+                remove(dest);
+                return -1;
+            }
+        }
+
+        if (ferror(in)) {
+            fclose(in);
+            fclose(out);
+            remove(dest);
+            return -1;
+        }
+
+        fclose(in);
+        if (fflush(out) != 0) {
+            fclose(out);
+            remove(dest);
+            return -1;
+        }
+        fclose(out);
+        remove(src);
+        return 0;
+    }
+    return 0;
+#endif
 }

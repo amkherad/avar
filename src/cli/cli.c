@@ -92,7 +92,7 @@ void cli_print_avar_help(void) {
     puts("Avar Download Manager");
     puts("");
     puts("Usage:");
-    puts("  avar <url> [--queue=<queue>] [--name=<name>] [--detached]");
+    puts("  avar <url> [--attached] [--queue=<queue>] [--name=<name>] [--detached]");
     puts("  avar dl|download <url> [--queue=<queue>]");
     puts("  avar queue add <name>");
     puts("  avar queue rm <name> [--force]");
@@ -125,10 +125,11 @@ int cli_parse_avar(int argc, char **argv, AvarArgs *out) {
     arg_str_t *queue = arg_str0(NULL, "queue", "QUEUE", "target queue name");
     arg_str_t *name = arg_str0(NULL, "name", "NAME", "download item name");
     arg_lit_t *detached = arg_lit0("d", "detached", "detach process and return immediately");
+    arg_lit_t *attached = arg_lit0(NULL, "attached", "run download in foreground with progress");
     arg_str_t *url = arg_str0(NULL, NULL, "URL", "download URL");
     arg_end_t *end = arg_end(20);
 
-    void *argtable[] = {help, version, queue, name, detached, url, end};
+    void *argtable[] = {help, version, queue, name, detached, attached, url, end};
 
     const int parse_rc = cli_run_argtable(argv[0], argtable, end, argc, argv, NULL);
     if (parse_rc != EXIT_SUCCESS) {
@@ -163,6 +164,9 @@ int cli_parse_avar(int argc, char **argv, AvarArgs *out) {
     }
     if (detached->count > 0) {
         out->detached = true;
+    }
+    if (attached->count > 0) {
+        out->attached = true;
     }
 
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);

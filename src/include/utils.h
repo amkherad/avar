@@ -12,4 +12,7 @@ bool is_valid_http_url(stringa url);
 
 int print_help(int help_message_n, const char* help_message[]);
 
+/* Duplicates at most n bytes. Caller must free(). Not available on all platforms. */
+char *strndup(stringa s, size_t n);
+
 #endif

@@ -20,7 +20,7 @@ static void print_download_command_help(void) {
     puts("Avar Download Manager - Download");
     puts("");
     puts("Usage:");
-    puts("  avar dl|download <url> [--queue=<queue>]");
+    puts("  avar dl|download <url> [--attached] [--queue=<queue>]");
     puts("  avar dl add <name>");
     puts("  avar dl rm <name> [--force]");
     puts("  avar dl ls [--list]");
@@ -71,9 +71,10 @@ static int handle_download_url(int argc, char *argv[]) {
 
     arg_str_t *url = arg_str1(NULL, NULL, "URL", "download URL");
     arg_str_t *queue = arg_str0(NULL, "queue", "QUEUE", "target queue name");
+    arg_lit_t *attached = arg_lit0(NULL, "attached", "run download in foreground with progress");
     arg_lit_t *help = arg_lit0("h", "help", "show help");
     arg_end_t *end = arg_end(20);
-    void *argtable[] = {url, queue, help, end};
+    void *argtable[] = {url, queue, attached, help, end};
 
     bool help_requested = false;
     const int parse_rc = cli_run_argtable(sub_argv[0], argtable, end, sub_argc, sub_argv, &help_requested);
@@ -88,7 +89,13 @@ static int handle_download_url(int argc, char *argv[]) {
         return EXIT_SUCCESS;
     }
 
-    const int rc = transient_download(url->sval[0], queue->count > 0 ? queue->sval[0] : NULL, NULL, false);
+    if (attached->count == 0) {
+        LOG_ERROR("Only --attached downloads are supported in this version");
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return EXIT_FAILURE;
+    }
+
+    const int rc = transient_download(url->sval[0], queue->count > 0 ? queue->sval[0] : NULL, NULL, true);
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return rc;
 }

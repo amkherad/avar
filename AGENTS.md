@@ -54,6 +54,5 @@ Project layout:
 
 ## Testing
 
-- Use CTest
-- Use Criterion for unit tests
+- Use doctest for unit tests
 - Run AddressSanitizer and UndefinedBehaviorSanitizer in CI

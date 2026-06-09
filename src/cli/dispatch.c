@@ -58,7 +58,11 @@ int cli_run(int argc, char *argv[]) {
 
     if (args.url != NULL && is_valid_http_url(args.url)) {
         LOG_DEBUG("Found a valid url '%s'", args.url);
-        return transient_download(args.url, args.queue, args.name, args.detached);
+        if (!args.attached) {
+            LOG_ERROR("Only --attached downloads are supported in this version");
+            return EXIT_FAILURE;
+        }
+        return transient_download(args.url, args.queue, args.name, true);
     }
 
     LOG_ERROR("Unknown command '%s'", cmd);

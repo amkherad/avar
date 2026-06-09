@@ -37,6 +37,7 @@ typedef enum {
 
 /* --- Severity levels ---------------------------------------------- */
 typedef enum {
+    LOG_LEVEL_TRACE = -1,
     LOG_LEVEL_VERBOSE = 0,
     LOG_LEVEL_DEBUG = 0,
     LOG_LEVEL_INFO = 1,
@@ -80,6 +81,7 @@ void _log_msg(log_level_t lvl, const char *file,
 #define VLOG(level, fmt, va_list) \
     _vlog_msg((level), __FILE__, LOG_FUNC, __LINE__, (fmt), va_list)
 
+#define LOG_DUMP(fmt, ...)  LOG(LOG_LEVEL_DEBUG,  fmt, ##__VA_ARGS__)
 #define LOG_VERBOSE(fmt, ...)  LOG(LOG_LEVEL_DEBUG,  fmt, ##__VA_ARGS__)
 #define LOG_DEBUG(fmt, ...)  LOG(LOG_LEVEL_DEBUG,  fmt, ##__VA_ARGS__)
 #define LOG_INFO(fmt, ...)   LOG(LOG_LEVEL_INFO,  fmt, ##__VA_ARGS__)
