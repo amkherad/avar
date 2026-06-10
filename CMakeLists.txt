@@ -16,6 +16,7 @@ set(AVAR_CORE_SOURCES
         "${SRC_DIR}/utils.c"
         "${SRC_DIR}/file-system.c"
         "${SRC_DIR}/config.c"
+        "${SRC_DIR}/queue.c"
         "${SRC_DIR}/http.c"
         "${SRC_DIR}/download_state.c"
         "${SRC_DIR}/download.c"

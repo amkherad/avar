@@ -95,8 +95,11 @@ void cli_print_avar_help(void) {
     puts("Usage:");
     puts("  avar <url> [--attached] [--queue=<queue>] [--name=<name>] [--detached]");
     puts("  avar dl|download <url> [--queue=<queue>]");
-    puts("  avar queue add <name>");
-    puts("  avar queue rm <name> [--force]");
+    puts("  avar queue add <name> [--description=<text>] [--tempPath=<path>] ...");
+    puts("  avar queue rm <id> [--name=<name>] [--purge-items]");
+    puts("  avar queue edit <id> [--description=<text>] ...");
+    puts("  avar queue start <id> [--name=<name>]");
+    puts("  avar queue stop <id> [--name=<name>]");
     puts("  avar queue ls");
     puts("  avar config get <name> [--format=<fmt>] [--defaultValue=<v>]");
     puts("  avar config set <name> <value>");

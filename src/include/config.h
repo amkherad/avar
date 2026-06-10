@@ -43,6 +43,15 @@ int update_config_array_item(stringa key, stringa match_field, stringa match_val
 /* Removes the first array item where match_field == match_value. */
 int remove_config_array_item(stringa key, stringa match_field, stringa match_value);
 
+/* Returns a newly allocated JSON object string for an array item, or NULL. Caller must free(). */
+char *get_config_array_item_json(stringa key, size_t index);
+
+/* Replaces the array item at index. Returns 0 on success, -1 on failure. */
+int replace_config_array_item_at(stringa key, size_t index, stringa json_object);
+
+/* Removes every array item where match_field == match_value. Returns count removed, or -1 on error. */
+int remove_config_array_items_where(stringa key, stringa match_field, stringa match_value);
+
 #if defined(AVAR_TESTING)
 /* Opens an isolated config file for unit tests. */
 int config_open_at(stringa config_file);

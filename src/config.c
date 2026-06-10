@@ -647,6 +647,95 @@ int remove_config_array_item(const char *key, const char *match_field, const cha
     return -1;
 }
 
+char *get_config_array_item_json(const char *key, const size_t index) {
+    ensure_initialized();
+
+    char *leaf = NULL;
+    cJSON *array = resolve_array_parent(key, false, &leaf);
+    free(leaf);
+    if (array == NULL) {
+        return NULL;
+    }
+
+    const cJSON *item = cJSON_GetArrayItem(array, (int)index);
+    if (item == NULL || !cJSON_IsObject(item)) {
+        return NULL;
+    }
+
+    return cJSON_PrintUnformatted(item);
+}
+
+int replace_config_array_item_at(const char *key, const size_t index, const char *json_object) {
+    ensure_initialized();
+
+    if (key == NULL || json_object == NULL) {
+        return -1;
+    }
+
+    cJSON *parsed = cJSON_Parse(json_object);
+    if (parsed == NULL || !cJSON_IsObject(parsed)) {
+        cJSON_Delete(parsed);
+        return -1;
+    }
+
+    char *leaf = NULL;
+    cJSON *array = resolve_array_parent(key, false, &leaf);
+    free(leaf);
+    if (array == NULL) {
+        cJSON_Delete(parsed);
+        return -1;
+    }
+
+    if (!cJSON_ReplaceItemInArray(array, (int)index, parsed)) {
+        cJSON_Delete(parsed);
+        return -1;
+    }
+
+    return persist_config(_config.path);
+}
+
+int remove_config_array_items_where(const char *key, const char *match_field,
+                                    const char *match_value) {
+    ensure_initialized();
+
+    if (key == NULL || match_field == NULL || match_value == NULL) {
+        return -1;
+    }
+
+    char *leaf = NULL;
+    cJSON *array = resolve_array_parent(key, false, &leaf);
+    free(leaf);
+    if (array == NULL) {
+        return 0;
+    }
+
+    int removed = 0;
+    for (int i = cJSON_GetArraySize(array) - 1; i >= 0; i--) {
+        cJSON *item = cJSON_GetArrayItem(array, i);
+        if (item == NULL || !cJSON_IsObject(item)) {
+            continue;
+        }
+
+        const cJSON *match = cJSON_GetObjectItemCaseSensitive(item, match_field);
+        if (match == NULL || !cJSON_IsString(match) || match->valuestring == NULL) {
+            continue;
+        }
+
+        if (strcmp(match->valuestring, match_value) != 0) {
+            continue;
+        }
+
+        cJSON_DeleteItemFromArray(array, i);
+        removed++;
+    }
+
+    if (removed > 0 && persist_config(_config.path) != 0) {
+        return -1;
+    }
+
+    return removed;
+}
+
 #if defined(AVAR_TESTING)
 int config_open_at(const char *config_file) {
     if (config_file == NULL) {

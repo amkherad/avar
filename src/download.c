@@ -6,6 +6,7 @@
 #include <download.h>
 #include <download_state.h>
 #include <file-system.h>
+#include <queue.h>
 #include <http.h>
 #include <mongoose.h>
 
@@ -1493,8 +1494,12 @@ int transient_download(const char *url, const char *queue, const char *name, con
             state->queued_at = format_datetime_iso();
             state->added_through = strdup(AVAR_DL_ADDED_DIRECT);
             if (queue != NULL) {
+                char *resolved = queue_resolve_id(queue, true);
+                if (resolved == NULL) {
+                    resolved = queue_resolve_id(queue, false);
+                }
                 free(state->queue_id);
-                state->queue_id = strdup(queue);
+                state->queue_id = resolved != NULL ? resolved : strdup(queue);
             }
         }
     }

@@ -52,11 +52,22 @@ avar_add_test(test_config_array
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
 
+avar_add_test(test_queue
+        test_queue.c
+        "${SRC_DIR}/queue.c"
+        "${SRC_DIR}/config.c"
+        "${SRC_DIR}/file-system.c"
+        "${SRC_DIR}/logger.c"
+        "${SRC_DIR}/utils.c"
+        "${SRC_DIR}/third_party/cJSON/cJSON.c"
+)
+
 set(AVAR_DOWNLOAD_TEST_SOURCES
         "${SRC_DIR}/logger.c"
         "${SRC_DIR}/utils.c"
         "${SRC_DIR}/file-system.c"
         "${SRC_DIR}/config.c"
+        "${SRC_DIR}/queue.c"
         "${SRC_DIR}/http.c"
         "${SRC_DIR}/download_state.c"
         "${SRC_DIR}/download.c"

@@ -10,6 +10,7 @@ Available skills:
 - performance
 - dependency-management
 - download-manager-architecture
+- queue-management
 - http-client
 - network-programming
 - memory-safety

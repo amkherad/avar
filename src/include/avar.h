@@ -100,6 +100,7 @@
 /* -------------------------------------------------------------------------- */
 
 #define AVAR_CFG_DM_ITEMS "dm.items"
+#define AVAR_CFG_DM_QUEUES "dm.queues"
 #define AVAR_CFG_DM_TEMP_PATH "dm.tempPath"
 #define AVAR_CFG_DM_DOWNLOAD_PATH "dm.downloadPath"
 #define AVAR_CFG_DM_PROGRESS_SIZE_UNIT "dm.progress.sizeUnit"
@@ -121,6 +122,10 @@
 #define DL_PROGRESS_LINE_BUF_SIZE 160U
 #define DL_PROGRESS_PERCENT_MAX 100
 #define DL_POLL_MS 50U
+
+#define AVAR_QUEUE_ID_PREFIX "queue-"
+#define AVAR_QUEUE_ID_BUF_SIZE 64U
+#define AVAR_QUEUE_NAME_MAX 128U
 
 #define AVAR_DL_ID_PREFIX "dl-"
 #define AVAR_DOWNLOAD_FALLBACK_PREFIX "download-"
@@ -151,6 +156,13 @@
 #define AVAR_FIELD_REFERER "referer"
 #define AVAR_FIELD_ADDED_THROUGH "addedThrough"
 #define AVAR_FIELD_QUEUE_ID "queueId"
+
+#define AVAR_QUEUE_FIELD_NAME "name"
+#define AVAR_QUEUE_FIELD_MAX_CONCURRENT "maxConcurrentDownloads"
+#define AVAR_QUEUE_FIELD_MAX_CONNECTIONS "maxConnections"
+#define AVAR_QUEUE_FIELD_TEMP_PATH "tempPath"
+#define AVAR_QUEUE_FIELD_DOWNLOAD_PATH "downloadPath"
+#define AVAR_QUEUE_FIELD_STARTED "started"
 #define AVAR_FIELD_ETAG "etag"
 #define AVAR_FIELD_LAST_MODIFIED "lastModified"
 #define AVAR_FIELD_CHUNK_SIZE "chunkSize"
