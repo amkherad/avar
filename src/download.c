@@ -18,6 +18,12 @@
 #include <time.h>
 #include <debug.h>
 
+#if defined(_WIN32)
+    #include <direct.h>
+#else
+    #include <unistd.h>
+#endif
+
 #define DM_ITEMS_KEY "dm.items"
 #define DL_CONNECT_TIMEOUT_MS 30000U
 #define DL_IDLE_TIMEOUT_MS 120000U
@@ -63,7 +69,19 @@ static void set_error(DownloadJob *job, const char *fmt, ...);
 
 static void close_file(DownloadJob *job);
 
-static char *build_state_path(const char *dest_dir, const char *filename);
+static char *build_job_dir(const char *temp_dir, const char *item_id);
+
+static char *build_state_path(const char *job_dir);
+
+static char *format_datetime_iso(void);
+
+static char *find_resumable_item_id(const char *url);
+
+static uint64_t job_bytes_done(const DownloadJob *job);
+
+static void sync_state_metadata(DownloadJob *job, const char *status);
+
+static void remove_job_work_dir(const char *state_path);
 
 static char *choose_filename(const char *url, const char *header_value, size_t header_len);
 
@@ -144,16 +162,102 @@ static void close_file(DownloadJob *job) {
     }
 }
 
-static char *build_state_path(const char *dest_dir, const char *filename) {
-    char *suffix_path = malloc(strlen(filename) + strlen(DL_STATE_SUFFIX) + 1);
-    if (suffix_path == NULL) {
+static char *build_job_dir(const char *temp_dir, const char *item_id) {
+    return path_join(temp_dir, item_id);
+}
+
+static char *build_state_path(const char *job_dir) {
+    return path_join(job_dir, DL_STATE_FILENAME);
+}
+
+static char *format_datetime_iso(void) {
+    const time_t now = time(NULL);
+    struct tm tm_utc;
+#if defined(_WIN32)
+    gmtime_s(&tm_utc, &now);
+#else
+    gmtime_r(&now, &tm_utc);
+#endif
+    char *buf = malloc(32);
+    if (buf == NULL) {
         return NULL;
     }
-    snprintf(suffix_path, strlen(filename) + strlen(DL_STATE_SUFFIX) + 1, "%s%s", filename,
-             DL_STATE_SUFFIX);
-    char *path = path_join(dest_dir, suffix_path);
-    free(suffix_path);
-    return path;
+    snprintf(buf, 32, "%04d-%02d-%02dT%02d:%02d:%02dZ", tm_utc.tm_year + 1900,
+             tm_utc.tm_mon + 1, tm_utc.tm_mday, tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec);
+    return buf;
+}
+
+static char *find_resumable_item_id(const char *url) {
+    const size_t count = get_config_array_size(DM_ITEMS_KEY);
+    for (size_t i = 0; i < count; i++) {
+        char *item_url = get_config_array_item_field(DM_ITEMS_KEY, i, "url");
+        char *status = get_config_array_item_field(DM_ITEMS_KEY, i, "status");
+        char *id = get_config_array_item_field(DM_ITEMS_KEY, i, "id");
+        if (item_url != NULL && status != NULL && id != NULL && strcmp(item_url, url) == 0
+            && strcmp(status, "completed") != 0) {
+            char *result = strdup(id);
+            free(item_url);
+            free(status);
+            free(id);
+            return result;
+        }
+        free(item_url);
+        free(status);
+        free(id);
+    }
+    return NULL;
+}
+
+static uint64_t job_bytes_done(const DownloadJob *job) {
+    if (job->state == NULL) {
+        return 0;
+    }
+    if (job->step == DL_STEP_STREAM) {
+        return job->stream_received;
+    }
+    return download_state_bytes_done(job->state);
+}
+
+static void sync_state_metadata(DownloadJob *job, const char *status) {
+    if (job == NULL || job->state == NULL || job->state_path == NULL) {
+        return;
+    }
+
+    free(job->state->status);
+    job->state->status = status != NULL ? strdup(status) : NULL;
+    job->state->bytes_downloaded = job_bytes_done(job);
+
+    if (job->item_id != NULL) {
+        free(job->state->id);
+        job->state->id = strdup(job->item_id);
+    }
+
+    (void) download_state_save(job->state, job->state_path);
+}
+
+static void remove_job_work_dir(const char *state_path) {
+    if (state_path == NULL) {
+        return;
+    }
+
+    remove(state_path);
+
+    const char *last_sep = strrchr(state_path, PATH_SEPARATOR);
+    if (last_sep == NULL) {
+        return;
+    }
+
+    char *job_dir = strndup(state_path, (size_t) (last_sep - state_path));
+    if (job_dir == NULL) {
+        return;
+    }
+
+#if defined(_WIN32)
+    _rmdir(job_dir);
+#else
+    rmdir(job_dir);
+#endif
+    free(job_dir);
 }
 
 static char *choose_filename(const char *url, const char *header_value, const size_t header_len) {
@@ -178,12 +282,7 @@ static char *choose_filename(const char *url, const char *header_value, const si
 
 static char *build_item_json(const DownloadJob *job, const char *status) {
     const uint64_t total = job->state != NULL ? job->state->total_size : 0;
-    uint64_t done_bytes = 0;
-    if (job->state != NULL) {
-        done_bytes = job->step == DL_STEP_STREAM
-                         ? job->stream_received
-                         : download_state_bytes_done(job->state);
-    }
+    const uint64_t done_bytes = job_bytes_done(job);
 
     cJSON *obj = cJSON_CreateObject();
     if (obj == NULL) {
@@ -194,8 +293,48 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
     cJSON_AddStringToObject(obj, "url", job->url);
     cJSON_AddStringToObject(obj, "filename", job->filename);
     cJSON_AddStringToObject(obj, "status", status);
+    if (job->state != NULL && job->state->proxy != NULL) {
+        cJSON_AddStringToObject(obj, "proxy", job->state->proxy);
+    } else {
+        cJSON_AddNullToObject(obj, "proxy");
+    }
     cJSON_AddNumberToObject(obj, "bytesDownloaded", (double) done_bytes);
     cJSON_AddNumberToObject(obj, "totalBytes", (double) total);
+
+    if (job->state != NULL && job->state->queued_at != NULL) {
+        cJSON_AddStringToObject(obj, "queuedAt", job->state->queued_at);
+    } else {
+        cJSON_AddNullToObject(obj, "queuedAt");
+    }
+    if (job->state != NULL && job->state->last_try_at != NULL) {
+        cJSON_AddStringToObject(obj, "lastTryAt", job->state->last_try_at);
+    } else {
+        cJSON_AddNullToObject(obj, "lastTryAt");
+    }
+    if (job->state != NULL && job->state->description != NULL) {
+        cJSON_AddStringToObject(obj, "description", job->state->description);
+    } else {
+        cJSON_AddNullToObject(obj, "description");
+    }
+    if (job->state != NULL && job->state->original_page != NULL) {
+        cJSON_AddStringToObject(obj, "originalPage", job->state->original_page);
+    } else {
+        cJSON_AddNullToObject(obj, "originalPage");
+    }
+    if (job->state != NULL && job->state->referer != NULL) {
+        cJSON_AddStringToObject(obj, "referer", job->state->referer);
+    } else {
+        cJSON_AddNullToObject(obj, "referer");
+    }
+    cJSON_AddStringToObject(obj, "addedThrough",
+                            job->state != NULL && job->state->added_through != NULL
+                                ? job->state->added_through
+                                : "direct");
+    if (job->state != NULL && job->state->queue_id != NULL) {
+        cJSON_AddStringToObject(obj, "queueId", job->state->queue_id);
+    } else {
+        cJSON_AddNullToObject(obj, "queueId");
+    }
 
     char *json = cJSON_PrintUnformatted(obj);
     cJSON_Delete(obj);
@@ -203,6 +342,8 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
 }
 
 static int dm_item_upsert(DownloadJob *job, const char *status) {
+    sync_state_metadata(job, status);
+
     char *json = build_item_json(job, status);
     if (json == NULL) {
         return -1;
@@ -220,9 +361,7 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
 
 static void print_progress(const DownloadJob *job) {
     const uint64_t total = job->state != NULL ? job->state->total_size : job->stream_expected;
-    uint64_t done_bytes = job->step == DL_STEP_STREAM
-                              ? job->stream_received
-                              : download_state_bytes_done(job->state);
+    const uint64_t done_bytes = job_bytes_done(job);
 
     if (total > 0) {
         const double pct = (100.0 * (double) done_bytes) / (double) total;
@@ -548,16 +687,20 @@ static bool apply_filename_from_headers(DownloadJob *job, struct mg_http_message
     free(job->filename);
     job->filename = sanitized;
 
-    char *temp_dir = default_temp_path();
+    char *job_dir = NULL;
+    if (job->state_path != NULL) {
+        const char *last_sep = strrchr(job->state_path, PATH_SEPARATOR);
+        if (last_sep != NULL) {
+            job_dir = strndup(job->state_path, (size_t) (last_sep - job->state_path));
+        }
+    }
+
     char *download_dir = default_download_path();
     free(job->temp_path);
     free(job->dest_path);
-    free(job->state_path);
-    job->temp_path = temp_dir != NULL ? path_join(temp_dir, job->filename) : NULL;
+    job->temp_path = job_dir != NULL ? path_join(job_dir, job->filename) : NULL;
     job->dest_path = download_dir != NULL ? path_join(download_dir, job->filename) : NULL;
-    job->state_path =
-            download_dir != NULL ? build_state_path(download_dir, job->filename) : NULL;
-    free(temp_dir);
+    free(job_dir);
     free(download_dir);
 
     if (job->state != NULL) {
@@ -606,8 +749,8 @@ static bool finalize_download(DownloadJob *job) {
         return false;
     }
 
-    remove(job->state_path);
     (void) dm_item_upsert(job, "completed");
+    remove_job_work_dir(job->state_path);
     print_progress(job);
     job->done = true;
     return true;
@@ -922,7 +1065,6 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
 
         job->state->chunks_done[job->active_chunk] = true;
-        (void) download_state_save(job->state, job->state_path);
         (void) dm_item_upsert(job, "downloading");
         print_progress(job);
 
@@ -1026,7 +1168,6 @@ static void job_free(DownloadJob *job) {
 }
 
 int transient_download(const char *url, const char *queue, const char *name, const bool attached) {
-    (void) queue;
     (void) name;
 
     if (!attached) {
@@ -1055,60 +1196,92 @@ int transient_download(const char *url, const char *queue, const char *name, con
         return EXIT_FAILURE;
     }
 
-    char *filename = choose_filename(url, NULL, 0);
-    if (filename == NULL) {
+    char *item_id = find_resumable_item_id(url);
+    if (item_id == NULL) {
+        char generated[64];
+        snprintf(generated, sizeof generated, "dl-%llu", (unsigned long long) time(NULL));
+        item_id = strdup(generated);
+    }
+
+    if (item_id == NULL) {
         free(temp_dir);
         free(download_dir);
-        LOG_ERROR("Failed to determine filename");
+        LOG_ERROR("Failed to allocate download id");
         return EXIT_FAILURE;
     }
 
-    char *temp_path = path_join(temp_dir, filename);
-    char *dest_path = path_join(download_dir, filename);
-    char *state_path = build_state_path(download_dir, filename);
-    free(temp_dir);
-    free(download_dir);
-
-    if (temp_path == NULL || dest_path == NULL || state_path == NULL) {
-        free(filename);
-        free(temp_path);
-        free(dest_path);
+    char *job_dir = build_job_dir(temp_dir, item_id);
+    char *state_path = job_dir != NULL ? build_state_path(job_dir) : NULL;
+    if (job_dir == NULL || state_path == NULL || make_dirs_in_path(job_dir) != 0) {
+        free(item_id);
+        free(job_dir);
         free(state_path);
-        LOG_ERROR("Failed to build download paths");
+        free(temp_dir);
+        free(download_dir);
+        LOG_ERROR("Failed to create download work directory");
         return EXIT_FAILURE;
     }
 
     DownloadState *state = download_state_load(state_path);
+    char *filename = NULL;
+    char *temp_path = NULL;
+    char *dest_path = NULL;
+
     if (state != NULL && strcmp(state->url, url) != 0) {
         download_state_free(state);
         state = NULL;
         remove(state_path);
     }
 
-    if (state == NULL) {
-        state = download_state_create(url, filename, temp_path, dest_path, 0, DL_CHUNK_SIZE);
-    } else {
-        free(filename);
-        free(temp_path);
-        free(dest_path);
-        free(state_path);
+    if (state != NULL) {
         filename = strdup(state->filename);
         temp_path = strdup(state->temp_path);
         dest_path = strdup(state->dest_path);
-        const char *dest_dir = state->dest_path;
-        const char *last_sep = strrchr(state->dest_path, PATH_SEPARATOR);
-        char *owned_dir = NULL;
-        if (last_sep != NULL) {
-            owned_dir = strndup(state->dest_path, (size_t) (last_sep - state->dest_path));
-            dest_dir = owned_dir;
+        if (state->id == NULL) {
+            state->id = strdup(item_id);
         }
-        state_path = build_state_path(dest_dir, state->filename);
-        free(owned_dir);
+        if (state->queued_at == NULL) {
+            state->queued_at = format_datetime_iso();
+        }
+        if (state->added_through == NULL) {
+            state->added_through = strdup("direct");
+        }
+        if (state->id != NULL) {
+            free(item_id);
+            item_id = strdup(state->id);
+        }
+    } else {
+        filename = choose_filename(url, NULL, 0);
+        if (filename == NULL) {
+            free(item_id);
+            free(job_dir);
+            free(state_path);
+            free(temp_dir);
+            free(download_dir);
+            LOG_ERROR("Failed to determine filename");
+            return EXIT_FAILURE;
+        }
+        temp_path = path_join(job_dir, filename);
+        dest_path = path_join(download_dir, filename);
+        state = download_state_create(url, filename, temp_path, dest_path, 0, DL_CHUNK_SIZE);
+        if (state != NULL) {
+            state->id = strdup(item_id);
+            state->queued_at = format_datetime_iso();
+            state->added_through = strdup("direct");
+            if (queue != NULL) {
+                free(state->queue_id);
+                state->queue_id = strdup(queue);
+            }
+        }
     }
 
-    if (state == NULL || filename == NULL || temp_path == NULL || dest_path == NULL
-        || state_path == NULL) {
+    free(temp_dir);
+    free(download_dir);
+    free(job_dir);
+
+    if (state == NULL || filename == NULL || temp_path == NULL || dest_path == NULL) {
         download_state_free(state);
+        free(item_id);
         free(filename);
         free(temp_path);
         free(dest_path);
@@ -1120,6 +1293,7 @@ int transient_download(const char *url, const char *queue, const char *name, con
     DownloadJob *job = calloc(1, sizeof(*job));
     if (job == NULL) {
         download_state_free(state);
+        free(item_id);
         free(filename);
         free(temp_path);
         free(dest_path);
@@ -1128,10 +1302,14 @@ int transient_download(const char *url, const char *queue, const char *name, con
         return EXIT_FAILURE;
     }
 
-    char item_id[64];
-    snprintf(item_id, sizeof item_id, "dl-%llu", (unsigned long long) time(NULL));
+    char *last_try_at = format_datetime_iso();
+    if (last_try_at != NULL) {
+        free(state->last_try_at);
+        state->last_try_at = last_try_at;
+    }
+
     job->url = strdup(url);
-    job->item_id = strdup(item_id);
+    job->item_id = item_id;
     job->filename = filename;
     job->temp_path = temp_path;
     job->dest_path = dest_path;
@@ -1140,7 +1318,7 @@ int transient_download(const char *url, const char *queue, const char *name, con
     job->use_ranges = true;
     job->last_progress_ms = mg_millis();
 
-    LOG_INFO("Downloading %s -> %s\n", url, dest_path);
+    LOG_INFO("Downloading %s <- %s", dest_path, url);
     (void) dm_item_upsert(job, "downloading");
 
     const int rc = run_download(job);

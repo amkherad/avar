@@ -21,15 +21,33 @@ static uint64_t json_get_u64(const cJSON *obj, const char *key) {
     return (uint64_t)item->valuedouble;
 }
 
+static void json_add_string_or_null(cJSON *obj, const char *key, const char *value) {
+    if (value != NULL) {
+        cJSON_AddStringToObject(obj, key, value);
+    } else {
+        cJSON_AddNullToObject(obj, key);
+    }
+}
+
 void download_state_free(DownloadState *state) {
     if (state == NULL) {
         return;
     }
 
+    free(state->id);
     free(state->url);
     free(state->filename);
     free(state->temp_path);
     free(state->dest_path);
+    free(state->status);
+    free(state->proxy);
+    free(state->queued_at);
+    free(state->last_try_at);
+    free(state->description);
+    free(state->original_page);
+    free(state->referer);
+    free(state->added_through);
+    free(state->queue_id);
     free(state->etag);
     free(state->last_modified);
     free(state->chunks_done);
@@ -48,6 +66,7 @@ DownloadState *download_state_create(const char *url, const char *filename,
     state->filename = filename != NULL ? strdup(filename) : NULL;
     state->temp_path = temp_path != NULL ? strdup(temp_path) : NULL;
     state->dest_path = dest_path != NULL ? strdup(dest_path) : NULL;
+    state->added_through = strdup("direct");
     state->total_size = total_size;
     state->chunk_size = chunk_size > 0 ? chunk_size : DL_CHUNK_SIZE;
 
@@ -117,13 +136,28 @@ DownloadState *download_state_load(const char *path) {
         return NULL;
     }
 
+    state->id = json_get_string(root, "id");
     state->url = json_get_string(root, "url");
     state->filename = json_get_string(root, "filename");
     state->temp_path = json_get_string(root, "temp_path");
     state->dest_path = json_get_string(root, "dest_path");
+    state->status = json_get_string(root, "status");
+    state->proxy = json_get_string(root, "proxy");
+    state->queued_at = json_get_string(root, "queuedAt");
+    state->last_try_at = json_get_string(root, "lastTryAt");
+    state->description = json_get_string(root, "description");
+    state->original_page = json_get_string(root, "originalPage");
+    state->referer = json_get_string(root, "referer");
+    state->added_through = json_get_string(root, "addedThrough");
+    state->queue_id = json_get_string(root, "queueId");
     state->etag = json_get_string(root, "etag");
     state->last_modified = json_get_string(root, "last_modified");
-    state->total_size = json_get_u64(root, "total_size");
+
+    state->total_size = json_get_u64(root, "totalBytes");
+    if (state->total_size == 0) {
+        state->total_size = json_get_u64(root, "total_size");
+    }
+    state->bytes_downloaded = json_get_u64(root, "bytesDownloaded");
 
     const cJSON *chunk_size = cJSON_GetObjectItemCaseSensitive(root, "chunk_size");
     if (chunk_size != NULL && cJSON_IsNumber(chunk_size)) {
@@ -166,6 +200,10 @@ DownloadState *download_state_load(const char *path) {
         return NULL;
     }
 
+    if (state->added_through == NULL) {
+        state->added_through = strdup("direct");
+    }
+
     return state;
 }
 
@@ -179,12 +217,22 @@ int download_state_save(const DownloadState *state, const char *path) {
         return -1;
     }
 
-    if (state->url != NULL) {
-        cJSON_AddStringToObject(root, "url", state->url);
-    }
-    if (state->filename != NULL) {
-        cJSON_AddStringToObject(root, "filename", state->filename);
-    }
+    json_add_string_or_null(root, "id", state->id);
+    json_add_string_or_null(root, "url", state->url);
+    json_add_string_or_null(root, "filename", state->filename);
+    json_add_string_or_null(root, "status", state->status);
+    json_add_string_or_null(root, "proxy", state->proxy);
+    cJSON_AddNumberToObject(root, "bytesDownloaded", (double)state->bytes_downloaded);
+    cJSON_AddNumberToObject(root, "totalBytes", (double)state->total_size);
+    json_add_string_or_null(root, "queuedAt", state->queued_at);
+    json_add_string_or_null(root, "lastTryAt", state->last_try_at);
+    json_add_string_or_null(root, "description", state->description);
+    json_add_string_or_null(root, "originalPage", state->original_page);
+    json_add_string_or_null(root, "referer", state->referer);
+    json_add_string_or_null(root, "addedThrough",
+                            state->added_through != NULL ? state->added_through : "direct");
+    json_add_string_or_null(root, "queueId", state->queue_id);
+
     if (state->temp_path != NULL) {
         cJSON_AddStringToObject(root, "temp_path", state->temp_path);
     }
@@ -198,7 +246,6 @@ int download_state_save(const DownloadState *state, const char *path) {
         cJSON_AddStringToObject(root, "last_modified", state->last_modified);
     }
 
-    cJSON_AddNumberToObject(root, "total_size", (double)state->total_size);
     cJSON_AddNumberToObject(root, "chunk_size", (double)state->chunk_size);
     cJSON_AddNumberToObject(root, "chunk_count", (double)state->chunk_count);
 
@@ -274,7 +321,7 @@ size_t download_state_completed_chunks(const DownloadState *state) {
 
 uint64_t download_state_bytes_done(const DownloadState *state) {
     if (state == NULL || state->chunks_done == NULL || state->chunk_count == 0) {
-        return 0;
+        return state != NULL ? state->bytes_downloaded : 0;
     }
 
     uint64_t bytes = 0;

@@ -5,17 +5,28 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define DL_STATE_SUFFIX ".avar.state"
+#define DL_STATE_FILENAME "state.json"
 #define DL_CHUNK_SIZE (256U * 1024U)
 
 typedef struct {
+    char *id;
     char *url;
     char *filename;
     char *temp_path;
     char *dest_path;
+    char *status;
+    char *proxy;
+    char *queued_at;
+    char *last_try_at;
+    char *description;
+    char *original_page;
+    char *referer;
+    char *added_through;
+    char *queue_id;
     char *etag;
     char *last_modified;
     uint64_t total_size;
+    uint64_t bytes_downloaded;
     size_t chunk_size;
     size_t chunk_count;
     bool *chunks_done;

@@ -184,7 +184,7 @@ char *default_temp_path(void) {
         return NULL;
     }
 
-    char *temp = path_join(base, "temp");
+    char *temp = path_join(base, "download-temp");
     free(base);
     if (temp != NULL) {
         (void)make_dirs_in_path(temp);
