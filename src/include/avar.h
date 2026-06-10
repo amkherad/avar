@@ -61,7 +61,7 @@
 #define AVAR_UNIT_GIBIT_PER_SEC "Gib/s"
 
 #define AVAR_DEFAULT_SIZE_UNIT AVAR_UNIT_MIB
-#define AVAR_DEFAULT_SPEED_UNIT AVAR_UNIT_MIBIT_PER_SEC
+#define AVAR_DEFAULT_SPEED_UNIT AVAR_UNIT_MIB_PER_SEC
 
 /* -------------------------------------------------------------------------- */
 /* Paths                                                                      */
@@ -116,6 +116,9 @@
 #define DL_MAX_REDIRECTS 10
 #define DL_WRITE_CHUNK_SIZE AVAR_MIB
 #define DL_PROGRESS_BAR_WIDTH 22
+#define DL_PROGRESS_PERCENT_WIDTH 3
+#define DL_PROGRESS_SPEED_NUMBER_WIDTH 6
+#define DL_PROGRESS_LINE_BUF_SIZE 160U
 #define DL_PROGRESS_PERCENT_MAX 100
 #define DL_POLL_MS 50U
 

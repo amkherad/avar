@@ -119,6 +119,15 @@ static void format_scaled_value(double value, const char *suffix, char *buf, con
     }
 }
 
+static void format_scaled_value_padded(const double value, const char *suffix,
+                                       const int number_width, char *buf, const size_t buflen) {
+    if (value < 10.0 && value != floor(value)) {
+        snprintf(buf, buflen, "%*.*f %s", number_width, 1, value, suffix);
+    } else {
+        snprintf(buf, buflen, "%*.*f %s", number_width, 0, value, suffix);
+    }
+}
+
 bool avar_size_unit_parse(const char *text, AvarSizeUnit *out) {
     if (out == NULL) {
         return false;
@@ -195,6 +204,71 @@ bool avar_speed_unit_parse(const char *text, AvarSpeedUnit *out) {
     return false;
 }
 
+static double bytes_to_scaled_value(const uint64_t bytes, const AvarSizeUnit unit) {
+    switch (unit) {
+    case AVAR_SIZE_BYTES:
+        return (double) bytes;
+    case AVAR_SIZE_KIB:
+        return (double) bytes / (double) AVAR_KIB;
+    case AVAR_SIZE_MIB:
+        return (double) bytes / (double) AVAR_MIB;
+    case AVAR_SIZE_GIB:
+        return (double) bytes / (double) AVAR_GIB;
+    }
+
+    return (double) bytes;
+}
+
+int avar_data_size_number_width(const uint64_t bytes, const AvarSizeUnit unit) {
+    if (unit == AVAR_SIZE_BYTES) {
+        return snprintf(NULL, 0, "%llu", (unsigned long long) bytes);
+    }
+
+    const double value = bytes_to_scaled_value(bytes, unit);
+    if (value < 10.0 && value != floor(value)) {
+        return snprintf(NULL, 0, "%.1f", value);
+    }
+
+    return snprintf(NULL, 0, "%.0f", value);
+}
+
+char *format_progress_percent(const int percent, char *buf, const size_t buflen) {
+    if (buf == NULL || buflen == 0) {
+        return buf;
+    }
+
+    snprintf(buf, buflen, "%*d%%", DL_PROGRESS_PERCENT_WIDTH, percent);
+    return buf;
+}
+
+char *format_data_size_padded(const uint64_t bytes, const AvarSizeUnit unit,
+                              const int number_width, char *buf, const size_t buflen) {
+    if (buf == NULL || buflen == 0) {
+        return buf;
+    }
+
+    switch (unit) {
+    case AVAR_SIZE_BYTES:
+        snprintf(buf, buflen, "%*llu %s", number_width, (unsigned long long) bytes,
+                 AVAR_UNIT_BYTES);
+        break;
+    case AVAR_SIZE_KIB:
+        format_scaled_value_padded((double) bytes / (double) AVAR_KIB, AVAR_UNIT_KIB, number_width,
+                                   buf, buflen);
+        break;
+    case AVAR_SIZE_MIB:
+        format_scaled_value_padded((double) bytes / (double) AVAR_MIB, AVAR_UNIT_MIB, number_width,
+                                   buf, buflen);
+        break;
+    case AVAR_SIZE_GIB:
+        format_scaled_value_padded((double) bytes / (double) AVAR_GIB, AVAR_UNIT_GIB, number_width,
+                                   buf, buflen);
+        break;
+    }
+
+    return buf;
+}
+
 char *format_data_size(const uint64_t bytes, const AvarSizeUnit unit, char *buf,
                        const size_t buflen) {
     if (buf == NULL || buflen == 0) {
@@ -213,6 +287,50 @@ char *format_data_size(const uint64_t bytes, const AvarSizeUnit unit, char *buf,
         break;
     case AVAR_SIZE_GIB:
         format_scaled_value((double) bytes / (double) AVAR_GIB, AVAR_UNIT_GIB, buf, buflen);
+        break;
+    }
+
+    return buf;
+}
+
+char *format_transfer_rate_padded(const double bytes_per_sec, const AvarSpeedUnit unit,
+                                  const int number_width, char *buf, const size_t buflen) {
+    if (buf == NULL || buflen == 0) {
+        return buf;
+    }
+
+    switch (unit) {
+    case AVAR_SPEED_BYTES_PER_SEC:
+        format_scaled_value_padded(bytes_per_sec, AVAR_UNIT_BYTES_PER_SEC, number_width, buf,
+                                   buflen);
+        break;
+    case AVAR_SPEED_BITS_PER_SEC:
+        format_scaled_value_padded(bytes_per_sec * (double) AVAR_BITS_PER_BYTE,
+                                 AVAR_UNIT_BITS_PER_SEC, number_width, buf, buflen);
+        break;
+    case AVAR_SPEED_KIB_PER_SEC:
+        format_scaled_value_padded(bytes_per_sec / (double) AVAR_KIB, AVAR_UNIT_KIB_PER_SEC,
+                                   number_width, buf, buflen);
+        break;
+    case AVAR_SPEED_MIB_PER_SEC:
+        format_scaled_value_padded(bytes_per_sec / (double) AVAR_MIB, AVAR_UNIT_MIB_PER_SEC,
+                                   number_width, buf, buflen);
+        break;
+    case AVAR_SPEED_GIB_PER_SEC:
+        format_scaled_value_padded(bytes_per_sec / (double) AVAR_GIB, AVAR_UNIT_GIB_PER_SEC,
+                                   number_width, buf, buflen);
+        break;
+    case AVAR_SPEED_KIBIT_PER_SEC:
+        format_scaled_value_padded((bytes_per_sec * (double) AVAR_BITS_PER_BYTE) / (double) AVAR_KIB,
+                                   AVAR_UNIT_KIBIT_PER_SEC, number_width, buf, buflen);
+        break;
+    case AVAR_SPEED_MIBIT_PER_SEC:
+        format_scaled_value_padded((bytes_per_sec * (double) AVAR_BITS_PER_BYTE) / (double) AVAR_MIB,
+                                   AVAR_UNIT_MIBIT_PER_SEC, number_width, buf, buflen);
+        break;
+    case AVAR_SPEED_GIBIT_PER_SEC:
+        format_scaled_value_padded((bytes_per_sec * (double) AVAR_BITS_PER_BYTE) / (double) AVAR_GIB,
+                                   AVAR_UNIT_GIBIT_PER_SEC, number_width, buf, buflen);
         break;
     }
 

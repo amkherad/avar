@@ -40,8 +40,22 @@ bool avar_speed_unit_parse(stringa text, AvarSpeedUnit *out);
 /* Formats bytes using the requested size unit. Returns buf. */
 char *format_data_size(uint64_t bytes, AvarSizeUnit unit, char *buf, size_t buflen);
 
+/* Right-aligns the percent in DL_PROGRESS_PERCENT_WIDTH digits (e.g. "  7%"). Returns buf. */
+char *format_progress_percent(int percent, char *buf, size_t buflen);
+
+/* Returns the character width of the numeric part for bytes in unit (e.g. 192 -> 3). */
+int avar_data_size_number_width(uint64_t bytes, AvarSizeUnit unit);
+
+/* Like format_data_size(), but right-aligns the numeric part in number_width columns. */
+char *format_data_size_padded(uint64_t bytes, AvarSizeUnit unit, int number_width, char *buf,
+                              size_t buflen);
+
 /* Formats a transfer rate (bytes/s) using the requested speed unit. Returns buf. */
 char *format_transfer_rate(double bytes_per_sec, AvarSpeedUnit unit, char *buf, size_t buflen);
+
+/* Like format_transfer_rate(), but right-aligns the numeric part in number_width columns. */
+char *format_transfer_rate_padded(double bytes_per_sec, AvarSpeedUnit unit, int number_width,
+                                  char *buf, size_t buflen);
 
 /* Builds an ASCII progress bar like "[=======              ]". Returns buf. */
 char *format_progress_bar(int percent, int width, char *buf, size_t buflen);

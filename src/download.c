@@ -65,6 +65,10 @@ typedef struct {
     uint64_t last_speed_sample_ms;
     uint64_t last_speed_bytes;
     double last_speed_bps;
+    uint64_t last_progress_total;
+    int last_progress_total_num_width;
+    size_t progress_line_max_len;
+    bool last_progress_had_total;
 } DownloadJob;
 
 static void set_error(DownloadJob *job, const char *fmt, ...);
@@ -375,6 +379,32 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
     return 0;
 }
 
+static void clear_progress_line(DownloadJob *job) {
+    if (job == NULL || job->progress_line_max_len == 0) {
+        return;
+    }
+
+    fprintf(stderr, "\r%*s\r", (int) job->progress_line_max_len, "");
+    job->progress_line_max_len = 0;
+}
+
+static void write_progress_line(DownloadJob *job, const char *line) {
+    const size_t len = strlen(line);
+    size_t pad_to = job->progress_line_max_len;
+
+    fputs("\r", stderr);
+    fputs(line, stderr);
+    if (len < pad_to) {
+        for (size_t i = len; i < pad_to; ++i) {
+            fputc(' ', stderr);
+        }
+    } else if (len > pad_to) {
+        job->progress_line_max_len = len;
+    }
+
+    fflush(stderr);
+}
+
 static void print_progress(DownloadJob *job) {
     const uint64_t total = job->state != NULL ? job->state->total_size : job->stream_expected;
     const uint64_t done_bytes = job_bytes_done(job);
@@ -410,23 +440,47 @@ static void print_progress(DownloadJob *job) {
         }
     }
 
+    const bool has_total = total > 0;
+    const int total_num_width =
+            has_total ? avar_data_size_number_width(total, size_unit) : 0;
+    const int done_num_width = avar_data_size_number_width(done_bytes, size_unit);
+
+    if (has_total && job->last_progress_total > 0 && total < job->last_progress_total) {
+        clear_progress_line(job);
+    }
+    if (has_total && job->last_progress_total_num_width > 0
+        && total_num_width < job->last_progress_total_num_width) {
+        clear_progress_line(job);
+    }
+    if (job->last_progress_had_total != has_total) {
+        clear_progress_line(job);
+    }
+
     char bar[DL_PROGRESS_BAR_WIDTH + 3];
+    char percent_str[DL_PROGRESS_PERCENT_WIDTH + 2];
     char done_str[32];
     char total_str[32];
     char speed_str[32];
+    char line[DL_PROGRESS_LINE_BUF_SIZE];
 
     format_progress_bar(percent, DL_PROGRESS_BAR_WIDTH, bar, sizeof bar);
-    format_data_size(done_bytes, size_unit, done_str, sizeof done_str);
-    format_transfer_rate(job->last_speed_bps, speed_unit, speed_str, sizeof speed_str);
+    format_progress_percent(percent, percent_str, sizeof percent_str);
+    format_data_size_padded(done_bytes, size_unit, done_num_width, done_str, sizeof done_str);
+    format_transfer_rate_padded(job->last_speed_bps, speed_unit, DL_PROGRESS_SPEED_NUMBER_WIDTH,
+                                speed_str, sizeof speed_str);
 
-    if (total > 0) {
-        format_data_size(total, size_unit, total_str, sizeof total_str);
-        fprintf(stderr, "\r%s %d%%, %s, (%s / %s)", bar, percent, speed_str, done_str, total_str);
+    if (has_total) {
+        format_data_size_padded(total, size_unit, total_num_width, total_str, sizeof total_str);
+        snprintf(line, sizeof line, "%s %s, %s, (%s / %s)", bar, percent_str, speed_str, done_str,
+                 total_str);
     } else {
-        fprintf(stderr, "\r%s %s, (%s)", bar, speed_str, done_str);
+        snprintf(line, sizeof line, "%s %s, (%s)", bar, speed_str, done_str);
     }
 
-    fflush(stderr);
+    write_progress_line(job, line);
+    job->last_progress_total = total;
+    job->last_progress_total_num_width = total_num_width;
+    job->last_progress_had_total = has_total;
     job->last_progress_ms = now;
 }
 

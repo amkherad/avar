@@ -135,6 +135,42 @@ AVAR_TEST(utils_format_progress_bar_renders_percent_fill) {
     AVAR_ASSERT_STR_EQ(bar, "[===========           ]");
 }
 
+AVAR_TEST(utils_format_progress_percent_right_aligns) {
+    char buf[8];
+
+    format_progress_percent(7, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "  7%");
+
+    format_progress_percent(47, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, " 47%");
+
+    format_progress_percent(100, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "100%");
+}
+
+AVAR_TEST(utils_data_size_number_width_matches_value) {
+    AVAR_ASSERT_EQ(avar_data_size_number_width(7U * AVAR_MIB, AVAR_SIZE_MIB), 1);
+    AVAR_ASSERT_EQ(avar_data_size_number_width(10U * AVAR_MIB, AVAR_SIZE_MIB), 2);
+    AVAR_ASSERT_EQ(avar_data_size_number_width(192U * AVAR_MIB, AVAR_SIZE_MIB), 3);
+}
+
+AVAR_TEST(utils_padded_size_uses_inferred_width) {
+    char buf[32];
+    const int width = avar_data_size_number_width(192U * AVAR_MIB, AVAR_SIZE_MIB);
+
+    format_data_size_padded(192U * AVAR_MIB, AVAR_SIZE_MIB, width, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "192 " AVAR_UNIT_MIB);
+}
+
+AVAR_TEST(utils_padded_transfer_rate_uses_fixed_width) {
+    char buf[32];
+
+    format_transfer_rate_padded((double) (5U * AVAR_MIB) / (double) AVAR_BITS_PER_BYTE,
+                                AVAR_SPEED_MIBIT_PER_SEC, DL_PROGRESS_SPEED_NUMBER_WIDTH, buf,
+                                sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "     5 " AVAR_UNIT_MIBIT_PER_SEC);
+}
+
 AVAR_TEST(utils_format_data_size_uses_configured_units) {
     char buf[32];
 
@@ -195,6 +231,10 @@ AVAR_TEST_MAIN(
         run_utils_is_valid_http_url_delegates_to_http_schemes();
         run_utils_print_help_returns_success();
         run_utils_format_progress_bar_renders_percent_fill();
+        run_utils_format_progress_percent_right_aligns();
+        run_utils_data_size_number_width_matches_value();
+        run_utils_padded_size_uses_inferred_width();
+        run_utils_padded_transfer_rate_uses_fixed_width();
         run_utils_format_data_size_uses_configured_units();
         run_utils_format_transfer_rate_uses_configured_units();
         run_utils_unit_parsers_accept_config_keys();
