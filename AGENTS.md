@@ -11,6 +11,7 @@ Available skills:
 - dependency-management
 - download-manager-architecture
 - queue-management
+- daemon-mode
 - http-client
 - network-programming
 - memory-safety
@@ -23,6 +24,15 @@ When modifying C code:
 - Prefer C23 features.
 - Keep headers in include/.
 - Keep implementations in src/.
+
+## Daemon mode
+
+CLI and daemon share one executable. Use the **daemon-mode** skill for all daemon, IPC, and session-routing work:
+
+- Config lives at `daemon` in `config.json` (`daemon.session` controls local vs remote).
+- CLI commands delegate through `daemon_session.c`; transports live in `daemon_transport.c`.
+- Do not run the transfer engine in the CLI when `daemon.session.mode` is `remote`.
+- Deferred work belongs in `tasks/daemon-mode-deferred.md`.
 
 Project layout:
 

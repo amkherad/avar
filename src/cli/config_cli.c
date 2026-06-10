@@ -3,6 +3,7 @@
 #include <avar.h>
 #include <cli.h>
 #include <config.h>
+#include <daemon_session.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,6 +59,10 @@ static void print_config_command_help(void) {
 }
 
 int handle_config(int argc, char *argv[]) {
+    if (daemon_session_is_remote()) {
+        return daemon_session_delegate_argv(argc, argv);
+    }
+
     if (cli_try_command_help(argc, argv, 2, print_config_command_help)) {
         return EXIT_SUCCESS;
     }

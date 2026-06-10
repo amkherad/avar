@@ -182,6 +182,50 @@
 
 #define AVAR_DAEMON_PORT 8000
 #define AVAR_DAEMON_POLL_MS 1000U
+#define AVAR_DAEMON_HTTP_BIND_DEFAULT "0.0.0.0"
+#define AVAR_DAEMON_PID_FILENAME "avar.pid"
+#define AVAR_DAEMON_SYSTEMD_UNIT "avar-daemon.service"
+
+#if defined(_WIN32)
+#define AVAR_DAEMON_PIPE_NAME_WIN "\\\\.\\pipe\\avar"
+#else
+#define AVAR_DAEMON_PIPE_NAME_UNIX "/tmp/avar.pipe"
+#endif
+
+#define AVAR_CFG_DAEMON "daemon"
+#define AVAR_CFG_DAEMON_SESSION "daemon.session"
+#define AVAR_CFG_DAEMON_SESSION_MODE "daemon.session.mode"
+#define AVAR_CFG_DAEMON_SESSION_TRANSPORT "daemon.session.transport"
+#define AVAR_CFG_DAEMON_SESSION_REMOTE_HOST "daemon.session.remoteHost"
+#define AVAR_CFG_DAEMON_SESSION_REMOTE_PORT "daemon.session.remotePort"
+#define AVAR_CFG_DAEMON_SERVER "daemon.server"
+#define AVAR_CFG_DAEMON_SERVER_DETACH "daemon.server.detach"
+#define AVAR_CFG_DAEMON_SERVER_PID_FILE "daemon.server.pidFile"
+#define AVAR_CFG_DAEMON_SERVER_CONTAINER "daemon.server.containerMode"
+#define AVAR_CFG_DAEMON_SERVER_AUTH_TOKEN "daemon.server.authToken"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTP "daemon.server.channels.http"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTPS "daemon.server.channels.https"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTPS_ENABLED "daemon.server.channels.https.enabled"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTPS_BIND "daemon.server.channels.https.bind"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTPS_PORT "daemon.server.channels.https.port"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTPS_CERT "daemon.server.channels.https.certFile"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTPS_KEY "daemon.server.channels.https.keyFile"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTP_ENABLED "daemon.server.channels.http.enabled"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTP_BIND "daemon.server.channels.http.bind"
+#define AVAR_CFG_DAEMON_CHANNELS_HTTP_PORT "daemon.server.channels.http.port"
+#define AVAR_CFG_DAEMON_CHANNELS_PIPE "daemon.server.channels.pipe"
+#define AVAR_CFG_DAEMON_CHANNELS_PIPE_ENABLED "daemon.server.channels.pipe.enabled"
+#define AVAR_CFG_DAEMON_CHANNELS_PIPE_NAME "daemon.server.channels.pipe.name"
+#define AVAR_CFG_DAEMON_CHANNELS_UNIX "daemon.server.channels.unix"
+#define AVAR_CFG_DAEMON_CHANNELS_UNIX_ENABLED "daemon.server.channels.unix.enabled"
+#define AVAR_CFG_DAEMON_CHANNELS_UNIX_PATH "daemon.server.channels.unix.path"
+
+#define AVAR_DAEMON_SESSION_MODE_LOCAL "local"
+#define AVAR_DAEMON_SESSION_MODE_REMOTE "remote"
+#define AVAR_DAEMON_TRANSPORT_LOCAL "local"
+#define AVAR_DAEMON_TRANSPORT_PIPE "pipe"
+#define AVAR_DAEMON_TRANSPORT_UNIX "unix"
+#define AVAR_DAEMON_TRANSPORT_HTTP "http"
 
 /* -------------------------------------------------------------------------- */
 /* Buffers and limits                                                         */
@@ -193,7 +237,8 @@
 #define AVAR_DL_ERROR_BUF_SIZE 256U
 #define AVAR_DL_ID_BUF_SIZE 64U
 #define AVAR_DL_FALLBACK_NAME_BUF_SIZE 64U
-#define AVAR_DAEMON_URL_BUF_SIZE 32U
+#define AVAR_DAEMON_URL_BUF_SIZE 256U
+#define AVAR_DAEMON_LAUNCHD_LABEL "com.avar.daemon"
 
 /* -------------------------------------------------------------------------- */
 /* CLI                                                                        */

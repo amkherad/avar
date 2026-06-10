@@ -109,7 +109,7 @@ void cli_print_avar_help(void) {
     puts("  avar config load <path>");
     puts("  avar profile add|rm|ls ...");
     puts("  avar scheduler add|rm|ls ...");
-    puts("  avar daemon start|stop|restart ...");
+    puts("  avar daemon start|stop|restart|attach|status|ping|install ...");
     puts("");
     puts("Options:");
     puts("  -h, --help        Show this help.");

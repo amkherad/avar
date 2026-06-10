@@ -23,6 +23,11 @@ set(AVAR_CORE_SOURCES
         "${SRC_DIR}/transport.c"
         "${SRC_DIR}/torrent.c"
         "${SRC_DIR}/daemon.c"
+        "${SRC_DIR}/daemon_config.c"
+        "${SRC_DIR}/daemon_session.c"
+        "${SRC_DIR}/daemon_transport.c"
+        "${SRC_DIR}/daemon_rpc.c"
+        "${SRC_DIR}/daemon_install.c"
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )

@@ -1,0 +1,15 @@
+services:
+  avar-daemon:
+    image: avar:latest
+    build: ..
+    command: ["daemon", "start", "--attached", "--container", "--http", "--pipe"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - avar-config:/root/.config/avar
+      - avar-data:/root/.local/share/avar
+    restart: unless-stopped
+
+volumes:
+  avar-config:
+  avar-data:

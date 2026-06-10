@@ -12,6 +12,7 @@
 
 #include <errno.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,9 +24,38 @@
 #if defined(_WIN32)
     #include <direct.h>
     #include <io.h>
+    #include <process.h>
 #else
+    #include <pthread.h>
     #include <unistd.h>
 #endif
+
+static atomic_uint g_active_downloads = 0;
+
+typedef struct {
+    char *url;
+    char *queue;
+    char *name;
+} BackgroundDownloadArgs;
+
+size_t download_active_count(void) {
+    return (size_t)atomic_load(&g_active_downloads);
+}
+
+bool download_wait_idle(const unsigned timeout_ms) {
+    const unsigned step_ms = 100U;
+    for (unsigned elapsed = 0U; elapsed < timeout_ms; elapsed += step_ms) {
+        if (download_active_count() == 0U) {
+            return true;
+        }
+#if defined(_WIN32)
+        Sleep(step_ms);
+#else
+        usleep((useconds_t)step_ms * 1000U);
+#endif
+    }
+    return download_active_count() == 0U;
+}
 
 typedef enum {
     DL_STEP_CHUNK,
@@ -1391,13 +1421,8 @@ static void job_free(DownloadJob *job) {
     free(job);
 }
 
-int transient_download(const char *url, const char *queue, const char *name, const bool attached) {
-    (void) name;
-
-    if (!attached) {
-        LOG_ERROR("Only attached downloads are supported in this version");
-        return EXIT_FAILURE;
-    }
+static int run_transient_download(const char *url, const char *queue, const char *name) {
+    (void)name;
 
     if (url == NULL || !is_valid_http_url(url)) {
         LOG_ERROR("Invalid download URL");
@@ -1557,4 +1582,96 @@ int transient_download(const char *url, const char *queue, const char *name, con
     }
     job_free(job);
     return rc;
+}
+
+int transient_download(const char *url, const char *queue, const char *name, const bool attached) {
+    if (!attached) {
+        LOG_ERROR("Only --attached downloads are supported in local CLI mode");
+        return EXIT_FAILURE;
+    }
+    return run_transient_download(url, queue, name);
+}
+
+#if defined(_WIN32)
+static unsigned __stdcall background_download_thread(void *arg) {
+#else
+static void *background_download_thread(void *arg) {
+#endif
+    BackgroundDownloadArgs *args = (BackgroundDownloadArgs *)arg;
+    if (args == NULL) {
+#if defined(_WIN32)
+        return 0;
+#else
+        return NULL;
+#endif
+    }
+
+    atomic_fetch_add(&g_active_downloads, 1U);
+    (void)run_transient_download(args->url, args->queue, args->name);
+    atomic_fetch_sub(&g_active_downloads, 1U);
+
+    free(args->url);
+    free(args->queue);
+    free(args->name);
+    free(args);
+
+#if defined(_WIN32)
+    return 0;
+#else
+    return NULL;
+#endif
+}
+
+int download_start_background(const char *url, const char *queue, const char *name, char **id_out) {
+    if (url == NULL || !is_valid_http_url(url)) {
+        return EXIT_FAILURE;
+    }
+
+    BackgroundDownloadArgs *args = calloc(1, sizeof(*args));
+    if (args == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    args->url = strdup(url);
+    args->queue = queue != NULL ? strdup(queue) : NULL;
+    args->name = name != NULL ? strdup(name) : NULL;
+    if (args->url == NULL || (queue != NULL && args->queue == NULL) ||
+        (name != NULL && args->name == NULL)) {
+        free(args->url);
+        free(args->queue);
+        free(args->name);
+        free(args);
+        return EXIT_FAILURE;
+    }
+
+    if (id_out != NULL) {
+        char generated[AVAR_DL_ID_BUF_SIZE];
+        snprintf(generated, sizeof generated, "%s%llu", AVAR_DL_ID_PREFIX,
+                 (unsigned long long)time(NULL));
+        *id_out = strdup(generated);
+    }
+
+#if defined(_WIN32)
+    const uintptr_t handle = _beginthreadex(NULL, 0, background_download_thread, args, 0, NULL);
+    if (handle == 0U) {
+        free(args->url);
+        free(args->queue);
+        free(args->name);
+        free(args);
+        return EXIT_FAILURE;
+    }
+    CloseHandle((HANDLE)handle);
+#else
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, background_download_thread, args) != 0) {
+        free(args->url);
+        free(args->queue);
+        free(args->name);
+        free(args);
+        return EXIT_FAILURE;
+    }
+    pthread_detach(thread);
+#endif
+
+    return EXIT_SUCCESS;
 }

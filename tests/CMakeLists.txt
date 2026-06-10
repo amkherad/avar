@@ -1,3 +1,5 @@
+enable_testing()
+
 function(avar_add_test test_name)
     add_executable(${test_name} ${ARGN})
     target_include_directories(${test_name} PRIVATE
@@ -23,6 +25,7 @@ function(avar_add_test test_name)
     else()
         target_link_libraries(${test_name} PRIVATE m pthread mbedtls_vendor)
     endif()
+    add_test(NAME ${test_name} COMMAND ${test_name})
 endfunction()
 
 avar_add_test(test_utils
@@ -80,3 +83,39 @@ avar_add_test(test_download_integration
         ${AVAR_DOWNLOAD_TEST_SOURCES}
 )
 target_compile_definitions(test_download_integration PRIVATE AVAR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+set(AVAR_DAEMON_TEST_SOURCES
+        "${SRC_DIR}/logger.c"
+        "${SRC_DIR}/utils.c"
+        "${SRC_DIR}/file-system.c"
+        "${SRC_DIR}/config.c"
+        "${SRC_DIR}/queue.c"
+        "${SRC_DIR}/http.c"
+        "${SRC_DIR}/download_state.c"
+        "${SRC_DIR}/download.c"
+        "${SRC_DIR}/transport.c"
+        "${SRC_DIR}/torrent.c"
+        "${SRC_DIR}/daemon.c"
+        "${SRC_DIR}/daemon_config.c"
+        "${SRC_DIR}/daemon_session.c"
+        "${SRC_DIR}/daemon_transport.c"
+        "${SRC_DIR}/daemon_rpc.c"
+        "${SRC_DIR}/daemon_install.c"
+        "${SRC_DIR}/third_party/mongoose/mongoose.c"
+        "${SRC_DIR}/third_party/cJSON/cJSON.c"
+        "${SRC_DIR}/cli/cli.c"
+        "${SRC_DIR}/cli/dispatch.c"
+        "${SRC_DIR}/cli/download_cli.c"
+        "${SRC_DIR}/cli/queue_cli.c"
+        "${SRC_DIR}/cli/config_cli.c"
+        "${SRC_DIR}/cli/profile_cli.c"
+        "${SRC_DIR}/cli/scheduler_cli.c"
+        "${SRC_DIR}/cli/daemon_cli.c"
+        "${SRC_DIR}/third_party/argtable3/argtable3.c"
+)
+
+avar_add_test(test_daemon
+        test_daemon.c
+        ${AVAR_DAEMON_TEST_SOURCES}
+)
+target_compile_definitions(test_daemon PRIVATE VERSION_STR=\"0.0.1\")

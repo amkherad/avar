@@ -1,5 +1,6 @@
 #include <avar.h>
 #include <cli.h>
+#include <daemon_session.h>
 #include <download.h>
 
 #include <stdio.h>
@@ -21,6 +22,7 @@ static void print_download_command_help(void) {
     puts("");
     puts("Usage:");
     puts("  avar dl|download <url> [--attached] [--queue=<queue>]");
+    puts("      (default: queue on daemon; falls back to --attached if daemon is down)");
     puts("  avar dl add <name>");
     puts("  avar dl rm <name> [--force]");
     puts("  avar dl ls [--list]");
@@ -33,6 +35,10 @@ static void print_download_command_help(void) {
 int handle_download(int argc, char *argv[]) {
     if (argc < 2) {
         fatal("Expected at least 2 parameters");
+    }
+
+    if (daemon_session_is_remote()) {
+        return daemon_session_delegate_argv(argc, argv);
     }
 
     if (cli_try_command_help(argc, argv, 2, print_download_command_help)) {
@@ -89,13 +95,10 @@ static int handle_download_url(int argc, char *argv[]) {
         return EXIT_SUCCESS;
     }
 
-    if (attached->count == 0) {
-        LOG_ERROR("Only --attached downloads are supported in this version");
-        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
-        return EXIT_FAILURE;
-    }
-
-    const int rc = transient_download(url->sval[0], queue->count > 0 ? queue->sval[0] : NULL, NULL, true);
+    const bool is_attached = attached->count > 0;
+    const int rc = daemon_session_download_url(url->sval[0],
+                                               queue->count > 0 ? queue->sval[0] : NULL, NULL,
+                                               is_attached);
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return rc;
 }

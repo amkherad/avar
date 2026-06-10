@@ -1,6 +1,6 @@
 #include <cli.h>
 #include <avar.h>
-#include <download.h>
+#include <daemon_session.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +27,10 @@ int cli_run(int argc, char *argv[]) {
     }
 
     LOG_DEBUG(APP_NAME " was called with %d parameters", argc);
+
+    if (daemon_session_init() != DaemonSessionErrorNone) {
+        LOG_WARNING("Failed to load daemon session config; using local mode");
+    }
 
     if (argc < 2) {
         cli_print_avar_help();
@@ -58,11 +62,8 @@ int cli_run(int argc, char *argv[]) {
 
     if (args.url != NULL && is_valid_http_url(args.url)) {
         LOG_DEBUG("Found a valid url '%s'", args.url);
-        if (!args.attached) {
-            LOG_ERROR("Only --attached downloads are supported in this version");
-            return EXIT_FAILURE;
-        }
-        return transient_download(args.url, args.queue, args.name, true);
+
+        return daemon_session_download_url(args.url, args.queue, args.name, args.attached);
     }
 
     LOG_ERROR("Unknown command '%s'", cmd);

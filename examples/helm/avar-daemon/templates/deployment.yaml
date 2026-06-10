@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-avar-daemon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: avar-daemon
+  template:
+    metadata:
+      labels:
+        app: avar-daemon
+    spec:
+      containers:
+        - name: avar-daemon
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          args: ["daemon", "start", "--attached", "--container", "--http", "--pipe"]
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          volumeMounts:
+            - name: config
+              mountPath: /root/.config/avar
+            - name: data
+              mountPath: /root/.local/share/avar
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
