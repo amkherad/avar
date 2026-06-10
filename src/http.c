@@ -1,3 +1,4 @@
+#include "avar.h"
 #include <http.h>
 #include <mongoose.h>
 
@@ -107,7 +108,7 @@ char *http_url_basename(const char *url) {
         return NULL;
     }
 
-    char decoded[1024];
+    char decoded[AVAR_HTTP_DECODE_BUFFER];
     if (mg_url_decode(encoded, strlen(encoded), decoded, sizeof decoded, 0) <= 0) {
         free(encoded);
         return NULL;

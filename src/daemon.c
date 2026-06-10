@@ -7,6 +7,8 @@
 
 #include <avar.h>
 #include <daemon.h>
+#include <logger.h>
+#include <utils.h>
 #include <io.h>
 
 // #include <sys/types.h>
@@ -34,7 +36,7 @@ static void ev_handler(struct mg_connection *c, int ev, void *ev_data);
 
 
 /* Path of the Unix domain socket file */
-static stringa SOCK_PATH = "/tmp/avar.sock";
+static stringa SOCK_PATH = AVAR_SOCK_DEFAULT;
 static volatile bool _runDaemon = false;
 static struct mg_mgr g_mg_mgr;
 
@@ -46,9 +48,9 @@ int start_daemon() {
     // Set
     // mg_log_set_fn(mg_log_to_log, nullptr);
 
-    int port = 8000;
+    const int port = AVAR_DAEMON_PORT;
     LOG_INFO("Starting HTTP API server on port %d...", port);
-    char url[32];
+    char url[AVAR_DAEMON_URL_BUF_SIZE];
     snprintf(url, sizeof(url), "http://0.0.0.0:%d", port);
 
     mg_mgr_init(&g_mg_mgr); // Initialise event manager
@@ -61,7 +63,7 @@ int start_daemon() {
 
     while (_runDaemon) {
         // Run an infinite event loop
-        mg_mgr_poll(&g_mg_mgr, 1000);
+        mg_mgr_poll(&g_mg_mgr, (int) AVAR_DAEMON_POLL_MS);
     }
 
     return EXIT_SUCCESS;

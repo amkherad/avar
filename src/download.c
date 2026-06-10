@@ -17,6 +17,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <debug.h>
+#include <logger.h>
 
 #if defined(_WIN32)
     #include <direct.h>
@@ -24,13 +25,6 @@
 #else
     #include <unistd.h>
 #endif
-
-#define DM_ITEMS_KEY "dm.items"
-#define DL_CONNECT_TIMEOUT_MS 30000U
-#define DL_IDLE_TIMEOUT_MS 120000U
-#define DL_MAX_REDIRECTS 10
-#define DL_WRITE_CHUNK_SIZE (1024U * 1024U)
-#define DL_PROGRESS_BAR_WIDTH 22
 
 typedef enum {
     DL_STEP_CHUNK,
@@ -64,7 +58,7 @@ typedef struct {
     int redirect_count;
     bool done;
     bool failed;
-    char error[256];
+    char error[AVAR_DL_ERROR_BUF_SIZE];
     uint64_t connect_deadline_ms;
     uint64_t last_activity_ms;
     uint64_t last_progress_ms;
@@ -194,23 +188,23 @@ static char *format_datetime_iso(void) {
 #else
     gmtime_r(&now, &tm_utc);
 #endif
-    char *buf = malloc(32);
+    char *buf = malloc(AVAR_DATETIME_BUF_SIZE);
     if (buf == NULL) {
         return NULL;
     }
-    snprintf(buf, 32, "%04d-%02d-%02dT%02d:%02d:%02dZ", tm_utc.tm_year + 1900,
+    snprintf(buf, AVAR_DATETIME_BUF_SIZE, "%04d-%02d-%02dT%02d:%02d:%02dZ", tm_utc.tm_year + 1900,
              tm_utc.tm_mon + 1, tm_utc.tm_mday, tm_utc.tm_hour, tm_utc.tm_min, tm_utc.tm_sec);
     return buf;
 }
 
 static char *find_resumable_item_id(const char *url) {
-    const size_t count = get_config_array_size(DM_ITEMS_KEY);
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
     for (size_t i = 0; i < count; i++) {
-        char *item_url = get_config_array_item_field(DM_ITEMS_KEY, i, "url");
-        char *status = get_config_array_item_field(DM_ITEMS_KEY, i, "status");
-        char *id = get_config_array_item_field(DM_ITEMS_KEY, i, "id");
+        char *item_url = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_URL);
+        char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_STATUS);
+        char *id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
         if (item_url != NULL && status != NULL && id != NULL && strcmp(item_url, url) == 0
-            && strcmp(status, "completed") != 0) {
+            && strcmp(status, AVAR_DL_STATUS_COMPLETED) != 0) {
             char *result = strdup(id);
             free(item_url);
             free(status);
@@ -291,8 +285,9 @@ static char *choose_filename(const char *url, const char *header_value, const si
     }
     if (name == NULL) {
         const unsigned long stamp = (unsigned long) time(NULL);
-        char fallback[64];
-        snprintf(fallback, sizeof fallback, "download-%lu.bin", stamp);
+        char fallback[AVAR_DL_FALLBACK_NAME_BUF_SIZE];
+        snprintf(fallback, sizeof fallback, "%s%lu%s", AVAR_DOWNLOAD_FALLBACK_PREFIX, stamp,
+                 AVAR_DOWNLOAD_FALLBACK_SUFFIX);
         name = strdup(fallback);
     }
 
@@ -310,51 +305,51 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         return NULL;
     }
 
-    cJSON_AddStringToObject(obj, "id", job->item_id);
-    cJSON_AddStringToObject(obj, "url", job->url);
-    cJSON_AddStringToObject(obj, "filename", job->filename);
-    cJSON_AddStringToObject(obj, "status", status);
+    cJSON_AddStringToObject(obj, AVAR_FIELD_ID, job->item_id);
+    cJSON_AddStringToObject(obj, AVAR_FIELD_URL, job->url);
+    cJSON_AddStringToObject(obj, AVAR_FIELD_FILENAME, job->filename);
+    cJSON_AddStringToObject(obj, AVAR_FIELD_STATUS, status);
     if (job->state != NULL && job->state->proxy != NULL) {
-        cJSON_AddStringToObject(obj, "proxy", job->state->proxy);
+        cJSON_AddStringToObject(obj, AVAR_FIELD_PROXY, job->state->proxy);
     } else {
-        cJSON_AddNullToObject(obj, "proxy");
+        cJSON_AddNullToObject(obj, AVAR_FIELD_PROXY);
     }
-    cJSON_AddNumberToObject(obj, "bytesDownloaded", (double) done_bytes);
-    cJSON_AddNumberToObject(obj, "totalBytes", (double) total);
+    cJSON_AddNumberToObject(obj, AVAR_FIELD_BYTES_DOWNLOADED, (double) done_bytes);
+    cJSON_AddNumberToObject(obj, AVAR_FIELD_TOTAL_BYTES, (double) total);
 
     if (job->state != NULL && job->state->queued_at != NULL) {
-        cJSON_AddStringToObject(obj, "queuedAt", job->state->queued_at);
+        cJSON_AddStringToObject(obj, AVAR_FIELD_QUEUED_AT, job->state->queued_at);
     } else {
-        cJSON_AddNullToObject(obj, "queuedAt");
+        cJSON_AddNullToObject(obj, AVAR_FIELD_QUEUED_AT);
     }
     if (job->state != NULL && job->state->last_try_at != NULL) {
-        cJSON_AddStringToObject(obj, "lastTryAt", job->state->last_try_at);
+        cJSON_AddStringToObject(obj, AVAR_FIELD_LAST_TRY_AT, job->state->last_try_at);
     } else {
-        cJSON_AddNullToObject(obj, "lastTryAt");
+        cJSON_AddNullToObject(obj, AVAR_FIELD_LAST_TRY_AT);
     }
     if (job->state != NULL && job->state->description != NULL) {
-        cJSON_AddStringToObject(obj, "description", job->state->description);
+        cJSON_AddStringToObject(obj, AVAR_FIELD_DESCRIPTION, job->state->description);
     } else {
-        cJSON_AddNullToObject(obj, "description");
+        cJSON_AddNullToObject(obj, AVAR_FIELD_DESCRIPTION);
     }
     if (job->state != NULL && job->state->original_page != NULL) {
-        cJSON_AddStringToObject(obj, "originalPage", job->state->original_page);
+        cJSON_AddStringToObject(obj, AVAR_FIELD_ORIGINAL_PAGE, job->state->original_page);
     } else {
-        cJSON_AddNullToObject(obj, "originalPage");
+        cJSON_AddNullToObject(obj, AVAR_FIELD_ORIGINAL_PAGE);
     }
     if (job->state != NULL && job->state->referer != NULL) {
-        cJSON_AddStringToObject(obj, "referer", job->state->referer);
+        cJSON_AddStringToObject(obj, AVAR_FIELD_REFERER, job->state->referer);
     } else {
-        cJSON_AddNullToObject(obj, "referer");
+        cJSON_AddNullToObject(obj, AVAR_FIELD_REFERER);
     }
-    cJSON_AddStringToObject(obj, "addedThrough",
+    cJSON_AddStringToObject(obj, AVAR_FIELD_ADDED_THROUGH,
                             job->state != NULL && job->state->added_through != NULL
                                 ? job->state->added_through
-                                : "direct");
+                                : AVAR_DL_ADDED_DIRECT);
     if (job->state != NULL && job->state->queue_id != NULL) {
-        cJSON_AddStringToObject(obj, "queueId", job->state->queue_id);
+        cJSON_AddStringToObject(obj, AVAR_FIELD_QUEUE_ID, job->state->queue_id);
     } else {
-        cJSON_AddNullToObject(obj, "queueId");
+        cJSON_AddNullToObject(obj, AVAR_FIELD_QUEUE_ID);
     }
 
     char *json = cJSON_PrintUnformatted(obj);
@@ -370,8 +365,8 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
         return -1;
     }
 
-    if (update_config_array_item(DM_ITEMS_KEY, "id", job->item_id, json) != 0) {
-        const int rc = append_config_array_item(DM_ITEMS_KEY, json);
+    if (update_config_array_item(AVAR_CFG_DM_ITEMS, AVAR_FIELD_ID, job->item_id, json) != 0) {
+        const int rc = append_config_array_item(AVAR_CFG_DM_ITEMS, json);
         cJSON_free(json);
         return rc;
     }
@@ -399,8 +394,9 @@ static void print_progress(DownloadJob *job) {
 
     AvarSizeUnit size_unit = AVAR_SIZE_MIB;
     AvarSpeedUnit speed_unit = AVAR_SPEED_MIBIT_PER_SEC;
-    char *size_cfg = get_config_or_default("dm.progress.sizeUnit", "MiB");
-    char *speed_cfg = get_config_or_default("dm.progress.speedUnit", "Mib/s");
+    char *size_cfg = get_config_or_default(AVAR_CFG_DM_PROGRESS_SIZE_UNIT, AVAR_DEFAULT_SIZE_UNIT);
+    char *speed_cfg =
+            get_config_or_default(AVAR_CFG_DM_PROGRESS_SPEED_UNIT, AVAR_DEFAULT_SPEED_UNIT);
     (void) avar_size_unit_parse(size_cfg, &size_unit);
     (void) avar_speed_unit_parse(speed_cfg, &speed_unit);
     free(size_cfg);
@@ -687,7 +683,7 @@ static void begin_stream_body(DownloadJob *job, struct mg_connection *c,
 
     mg_iobuf_del(&c->recv, 0, hm->head.len + to_write);
     print_progress(job);
-    (void) dm_item_upsert(job, "downloading");
+    (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
 }
 
 static void begin_chunk_body(DownloadJob *job, struct mg_connection *c,
@@ -708,7 +704,7 @@ static void begin_chunk_body(DownloadJob *job, struct mg_connection *c,
 
     mg_iobuf_del(&c->recv, 0, hm->head.len + to_write);
     print_progress(job);
-    (void) dm_item_upsert(job, "downloading");
+    (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
 }
 
 static bool complete_active_chunk(DownloadJob *job, struct mg_connection *c) {
@@ -735,7 +731,7 @@ static bool complete_active_chunk(DownloadJob *job, struct mg_connection *c) {
     job->streaming = false;
     job->chunk_received = 0;
     job->chunk_expected = 0;
-    (void) dm_item_upsert(job, "downloading");
+    (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
     print_progress(job);
     return true;
 }
@@ -873,7 +869,7 @@ static bool finalize_download(DownloadJob *job) {
         return false;
     }
 
-    (void) dm_item_upsert(job, "completed");
+    (void) dm_item_upsert(job, AVAR_DL_STATUS_COMPLETED);
     remove_job_work_dir(job->state_path);
     print_progress(job);
     job->done = true;
@@ -942,7 +938,7 @@ static void on_connection_closed(DownloadJob *job, struct mg_connection *c) {
     if (job->step == DL_STEP_CHUNK && job->headers_received
         && (job->streaming || job->chunk_received > 0)) {
         if (!complete_active_chunk(job, c)) {
-            (void) dm_item_upsert(job, "failed");
+            (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
             return;
         }
 
@@ -961,7 +957,7 @@ static void on_connection_closed(DownloadJob *job, struct mg_connection *c) {
             set_error(job, "Connection closed before download completed (%llu / %llu bytes)",
                       (unsigned long long) job->stream_received,
                       (unsigned long long) job->stream_expected);
-            (void) dm_item_upsert(job, "failed");
+            (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
         }
         return;
     }
@@ -971,7 +967,7 @@ static void on_connection_closed(DownloadJob *job, struct mg_connection *c) {
             (void) finalize_download(job);
         } else {
             set_error(job, "Connection closed before all chunks were downloaded");
-            (void) dm_item_upsert(job, "failed");
+            (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
         }
         return;
     }
@@ -986,7 +982,7 @@ static void on_connection_closed(DownloadJob *job, struct mg_connection *c) {
     } else {
         set_error(job, "Connection closed before the download started");
     }
-    (void) dm_item_upsert(job, "failed");
+    (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
 }
 
 static void schedule_next(DownloadJob *job) {
@@ -1227,7 +1223,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
 
         sync_temp_file(job);
         job->state->chunks_done[job->active_chunk] = true;
-        (void) dm_item_upsert(job, "downloading");
+        (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
         print_progress(job);
 
         if (download_state_all_chunks_done(job->state)) {
@@ -1257,7 +1253,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
 
             if (mg_millis() - job->last_progress_ms >= 200) {
                 print_progress(job);
-                (void) dm_item_upsert(job, "downloading");
+                (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
             }
         }
     } else if (ev == MG_EV_CLOSE) {
@@ -1272,7 +1268,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             } else {
                 set_error(job, "Network error");
             }
-            (void) dm_item_upsert(job, "failed");
+            (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
         }
     }
 }
@@ -1309,7 +1305,7 @@ static int run_download(DownloadJob *job) {
     LOG_DEBUG("Scheduling download job, jobId: %s", job->item_id);
     schedule_next(job);
     while (!job->done && !job->failed) {
-        mg_mgr_poll(&job->mgr, 50);
+        mg_mgr_poll(&job->mgr, (int) DL_POLL_MS);
         if (job->schedule_deferred) {
             job->schedule_deferred = false;
             schedule_next(job);
@@ -1371,8 +1367,9 @@ int transient_download(const char *url, const char *queue, const char *name, con
 
     char *item_id = find_resumable_item_id(url);
     if (item_id == NULL) {
-        char generated[64];
-        snprintf(generated, sizeof generated, "dl-%llu", (unsigned long long) time(NULL));
+        char generated[AVAR_DL_ID_BUF_SIZE];
+        snprintf(generated, sizeof generated, "%s%llu", AVAR_DL_ID_PREFIX,
+                 (unsigned long long) time(NULL));
         item_id = strdup(generated);
     }
 
@@ -1417,7 +1414,7 @@ int transient_download(const char *url, const char *queue, const char *name, con
             state->queued_at = format_datetime_iso();
         }
         if (state->added_through == NULL) {
-            state->added_through = strdup("direct");
+            state->added_through = strdup(AVAR_DL_ADDED_DIRECT);
         }
         if (state->id != NULL) {
             free(item_id);
@@ -1440,7 +1437,7 @@ int transient_download(const char *url, const char *queue, const char *name, con
         if (state != NULL) {
             state->id = strdup(item_id);
             state->queued_at = format_datetime_iso();
-            state->added_through = strdup("direct");
+            state->added_through = strdup(AVAR_DL_ADDED_DIRECT);
             if (queue != NULL) {
                 free(state->queue_id);
                 state->queue_id = strdup(queue);
@@ -1493,11 +1490,11 @@ int transient_download(const char *url, const char *queue, const char *name, con
     job->last_speed_sample_ms = mg_millis();
 
     LOG_INFO("Downloading %s <- %s", dest_path, url);
-    (void) dm_item_upsert(job, "downloading");
+    (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
 
     const int rc = run_download(job);
     if (rc != EXIT_SUCCESS && !job->failed) {
-        (void) dm_item_upsert(job, "failed");
+        (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
     }
     job_free(job);
     return rc;

@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "avar.h"
 #include "config.h"
 #include "file-system.h"
 
@@ -25,11 +26,17 @@ static void setup_temp_config(void) {
 AVAR_TEST(config_array_append_and_query) {
     setup_temp_config();
 
-    AVAR_ASSERT_EQ(append_config_array_item("dm.items", "{\"id\":\"1\",\"url\":\"https://a\"}"), 0);
-    AVAR_ASSERT_EQ(append_config_array_item("dm.items", "{\"id\":\"2\",\"url\":\"https://b\"}"), 0);
-    AVAR_ASSERT_EQ(get_config_array_size("dm.items"), 2);
+    AVAR_ASSERT_EQ(append_config_array_item(AVAR_CFG_DM_ITEMS,
+                                            "{\"" AVAR_FIELD_ID "\":\"1\",\"" AVAR_FIELD_URL
+                                            "\":\"https://a\"}"),
+                   0);
+    AVAR_ASSERT_EQ(append_config_array_item(AVAR_CFG_DM_ITEMS,
+                                            "{\"" AVAR_FIELD_ID "\":\"2\",\"" AVAR_FIELD_URL
+                                            "\":\"https://b\"}"),
+                   0);
+    AVAR_ASSERT_EQ(get_config_array_size(AVAR_CFG_DM_ITEMS), 2);
 
-    char *url = get_config_array_item_field("dm.items", 1, "url");
+    char *url = get_config_array_item_field(AVAR_CFG_DM_ITEMS, 1, AVAR_FIELD_URL);
     AVAR_ASSERT_NOT_NULL(url);
     AVAR_ASSERT_STR_EQ(url, "https://b");
     free(url);
@@ -38,18 +45,22 @@ AVAR_TEST(config_array_append_and_query) {
 AVAR_TEST(config_array_update_and_remove) {
     setup_temp_config();
 
-    AVAR_ASSERT_EQ(append_config_array_item("dm.items", "{\"id\":\"x\",\"status\":\"queued\"}"), 0);
-    AVAR_ASSERT_EQ(
-            update_config_array_item("dm.items", "id", "x", "{\"id\":\"x\",\"status\":\"done\"}"),
-            0);
+    AVAR_ASSERT_EQ(append_config_array_item(AVAR_CFG_DM_ITEMS,
+                                            "{\"" AVAR_FIELD_ID "\":\"x\",\"" AVAR_FIELD_STATUS
+                                            "\":\"" AVAR_DL_STATUS_QUEUED "\"}"),
+                   0);
+    AVAR_ASSERT_EQ(update_config_array_item(AVAR_CFG_DM_ITEMS, AVAR_FIELD_ID, "x",
+                                           "{\"" AVAR_FIELD_ID "\":\"x\",\"" AVAR_FIELD_STATUS
+                                           "\":\"done\"}"),
+                   0);
 
-    char *status = get_config_array_item_field("dm.items", 0, "status");
+    char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, 0, AVAR_FIELD_STATUS);
     AVAR_ASSERT_NOT_NULL(status);
     AVAR_ASSERT_STR_EQ(status, "done");
     free(status);
 
-    AVAR_ASSERT_EQ(remove_config_array_item("dm.items", "id", "x"), 0);
-    AVAR_ASSERT_EQ(get_config_array_size("dm.items"), 0);
+    AVAR_ASSERT_EQ(remove_config_array_item(AVAR_CFG_DM_ITEMS, AVAR_FIELD_ID, "x"), 0);
+    AVAR_ASSERT_EQ(get_config_array_size(AVAR_CFG_DM_ITEMS), 0);
 }
 
 AVAR_TEST_MAIN(

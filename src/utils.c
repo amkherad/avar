@@ -1,14 +1,12 @@
-﻿#include <utils.h>
+﻿#include "avar.h"
+#include <utils.h>
+
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ws2tcpip.h>
-
-#ifndef VERSION_STR
-#include "avar.h"
-#endif
 
 /* ---------- helper predicates --------------------------------------- */
 static bool is_scheme(const char *s, size_t len) {
@@ -135,15 +133,15 @@ bool avar_size_unit_parse(const char *text, AvarSizeUnit *out) {
         *out = AVAR_SIZE_BYTES;
         return true;
     }
-    if (str_ieq(text, "kib")) {
+    if (strcmp(text, AVAR_UNIT_KIB) == 0) {
         *out = AVAR_SIZE_KIB;
         return true;
     }
-    if (str_ieq(text, "mib")) {
+    if (strcmp(text, AVAR_UNIT_MIB) == 0) {
         *out = AVAR_SIZE_MIB;
         return true;
     }
-    if (str_ieq(text, "gib")) {
+    if (strcmp(text, AVAR_UNIT_GIB) == 0) {
         *out = AVAR_SIZE_GIB;
         return true;
     }
@@ -161,35 +159,35 @@ bool avar_speed_unit_parse(const char *text, AvarSpeedUnit *out) {
         return true;
     }
 
-    if (str_ieq(text, "bytes/s")) {
+    if (str_ieq(text, AVAR_UNIT_BYTES_PER_SEC)) {
         *out = AVAR_SPEED_BYTES_PER_SEC;
         return true;
     }
-    if (str_ieq(text, "bits/s")) {
+    if (str_ieq(text, AVAR_UNIT_BITS_PER_SEC)) {
         *out = AVAR_SPEED_BITS_PER_SEC;
         return true;
     }
-    if (strcmp(text, "KiB/s") == 0) {
+    if (strcmp(text, AVAR_UNIT_KIB_PER_SEC) == 0) {
         *out = AVAR_SPEED_KIB_PER_SEC;
         return true;
     }
-    if (strcmp(text, "MiB/s") == 0) {
+    if (strcmp(text, AVAR_UNIT_MIB_PER_SEC) == 0) {
         *out = AVAR_SPEED_MIB_PER_SEC;
         return true;
     }
-    if (strcmp(text, "GiB/s") == 0) {
+    if (strcmp(text, AVAR_UNIT_GIB_PER_SEC) == 0) {
         *out = AVAR_SPEED_GIB_PER_SEC;
         return true;
     }
-    if (strcmp(text, "Kib/s") == 0) {
+    if (strcmp(text, AVAR_UNIT_KIBIT_PER_SEC) == 0) {
         *out = AVAR_SPEED_KIBIT_PER_SEC;
         return true;
     }
-    if (strcmp(text, "Mib/s") == 0) {
+    if (strcmp(text, AVAR_UNIT_MIBIT_PER_SEC) == 0) {
         *out = AVAR_SPEED_MIBIT_PER_SEC;
         return true;
     }
-    if (strcmp(text, "Gib/s") == 0) {
+    if (strcmp(text, AVAR_UNIT_GIBIT_PER_SEC) == 0) {
         *out = AVAR_SPEED_GIBIT_PER_SEC;
         return true;
     }
@@ -205,16 +203,16 @@ char *format_data_size(const uint64_t bytes, const AvarSizeUnit unit, char *buf,
 
     switch (unit) {
     case AVAR_SIZE_BYTES:
-        snprintf(buf, buflen, "%llu Bytes", (unsigned long long) bytes);
+        snprintf(buf, buflen, "%llu %s", (unsigned long long) bytes, AVAR_UNIT_BYTES);
         break;
     case AVAR_SIZE_KIB:
-        format_scaled_value((double) bytes / 1024.0, "KiB", buf, buflen);
+        format_scaled_value((double) bytes / (double) AVAR_KIB, AVAR_UNIT_KIB, buf, buflen);
         break;
     case AVAR_SIZE_MIB:
-        format_scaled_value((double) bytes / (1024.0 * 1024.0), "MiB", buf, buflen);
+        format_scaled_value((double) bytes / (double) AVAR_MIB, AVAR_UNIT_MIB, buf, buflen);
         break;
     case AVAR_SIZE_GIB:
-        format_scaled_value((double) bytes / (1024.0 * 1024.0 * 1024.0), "GiB", buf, buflen);
+        format_scaled_value((double) bytes / (double) AVAR_GIB, AVAR_UNIT_GIB, buf, buflen);
         break;
     }
 
@@ -229,29 +227,32 @@ char *format_transfer_rate(const double bytes_per_sec, const AvarSpeedUnit unit,
 
     switch (unit) {
     case AVAR_SPEED_BYTES_PER_SEC:
-        format_scaled_value(bytes_per_sec, "Bytes/s", buf, buflen);
+        format_scaled_value(bytes_per_sec, AVAR_UNIT_BYTES_PER_SEC, buf, buflen);
         break;
     case AVAR_SPEED_BITS_PER_SEC:
-        format_scaled_value(bytes_per_sec * 8.0, "bits/s", buf, buflen);
+        format_scaled_value(bytes_per_sec * (double) AVAR_BITS_PER_BYTE, AVAR_UNIT_BITS_PER_SEC, buf,
+                            buflen);
         break;
     case AVAR_SPEED_KIB_PER_SEC:
-        format_scaled_value(bytes_per_sec / 1024.0, "KiB/s", buf, buflen);
+        format_scaled_value(bytes_per_sec / (double) AVAR_KIB, AVAR_UNIT_KIB_PER_SEC, buf, buflen);
         break;
     case AVAR_SPEED_MIB_PER_SEC:
-        format_scaled_value(bytes_per_sec / (1024.0 * 1024.0), "MiB/s", buf, buflen);
+        format_scaled_value(bytes_per_sec / (double) AVAR_MIB, AVAR_UNIT_MIB_PER_SEC, buf, buflen);
         break;
     case AVAR_SPEED_GIB_PER_SEC:
-        format_scaled_value(bytes_per_sec / (1024.0 * 1024.0 * 1024.0), "GiB/s", buf, buflen);
+        format_scaled_value(bytes_per_sec / (double) AVAR_GIB, AVAR_UNIT_GIB_PER_SEC, buf, buflen);
         break;
     case AVAR_SPEED_KIBIT_PER_SEC:
-        format_scaled_value((bytes_per_sec * 8.0) / 1024.0, "Kib/s", buf, buflen);
+        format_scaled_value((bytes_per_sec * (double) AVAR_BITS_PER_BYTE) / (double) AVAR_KIB,
+                            AVAR_UNIT_KIBIT_PER_SEC, buf, buflen);
         break;
     case AVAR_SPEED_MIBIT_PER_SEC:
-        format_scaled_value((bytes_per_sec * 8.0) / (1024.0 * 1024.0), "Mib/s", buf, buflen);
+        format_scaled_value((bytes_per_sec * (double) AVAR_BITS_PER_BYTE) / (double) AVAR_MIB,
+                            AVAR_UNIT_MIBIT_PER_SEC, buf, buflen);
         break;
     case AVAR_SPEED_GIBIT_PER_SEC:
-        format_scaled_value((bytes_per_sec * 8.0) / (1024.0 * 1024.0 * 1024.0), "Gib/s", buf,
-                            buflen);
+        format_scaled_value((bytes_per_sec * (double) AVAR_BITS_PER_BYTE) / (double) AVAR_GIB,
+                            AVAR_UNIT_GIBIT_PER_SEC, buf, buflen);
         break;
     }
 

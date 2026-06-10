@@ -12,6 +12,7 @@
 #endif
 
 #include <avar.h>
+#include <logger.h>
 #include <utils.h>
 
 struct ConfigContext {
@@ -36,7 +37,7 @@ static void prune_empty_parents(cJSON *root, const char *key);
 
 static struct ConfigPaths get_config_path(bool user) {
     (void)user;
-    const size_t path_buffer_size = 256;
+    const size_t path_buffer_size = AVAR_CONFIG_PATH_MAX;
 
     char *dir = config_path(APP_ID);
     if (dir == NULL) {
@@ -50,14 +51,14 @@ static struct ConfigPaths get_config_path(bool user) {
         return (struct ConfigPaths){.dir = NULL, .file = NULL};
     }
 
-    const size_t file_len = len + sizeof(PATH_SEPARATOR) + sizeof("config.json");
+    const size_t file_len = len + sizeof(PATH_SEPARATOR) + sizeof(AVAR_CONFIG_FILENAME);
     char *file = malloc(file_len);
     if (file == NULL) {
         free(dir);
         return (struct ConfigPaths){.dir = NULL, .file = NULL};
     }
 
-    snprintf(file, file_len, "%s%cconfig.json", dir, PATH_SEPARATOR);
+    snprintf(file, file_len, "%s%c%s", dir, PATH_SEPARATOR, AVAR_CONFIG_FILENAME);
     return (struct ConfigPaths){.dir = dir, .file = file};
 }
 
@@ -146,14 +147,15 @@ static int persist_config(const char *path) {
     }
 
     const size_t path_len = strlen(path);
-    char *tmp_path = malloc(path_len + 5);
+    char *tmp_path = malloc(path_len + sizeof(AVAR_CONFIG_TMP_SUFFIX));
     if (tmp_path == NULL) {
         cJSON_free(json);
         LOG_ERROR("Failed to allocate temporary config path");
         return -1;
     }
 
-    snprintf(tmp_path, path_len + 5, "%s.tmp", path);
+    snprintf(tmp_path, path_len + sizeof(AVAR_CONFIG_TMP_SUFFIX), "%s%s", path,
+             AVAR_CONFIG_TMP_SUFFIX);
 
     FILE *file = fopen(tmp_path, "wb");
     if (file == NULL) {

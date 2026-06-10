@@ -2,9 +2,8 @@
 
 #include <stdio.h>
 
+#include "avar.h"
 #include "utils.h"
-
-#define TEST_VERSION_STR "0.0.1"
 
 static stringa http_schemes[] = {"http", "https", NULL};
 
@@ -123,7 +122,7 @@ AVAR_TEST(utils_print_help_returns_success) {
     char *output = capture_print_help(3, messages);
     AVAR_ASSERT_NOT_NULL(output);
     AVAR_ASSERT_STR_EQ(output,
-                       "Avar (v" TEST_VERSION_STR ")\n"
+                       "Avar (v" VERSION_STR ")\n"
                        "Usage: avar [options]\n"
                        "  --help  Show help\n");
     free(output);
@@ -139,29 +138,37 @@ AVAR_TEST(utils_format_progress_bar_renders_percent_fill) {
 AVAR_TEST(utils_format_data_size_uses_configured_units) {
     char buf[32];
 
-    format_data_size(10485760, AVAR_SIZE_MIB, buf, sizeof buf);
-    AVAR_ASSERT_STR_EQ(buf, "10 MiB");
+    format_data_size(10U * AVAR_MIB, AVAR_SIZE_MIB, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "10 " AVAR_UNIT_MIB);
 
-    format_data_size(104857600, AVAR_SIZE_MIB, buf, sizeof buf);
-    AVAR_ASSERT_STR_EQ(buf, "100 MiB");
+    format_data_size(100U * AVAR_MIB, AVAR_SIZE_MIB, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "100 " AVAR_UNIT_MIB);
 }
 
 AVAR_TEST(utils_format_transfer_rate_uses_configured_units) {
     char buf[32];
 
-    format_transfer_rate(625000.0, AVAR_SPEED_MIBIT_PER_SEC, buf, sizeof buf);
-    AVAR_ASSERT_STR_EQ(buf, "5 Mib/s");
+    format_transfer_rate((double) (5U * AVAR_MIB) / (double) AVAR_BITS_PER_BYTE,
+                         AVAR_SPEED_MIBIT_PER_SEC, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "5 " AVAR_UNIT_MIBIT_PER_SEC);
 }
 
 AVAR_TEST(utils_unit_parsers_accept_config_keys) {
     AvarSizeUnit size_unit = AVAR_SIZE_BYTES;
     AvarSpeedUnit speed_unit = AVAR_SPEED_BYTES_PER_SEC;
 
-    AVAR_ASSERT(avar_size_unit_parse("MiB", &size_unit));
+    AVAR_ASSERT(avar_size_unit_parse(AVAR_UNIT_MIB, &size_unit));
     AVAR_ASSERT_EQ(size_unit, AVAR_SIZE_MIB);
 
-    AVAR_ASSERT(avar_speed_unit_parse("Mib/s", &speed_unit));
+    AVAR_ASSERT(avar_speed_unit_parse(AVAR_UNIT_MIBIT_PER_SEC, &speed_unit));
     AVAR_ASSERT_EQ(speed_unit, AVAR_SPEED_MIBIT_PER_SEC);
+}
+
+AVAR_TEST(utils_size_unit_rejects_kibibits) {
+    AvarSizeUnit size_unit = AVAR_SIZE_MIB;
+
+    AVAR_ASSERT(!avar_size_unit_parse("Kib", &size_unit));
+    AVAR_ASSERT_EQ(size_unit, AVAR_SIZE_MIB);
 }
 
 AVAR_TEST(utils_print_help_handles_single_line) {
@@ -171,7 +178,7 @@ AVAR_TEST(utils_print_help_handles_single_line) {
 #if !defined(_WIN32)
     char *output = capture_print_help(1, messages);
     AVAR_ASSERT_NOT_NULL(output);
-    AVAR_ASSERT_STR_EQ(output, "Avar (v" TEST_VERSION_STR ")\n");
+    AVAR_ASSERT_STR_EQ(output, "Avar (v" VERSION_STR ")\n");
     free(output);
 #endif
 }
@@ -191,4 +198,5 @@ AVAR_TEST_MAIN(
         run_utils_format_data_size_uses_configured_units();
         run_utils_format_transfer_rate_uses_configured_units();
         run_utils_unit_parsers_accept_config_keys();
+        run_utils_size_unit_rejects_kibibits();
         run_utils_print_help_handles_single_line();)

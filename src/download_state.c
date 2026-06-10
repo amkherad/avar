@@ -66,7 +66,7 @@ DownloadState *download_state_create(const char *url, const char *filename,
     state->filename = filename != NULL ? strdup(filename) : NULL;
     state->temp_path = temp_path != NULL ? strdup(temp_path) : NULL;
     state->dest_path = dest_path != NULL ? strdup(dest_path) : NULL;
-    state->added_through = strdup("direct");
+    state->added_through = strdup(AVAR_DL_ADDED_DIRECT);
     state->total_size = total_size;
     state->chunk_size = chunk_size > 0 ? chunk_size : DL_CHUNK_SIZE;
 
@@ -136,37 +136,37 @@ DownloadState *download_state_load(const char *path) {
         return NULL;
     }
 
-    state->id = json_get_string(root, "id");
-    state->url = json_get_string(root, "url");
-    state->filename = json_get_string(root, "filename");
-    state->temp_path = json_get_string(root, "temp_path");
-    state->dest_path = json_get_string(root, "dest_path");
-    state->status = json_get_string(root, "status");
-    state->proxy = json_get_string(root, "proxy");
-    state->queued_at = json_get_string(root, "queuedAt");
-    state->last_try_at = json_get_string(root, "lastTryAt");
-    state->description = json_get_string(root, "description");
-    state->original_page = json_get_string(root, "originalPage");
-    state->referer = json_get_string(root, "referer");
-    state->added_through = json_get_string(root, "addedThrough");
-    state->queue_id = json_get_string(root, "queueId");
-    state->etag = json_get_string(root, "etag");
-    state->last_modified = json_get_string(root, "last_modified");
+    state->id = json_get_string(root, AVAR_FIELD_ID);
+    state->url = json_get_string(root, AVAR_FIELD_URL);
+    state->filename = json_get_string(root, AVAR_FIELD_FILENAME);
+    state->temp_path = json_get_string(root, AVAR_STATE_FIELD_TEMP_PATH);
+    state->dest_path = json_get_string(root, AVAR_STATE_FIELD_DEST_PATH);
+    state->status = json_get_string(root, AVAR_FIELD_STATUS);
+    state->proxy = json_get_string(root, AVAR_FIELD_PROXY);
+    state->queued_at = json_get_string(root, AVAR_FIELD_QUEUED_AT);
+    state->last_try_at = json_get_string(root, AVAR_FIELD_LAST_TRY_AT);
+    state->description = json_get_string(root, AVAR_FIELD_DESCRIPTION);
+    state->original_page = json_get_string(root, AVAR_FIELD_ORIGINAL_PAGE);
+    state->referer = json_get_string(root, AVAR_FIELD_REFERER);
+    state->added_through = json_get_string(root, AVAR_FIELD_ADDED_THROUGH);
+    state->queue_id = json_get_string(root, AVAR_FIELD_QUEUE_ID);
+    state->etag = json_get_string(root, AVAR_FIELD_ETAG);
+    state->last_modified = json_get_string(root, AVAR_FIELD_LAST_MODIFIED);
 
-    state->total_size = json_get_u64(root, "totalBytes");
+    state->total_size = json_get_u64(root, AVAR_FIELD_TOTAL_BYTES);
     if (state->total_size == 0) {
-        state->total_size = json_get_u64(root, "total_size");
+        state->total_size = json_get_u64(root, AVAR_STATE_FIELD_TOTAL_SIZE);
     }
-    state->bytes_downloaded = json_get_u64(root, "bytesDownloaded");
+    state->bytes_downloaded = json_get_u64(root, AVAR_FIELD_BYTES_DOWNLOADED);
 
-    const cJSON *chunk_size = cJSON_GetObjectItemCaseSensitive(root, "chunk_size");
+    const cJSON *chunk_size = cJSON_GetObjectItemCaseSensitive(root, AVAR_STATE_FIELD_CHUNK_SIZE);
     if (chunk_size != NULL && cJSON_IsNumber(chunk_size)) {
         state->chunk_size = (size_t)chunk_size->valuedouble;
     } else {
         state->chunk_size = DL_CHUNK_SIZE;
     }
 
-    const cJSON *chunk_count = cJSON_GetObjectItemCaseSensitive(root, "chunk_count");
+    const cJSON *chunk_count = cJSON_GetObjectItemCaseSensitive(root, AVAR_STATE_FIELD_CHUNK_COUNT);
     if (chunk_count != NULL && cJSON_IsNumber(chunk_count)) {
         state->chunk_count = (size_t)chunk_count->valuedouble;
     } else if (state->total_size > 0) {
@@ -182,7 +182,7 @@ DownloadState *download_state_load(const char *path) {
             return NULL;
         }
 
-        const cJSON *chunks = cJSON_GetObjectItemCaseSensitive(root, "chunks");
+        const cJSON *chunks = cJSON_GetObjectItemCaseSensitive(root, AVAR_FIELD_CHUNKS);
         if (chunks != NULL && cJSON_IsArray(chunks)) {
             const int count = cJSON_GetArraySize(chunks);
             for (int i = 0; i < count && (size_t)i < state->chunk_count; i++) {
@@ -201,7 +201,7 @@ DownloadState *download_state_load(const char *path) {
     }
 
     if (state->added_through == NULL) {
-        state->added_through = strdup("direct");
+        state->added_through = strdup(AVAR_DL_ADDED_DIRECT);
     }
 
     return state;
@@ -217,39 +217,40 @@ int download_state_save(const DownloadState *state, const char *path) {
         return -1;
     }
 
-    json_add_string_or_null(root, "id", state->id);
-    json_add_string_or_null(root, "url", state->url);
-    json_add_string_or_null(root, "filename", state->filename);
-    json_add_string_or_null(root, "status", state->status);
-    json_add_string_or_null(root, "proxy", state->proxy);
-    cJSON_AddNumberToObject(root, "bytesDownloaded", (double)state->bytes_downloaded);
-    cJSON_AddNumberToObject(root, "totalBytes", (double)state->total_size);
-    json_add_string_or_null(root, "queuedAt", state->queued_at);
-    json_add_string_or_null(root, "lastTryAt", state->last_try_at);
-    json_add_string_or_null(root, "description", state->description);
-    json_add_string_or_null(root, "originalPage", state->original_page);
-    json_add_string_or_null(root, "referer", state->referer);
-    json_add_string_or_null(root, "addedThrough",
-                            state->added_through != NULL ? state->added_through : "direct");
-    json_add_string_or_null(root, "queueId", state->queue_id);
+    json_add_string_or_null(root, AVAR_FIELD_ID, state->id);
+    json_add_string_or_null(root, AVAR_FIELD_URL, state->url);
+    json_add_string_or_null(root, AVAR_FIELD_FILENAME, state->filename);
+    json_add_string_or_null(root, AVAR_FIELD_STATUS, state->status);
+    json_add_string_or_null(root, AVAR_FIELD_PROXY, state->proxy);
+    cJSON_AddNumberToObject(root, AVAR_FIELD_BYTES_DOWNLOADED, (double) state->bytes_downloaded);
+    cJSON_AddNumberToObject(root, AVAR_FIELD_TOTAL_BYTES, (double) state->total_size);
+    json_add_string_or_null(root, AVAR_FIELD_QUEUED_AT, state->queued_at);
+    json_add_string_or_null(root, AVAR_FIELD_LAST_TRY_AT, state->last_try_at);
+    json_add_string_or_null(root, AVAR_FIELD_DESCRIPTION, state->description);
+    json_add_string_or_null(root, AVAR_FIELD_ORIGINAL_PAGE, state->original_page);
+    json_add_string_or_null(root, AVAR_FIELD_REFERER, state->referer);
+    json_add_string_or_null(root, AVAR_FIELD_ADDED_THROUGH,
+                            state->added_through != NULL ? state->added_through
+                                                         : AVAR_DL_ADDED_DIRECT);
+    json_add_string_or_null(root, AVAR_FIELD_QUEUE_ID, state->queue_id);
 
     if (state->temp_path != NULL) {
-        cJSON_AddStringToObject(root, "temp_path", state->temp_path);
+        cJSON_AddStringToObject(root, AVAR_STATE_FIELD_TEMP_PATH, state->temp_path);
     }
     if (state->dest_path != NULL) {
-        cJSON_AddStringToObject(root, "dest_path", state->dest_path);
+        cJSON_AddStringToObject(root, AVAR_STATE_FIELD_DEST_PATH, state->dest_path);
     }
     if (state->etag != NULL) {
-        cJSON_AddStringToObject(root, "etag", state->etag);
+        cJSON_AddStringToObject(root, AVAR_FIELD_ETAG, state->etag);
     }
     if (state->last_modified != NULL) {
-        cJSON_AddStringToObject(root, "last_modified", state->last_modified);
+        cJSON_AddStringToObject(root, AVAR_FIELD_LAST_MODIFIED, state->last_modified);
     }
 
-    cJSON_AddNumberToObject(root, "chunk_size", (double)state->chunk_size);
-    cJSON_AddNumberToObject(root, "chunk_count", (double)state->chunk_count);
+    cJSON_AddNumberToObject(root, AVAR_STATE_FIELD_CHUNK_SIZE, (double) state->chunk_size);
+    cJSON_AddNumberToObject(root, AVAR_STATE_FIELD_CHUNK_COUNT, (double) state->chunk_count);
 
-    cJSON *chunks = cJSON_AddArrayToObject(root, "chunks");
+    cJSON *chunks = cJSON_AddArrayToObject(root, AVAR_FIELD_CHUNKS);
     if (chunks == NULL) {
         cJSON_Delete(root);
         return -1;
@@ -266,12 +267,13 @@ int download_state_save(const DownloadState *state, const char *path) {
     }
 
     const size_t path_len = strlen(path);
-    char *tmp_path = malloc(path_len + 5);
+    char *tmp_path = malloc(path_len + sizeof(AVAR_STATE_TMP_SUFFIX));
     if (tmp_path == NULL) {
         cJSON_free(json);
         return -1;
     }
-    snprintf(tmp_path, path_len + 5, "%s.tmp", path);
+    snprintf(tmp_path, path_len + sizeof(AVAR_STATE_TMP_SUFFIX), "%s%s", path,
+             AVAR_STATE_TMP_SUFFIX);
 
     FILE *file = fopen(tmp_path, "wb");
     if (file == NULL) {

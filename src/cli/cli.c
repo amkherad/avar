@@ -70,7 +70,8 @@ void cli_free_subargv(char **sub_argv) {
 }
 
 bool cli_is_help_flag(const char *arg) {
-    return arg != NULL && (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0);
+    return arg != NULL
+           && (strcmp(arg, AVAR_CLI_HELP_LONG) == 0 || strcmp(arg, AVAR_CLI_HELP_SHORT) == 0);
 }
 
 void cli_print_argtable_help(const char *progname, void **argtable) {

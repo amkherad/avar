@@ -112,7 +112,7 @@ void _log_msg(log_level_t lvl,
     va_end(ap);
 }
 
-inline void fatal(stringa reason) {
+inline void fatal(const char *reason) {
     if (reason) {
         LOG_FATAL("Fatal error: %s", reason);
     }

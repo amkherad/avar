@@ -1,13 +1,12 @@
 ﻿#ifndef AVAR_CLI_H
 #define AVAR_CLI_H
 
+#include "avar.h"
+#include "logger.h"
 #include "utils.h"
 
 #include <argtable3.h>
 #include <stdbool.h>
-
-#define EXIT_UNKNOWN_COMMAND 2
-#define EXIT_FATAL_ERROR 3
 
 typedef struct {
     stringa name;

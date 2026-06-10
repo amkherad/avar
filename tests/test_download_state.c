@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "avar.h"
 #include "download_state.h"
 #include "file-system.h"
 
@@ -25,7 +26,7 @@ AVAR_TEST(download_state_save_load_roundtrip) {
     setup_temp_state_path();
 
     DownloadState *state = download_state_create("https://example.com/a.bin", "a.bin", "/tmp/a.bin",
-                                                 "/dl/a.bin", 600000, 256 * 1024);
+                                                 "/dl/a.bin", 600000, DL_CHUNK_SIZE);
     AVAR_ASSERT_NOT_NULL(state);
 
     state->chunks_done[0] = true;
@@ -42,7 +43,7 @@ AVAR_TEST(download_state_save_load_roundtrip) {
     AVAR_ASSERT(!loaded->chunks_done[1]);
     AVAR_ASSERT(loaded->chunks_done[2]);
     AVAR_ASSERT_EQ(download_state_bytes_done(loaded),
-                  (uint64_t) (256 * 1024 + (600000 - 2 * 256 * 1024)));
+                  (uint64_t) (DL_CHUNK_SIZE + (600000 - 2 * DL_CHUNK_SIZE)));
 
     download_state_free(state);
     download_state_free(loaded);

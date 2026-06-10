@@ -24,16 +24,16 @@
 
 const char *get_user_home(void) {
 #if defined(_WIN32)
-    return getenv("USERPROFILE");
+    return getenv(AVAR_ENV_USERPROFILE);
 #else
-    return getenv("HOME") ? : "/tmp";
+    return getenv(AVAR_ENV_HOME) ? : "/tmp";
 #endif
 }
 
 char *config_path(const char *app_name) {
 #if defined(_WIN32)
     /* Windows: %APPDATA% */
-    const char *appdata = getenv("APPDATA");
+    const char *appdata = getenv(AVAR_ENV_APPDATA);
     if (!appdata) {
         appdata = get_user_home();
     }
@@ -42,7 +42,7 @@ char *config_path(const char *app_name) {
     snprintf(p, len, "%s\\%s", appdata, app_name);
     return p;
 #else
-    const char *xdg = getenv("XDG_CONFIG_HOME");
+    const char *xdg = getenv(AVAR_ENV_XDG_CONFIG_HOME);
     const char *base = xdg ? xdg : get_user_home();
     size_t len = strlen(base) + 1 + strlen(app_name) + 2; /* slash */
     char *p = malloc(len);
@@ -153,17 +153,17 @@ char *path_join(const char *dir, const char *name) {
 
 static char *platform_data_dir(void) {
 #if defined(_WIN32)
-    const char *appdata = getenv("APPDATA");
+    const char *appdata = getenv(AVAR_ENV_APPDATA);
     if (appdata == NULL) {
         appdata = get_user_home();
     }
     return path_join(appdata, APP_ID);
 #else
-    const char *xdg = getenv("XDG_DATA_HOME");
+    const char *xdg = getenv(AVAR_ENV_XDG_DATA_HOME);
     if (xdg != NULL) {
         return path_join(xdg, APP_ID);
     }
-    char *home = path_join(get_user_home(), ".local/share");
+    char *home = path_join(get_user_home(), AVAR_DIR_LOCAL_SHARE);
     if (home == NULL) {
         return NULL;
     }
@@ -174,7 +174,7 @@ static char *platform_data_dir(void) {
 }
 
 char *default_temp_path(void) {
-    char *configured = get_config("dm.tempPath");
+    char *configured = get_config(AVAR_CFG_DM_TEMP_PATH);
     if (configured != NULL) {
         return configured;
     }
@@ -184,7 +184,7 @@ char *default_temp_path(void) {
         return NULL;
     }
 
-    char *temp = path_join(base, "download-temp");
+    char *temp = path_join(base, AVAR_DIR_DOWNLOAD_TEMP);
     free(base);
     if (temp != NULL) {
         (void)make_dirs_in_path(temp);
@@ -193,25 +193,25 @@ char *default_temp_path(void) {
 }
 
 char *default_download_path(void) {
-    char *configured = get_config("dm.downloadPath");
+    char *configured = get_config(AVAR_CFG_DM_DOWNLOAD_PATH);
     if (configured != NULL) {
         return configured;
     }
 
 #if defined(_WIN32)
-    const char *profile = getenv("USERPROFILE");
+    const char *profile = getenv(AVAR_ENV_USERPROFILE);
     if (profile == NULL) {
         profile = get_user_home();
     }
-    return path_join(profile, "Downloads");
+    return path_join(profile, AVAR_DIR_DOWNLOADS);
 #elif defined(__APPLE__)
-    char *home = path_join(get_user_home(), "Downloads");
+    char *home = path_join(get_user_home(), AVAR_DIR_DOWNLOADS);
     if (home != NULL) {
         (void)make_dirs_in_path(home);
     }
     return home;
 #else
-    const char *xdg_download = getenv("XDG_DOWNLOAD_DIR");
+    const char *xdg_download = getenv(AVAR_ENV_XDG_DOWNLOAD_DIR);
     if (xdg_download != NULL) {
         char *path = strdup(xdg_download);
         if (path != NULL) {
@@ -220,7 +220,7 @@ char *default_download_path(void) {
         return path;
     }
 
-    char *home = path_join(get_user_home(), "Downloads");
+    char *home = path_join(get_user_home(), AVAR_DIR_DOWNLOADS);
     if (home != NULL) {
         (void)make_dirs_in_path(home);
     }
@@ -298,7 +298,7 @@ int move_file_atomic(const char *src, const char *dest) {
             return -1;
         }
 
-        char buffer[64 * 1024];
+        char buffer[AVAR_FS_COPY_BUFFER];
         size_t n;
         while ((n = fread(buffer, 1, sizeof buffer, in)) > 0) {
             if (fwrite(buffer, 1, n, out) != n) {

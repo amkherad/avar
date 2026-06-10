@@ -1,13 +1,9 @@
 ﻿#ifndef AVAR_FILE_SYSTEM_H
 #define AVAR_FILE_SYSTEM_H
 
-#include <stdbool.h>
+#include "avar.h"
 
-#if defined(_WIN32)
-#define PATH_SEPARATOR '\\'
-#else
-#define PATH_SEPARATOR '/'
-#endif
+#include <stdbool.h>
 
 const char *get_user_home(void);
 

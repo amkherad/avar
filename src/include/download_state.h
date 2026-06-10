@@ -1,12 +1,11 @@
 #ifndef AVAR_DOWNLOAD_STATE_H
 #define AVAR_DOWNLOAD_STATE_H
 
+#include "avar.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#define DL_STATE_FILENAME "state.json"
-#define DL_CHUNK_SIZE (256U * 1024U)
 
 typedef struct {
     char *id;

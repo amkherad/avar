@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "avar.h"
 #include "config.h"
 #include "download.h"
 #include "file-system.h"
@@ -64,8 +65,8 @@ static void setup_isolated_paths(void) {
     }
 
     AVAR_ASSERT_EQ(config_open_at(g_config_path), 0);
-    AVAR_ASSERT_EQ(set_config("dm.tempPath", g_temp_dir), 0);
-    AVAR_ASSERT_EQ(set_config("dm.downloadPath", g_download_dir), 0);
+    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_TEMP_PATH, g_temp_dir), 0);
+    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_DOWNLOAD_PATH, g_download_dir), 0);
 }
 
 static void start_local_server(void) {
@@ -130,10 +131,10 @@ AVAR_TEST(download_integration_attached_roundtrip) {
     fclose(file);
     AVAR_ASSERT_STR_EQ(buffer, "hello world");
 
-    AVAR_ASSERT_EQ(get_config_array_size("dm.items"), 1);
-    char *status = get_config_array_item_field("dm.items", 0, "status");
+    AVAR_ASSERT_EQ(get_config_array_size(AVAR_CFG_DM_ITEMS), 1);
+    char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, 0, AVAR_FIELD_STATUS);
     AVAR_ASSERT_NOT_NULL(status);
-    AVAR_ASSERT_STR_EQ(status, "completed");
+    AVAR_ASSERT_STR_EQ(status, AVAR_DL_STATUS_COMPLETED);
     free(status);
 
     free(dest);
