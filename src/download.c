@@ -20,6 +20,7 @@
 
 #if defined(_WIN32)
     #include <direct.h>
+    #include <io.h>
 #else
     #include <unistd.h>
 #endif
@@ -29,6 +30,7 @@
 #define DL_IDLE_TIMEOUT_MS 120000U
 #define DL_MAX_REDIRECTS 10
 #define DL_WRITE_CHUNK_SIZE (1024U * 1024U)
+#define DL_PROGRESS_BAR_WIDTH 22
 
 typedef enum {
     DL_STEP_CHUNK,
@@ -48,6 +50,9 @@ typedef struct {
     FILE *fp;
     DlStep step;
     size_t active_chunk;
+    uint64_t chunk_write_offset;
+    uint64_t chunk_received;
+    uint64_t chunk_expected;
     uint64_t stream_received;
     uint64_t stream_expected;
     bool streaming;
@@ -63,11 +68,16 @@ typedef struct {
     uint64_t connect_deadline_ms;
     uint64_t last_activity_ms;
     uint64_t last_progress_ms;
+    uint64_t last_speed_sample_ms;
+    uint64_t last_speed_bytes;
+    double last_speed_bps;
 } DownloadJob;
 
 static void set_error(DownloadJob *job, const char *fmt, ...);
 
 static void close_file(DownloadJob *job);
+
+static void sync_temp_file(DownloadJob *job);
 
 static char *build_job_dir(const char *temp_dir, const char *item_id);
 
@@ -89,7 +99,7 @@ static char *build_item_json(const DownloadJob *job, const char *status);
 
 static int dm_item_upsert(DownloadJob *job, const char *status);
 
-static void print_progress(const DownloadJob *job);
+static void print_progress(DownloadJob *job);
 
 static void report_cli(const DownloadJob *job);
 
@@ -111,7 +121,13 @@ static bool write_at_offset(DownloadJob *job, const void *data, size_t len, uint
 
 static bool append_stream(DownloadJob *job, const void *data, size_t len);
 
+// static void sync_temp_file(DownloadJob *job);
+
 static void begin_stream_body(DownloadJob *job, struct mg_connection *c, struct mg_http_message *hm);
+
+static void begin_chunk_body(DownloadJob *job, struct mg_connection *c, struct mg_http_message *hm);
+
+static bool complete_active_chunk(DownloadJob *job, struct mg_connection *c);
 
 static bool store_header_value(char **dest, struct mg_str value);
 
@@ -125,7 +141,7 @@ static void request_close(DownloadJob *job, struct mg_connection *c, bool schedu
 
 static void schedule_next(DownloadJob *job);
 
-static void flush_recv_stream(DownloadJob *job, struct mg_connection *c);
+static void flush_recv_body(DownloadJob *job, struct mg_connection *c);
 
 static bool try_parse_pending_response(DownloadJob *job, struct mg_connection *c);
 
@@ -156,7 +172,7 @@ static void set_error(DownloadJob *job, const char *fmt, ...) {
 
 static void close_file(DownloadJob *job) {
     if (job != NULL && job->fp != NULL) {
-        fflush(job->fp);
+        sync_temp_file(job);
         fclose(job->fp);
         job->fp = NULL;
     }
@@ -215,7 +231,12 @@ static uint64_t job_bytes_done(const DownloadJob *job) {
     if (job->step == DL_STEP_STREAM) {
         return job->stream_received;
     }
-    return download_state_bytes_done(job->state);
+
+    uint64_t bytes = download_state_bytes_done(job->state);
+    if (job->streaming) {
+        bytes += job->chunk_received;
+    }
+    return bytes;
 }
 
 static void sync_state_metadata(DownloadJob *job, const char *status) {
@@ -359,18 +380,58 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
     return 0;
 }
 
-static void print_progress(const DownloadJob *job) {
+static void print_progress(DownloadJob *job) {
     const uint64_t total = job->state != NULL ? job->state->total_size : job->stream_expected;
     const uint64_t done_bytes = job_bytes_done(job);
+    const uint64_t now = mg_millis();
+
+    if (job->last_speed_sample_ms == 0) {
+        job->last_speed_sample_ms = now;
+        job->last_speed_bytes = done_bytes;
+    } else if (now > job->last_speed_sample_ms) {
+        const double elapsed = (now - job->last_speed_sample_ms) / 1000.0;
+        if (elapsed >= 0.2) {
+            job->last_speed_bps = (double) (done_bytes - job->last_speed_bytes) / elapsed;
+            job->last_speed_bytes = done_bytes;
+            job->last_speed_sample_ms = now;
+        }
+    }
+
+    AvarSizeUnit size_unit = AVAR_SIZE_MIB;
+    AvarSpeedUnit speed_unit = AVAR_SPEED_MIBIT_PER_SEC;
+    char *size_cfg = get_config_or_default("dm.progress.sizeUnit", "MiB");
+    char *speed_cfg = get_config_or_default("dm.progress.speedUnit", "Mib/s");
+    (void) avar_size_unit_parse(size_cfg, &size_unit);
+    (void) avar_speed_unit_parse(speed_cfg, &speed_unit);
+    free(size_cfg);
+    free(speed_cfg);
+
+    int percent = 0;
+    if (total > 0) {
+        percent = (int) ((100.0 * (double) done_bytes) / (double) total);
+        if (percent > 100) {
+            percent = 100;
+        }
+    }
+
+    char bar[DL_PROGRESS_BAR_WIDTH + 3];
+    char done_str[32];
+    char total_str[32];
+    char speed_str[32];
+
+    format_progress_bar(percent, DL_PROGRESS_BAR_WIDTH, bar, sizeof bar);
+    format_data_size(done_bytes, size_unit, done_str, sizeof done_str);
+    format_transfer_rate(job->last_speed_bps, speed_unit, speed_str, sizeof speed_str);
 
     if (total > 0) {
-        const double pct = (100.0 * (double) done_bytes) / (double) total;
-        fprintf(stderr, "\r%s: %.1f%% (%llu / %llu bytes)", job->filename, pct,
-                (unsigned long long) done_bytes, (unsigned long long) total);
+        format_data_size(total, size_unit, total_str, sizeof total_str);
+        fprintf(stderr, "\r%s %d%%, %s, (%s / %s)", bar, percent, speed_str, done_str, total_str);
     } else {
-        fprintf(stderr, "\r%s: %llu bytes", job->filename, (unsigned long long) done_bytes);
+        fprintf(stderr, "\r%s %s, (%s)", bar, speed_str, done_str);
     }
+
     fflush(stderr);
+    job->last_progress_ms = now;
 }
 
 static void report_cli(const DownloadJob *job) {
@@ -563,6 +624,19 @@ static bool write_at_offset(DownloadJob *job, const void *data, const size_t len
     return true;
 }
 
+static void sync_temp_file(DownloadJob *job) {
+    if (job == NULL || job->fp == NULL) {
+        return;
+    }
+
+    fflush(job->fp);
+#if defined(_WIN32)
+    _commit(_fileno(job->fp));
+#else
+    fsync(fileno(job->fp));
+#endif
+}
+
 static bool append_stream(DownloadJob *job, const void *data, const size_t len) {
     if (len == 0) {
         return true;
@@ -614,6 +688,56 @@ static void begin_stream_body(DownloadJob *job, struct mg_connection *c,
     mg_iobuf_del(&c->recv, 0, hm->head.len + to_write);
     print_progress(job);
     (void) dm_item_upsert(job, "downloading");
+}
+
+static void begin_chunk_body(DownloadJob *job, struct mg_connection *c,
+                             struct mg_http_message *hm) {
+    job->streaming = true;
+    c->pfn = NULL;
+    job->chunk_write_offset = (uint64_t) job->active_chunk * (uint64_t) job->state->chunk_size;
+    job->chunk_received = 0;
+
+    const size_t to_write = buffered_http_body(c, hm);
+    if (to_write > 0) {
+        if (!write_at_offset(job, hm->body.buf, to_write, job->chunk_write_offset)) {
+            c->is_draining = 1;
+            return;
+        }
+        job->chunk_received += to_write;
+    }
+
+    mg_iobuf_del(&c->recv, 0, hm->head.len + to_write);
+    print_progress(job);
+    (void) dm_item_upsert(job, "downloading");
+}
+
+static bool complete_active_chunk(DownloadJob *job, struct mg_connection *c) {
+    if (job == NULL || job->state == NULL) {
+        return false;
+    }
+
+    if (job->state->chunks_done[job->active_chunk]) {
+        return true;
+    }
+
+    flush_recv_body(job, c);
+
+    if (job->chunk_expected > 0 && job->chunk_received < job->chunk_expected) {
+        set_error(job, "Incomplete chunk %zu (%llu / %llu bytes)", job->active_chunk,
+                  (unsigned long long) job->chunk_received,
+                  (unsigned long long) job->chunk_expected);
+        return false;
+    }
+
+    sync_temp_file(job);
+
+    job->state->chunks_done[job->active_chunk] = true;
+    job->streaming = false;
+    job->chunk_received = 0;
+    job->chunk_expected = 0;
+    (void) dm_item_upsert(job, "downloading");
+    print_progress(job);
+    return true;
 }
 
 static bool store_header_value(char **dest, const struct mg_str value) {
@@ -761,12 +885,18 @@ static void request_close(DownloadJob *job, struct mg_connection *c, const bool 
     c->is_draining = 1;
 }
 
-static void flush_recv_stream(DownloadJob *job, struct mg_connection *c) {
+static void flush_recv_body(DownloadJob *job, struct mg_connection *c) {
     if (job == NULL || c == NULL || !job->streaming || c->recv.len == 0) {
         return;
     }
 
-    if (!append_stream(job, c->recv.buf, c->recv.len)) {
+    if (job->step == DL_STEP_CHUNK) {
+        const size_t len = c->recv.len;
+        if (!write_at_offset(job, c->recv.buf, len, job->chunk_write_offset + job->chunk_received)) {
+            return;
+        }
+        job->chunk_received += len;
+    } else if (!append_stream(job, c->recv.buf, c->recv.len)) {
         return;
     }
 
@@ -801,11 +931,26 @@ static void on_connection_closed(DownloadJob *job, struct mg_connection *c) {
         (void) try_parse_pending_response(job, c);
     }
 
-    flush_recv_stream(job, c);
+    flush_recv_body(job, c);
 
     if (job->pending_schedule) {
         job->pending_schedule = false;
         job->schedule_deferred = true;
+        return;
+    }
+
+    if (job->step == DL_STEP_CHUNK && job->headers_received
+        && (job->streaming || job->chunk_received > 0)) {
+        if (!complete_active_chunk(job, c)) {
+            (void) dm_item_upsert(job, "failed");
+            return;
+        }
+
+        if (download_state_all_chunks_done(job->state)) {
+            (void) finalize_download(job);
+        } else {
+            job->schedule_deferred = true;
+        }
         return;
     }
 
@@ -854,6 +999,9 @@ static void schedule_next(DownloadJob *job) {
     job->headers_received = false;
     job->request_sent = false;
     job->streaming = false;
+    job->chunk_received = 0;
+    job->chunk_expected = 0;
+    job->chunk_write_offset = 0;
 
     if (job->step == DL_STEP_CHUNK) {
         const size_t chunk = next_chunk_index(job);
@@ -966,7 +1114,9 @@ static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
         buffer[content_length->len] = '\0';
         const uint64_t len = strtoull(buffer, NULL, 10);
 
-        if (job->step == DL_STEP_STREAM && job->stream_expected == 0) {
+        if (job->step == DL_STEP_CHUNK) {
+            job->chunk_expected = len;
+        } else if (job->step == DL_STEP_STREAM && job->stream_expected == 0) {
             job->stream_expected = job->stream_received + len;
             if (job->state->total_size == 0) {
                 job->state->total_size = job->stream_expected;
@@ -974,7 +1124,18 @@ static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
         }
     }
 
-    if (job->step == DL_STEP_STREAM) {
+    if (job->step == DL_STEP_CHUNK && job->chunk_expected == 0) {
+        const uint64_t start = (uint64_t) job->active_chunk * (uint64_t) job->state->chunk_size;
+        uint64_t end = start + (uint64_t) job->state->chunk_size - 1;
+        if (job->state->total_size > 0 && end >= job->state->total_size) {
+            end = job->state->total_size - 1;
+        }
+        job->chunk_expected = end - start + 1;
+    }
+
+    if (job->step == DL_STEP_CHUNK) {
+        begin_chunk_body(job, c, hm);
+    } else if (job->step == DL_STEP_STREAM) {
         begin_stream_body(job, c, hm);
     }
 }
@@ -1043,7 +1204,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (ev == MG_EV_HTTP_MSG) {
         struct mg_http_message *hm = (struct mg_http_message *) ev_data;
 
-        if (job->step == DL_STEP_STREAM && job->streaming) {
+        if (job->streaming) {
             return;
         }
 
@@ -1064,6 +1225,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             return;
         }
 
+        sync_temp_file(job);
         job->state->chunks_done[job->active_chunk] = true;
         (void) dm_item_upsert(job, "downloading");
         print_progress(job);
@@ -1076,17 +1238,26 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
     } else if (ev == MG_EV_READ) {
         if (job->streaming && c->recv.len > 0) {
-            const size_t len = c->recv.len;
-            if (!append_stream(job, c->recv.buf, len)) {
-                request_close(job, c, false);
-                return;
+            if (job->step == DL_STEP_CHUNK) {
+                const size_t len = c->recv.len;
+                if (!write_at_offset(job, c->recv.buf, len,
+                                     job->chunk_write_offset + job->chunk_received)) {
+                    request_close(job, c, false);
+                    return;
+                }
+                job->chunk_received += len;
+            } else {
+                const size_t len = c->recv.len;
+                if (!append_stream(job, c->recv.buf, len)) {
+                    request_close(job, c, false);
+                    return;
+                }
             }
             c->recv.len = 0;
 
             if (mg_millis() - job->last_progress_ms >= 200) {
                 print_progress(job);
                 (void) dm_item_upsert(job, "downloading");
-                job->last_progress_ms = mg_millis();
             }
         }
     } else if (ev == MG_EV_CLOSE) {
@@ -1118,6 +1289,8 @@ static int run_download(DownloadJob *job) {
     }
     job->last_activity_ms = mg_millis();
     job->last_progress_ms = mg_millis();
+    job->last_speed_sample_ms = mg_millis();
+    job->last_speed_bytes = job_bytes_done(job);
 
     if (job->state->total_size > 0 && job->state->chunk_count > 0
         && !download_state_all_chunks_done(job->state)) {
@@ -1317,6 +1490,7 @@ int transient_download(const char *url, const char *queue, const char *name, con
     job->state = state;
     job->use_ranges = true;
     job->last_progress_ms = mg_millis();
+    job->last_speed_sample_ms = mg_millis();
 
     LOG_INFO("Downloading %s <- %s", dest_path, url);
     (void) dm_item_upsert(job, "downloading");

@@ -130,6 +130,40 @@ AVAR_TEST(utils_print_help_returns_success) {
 #endif
 }
 
+AVAR_TEST(utils_format_progress_bar_renders_percent_fill) {
+    char bar[32];
+    format_progress_bar(50, 22, bar, sizeof bar);
+    AVAR_ASSERT_STR_EQ(bar, "[===========           ]");
+}
+
+AVAR_TEST(utils_format_data_size_uses_configured_units) {
+    char buf[32];
+
+    format_data_size(10485760, AVAR_SIZE_MIB, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "10 MiB");
+
+    format_data_size(104857600, AVAR_SIZE_MIB, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "100 MiB");
+}
+
+AVAR_TEST(utils_format_transfer_rate_uses_configured_units) {
+    char buf[32];
+
+    format_transfer_rate(625000.0, AVAR_SPEED_MIBIT_PER_SEC, buf, sizeof buf);
+    AVAR_ASSERT_STR_EQ(buf, "5 Mib/s");
+}
+
+AVAR_TEST(utils_unit_parsers_accept_config_keys) {
+    AvarSizeUnit size_unit = AVAR_SIZE_BYTES;
+    AvarSpeedUnit speed_unit = AVAR_SPEED_BYTES_PER_SEC;
+
+    AVAR_ASSERT(avar_size_unit_parse("MiB", &size_unit));
+    AVAR_ASSERT_EQ(size_unit, AVAR_SIZE_MIB);
+
+    AVAR_ASSERT(avar_speed_unit_parse("Mib/s", &speed_unit));
+    AVAR_ASSERT_EQ(speed_unit, AVAR_SPEED_MIBIT_PER_SEC);
+}
+
 AVAR_TEST(utils_print_help_handles_single_line) {
     const char *messages[] = {"Avar"};
 
@@ -153,4 +187,8 @@ AVAR_TEST_MAIN(
         run_utils_is_valid_url_accepts_userinfo_and_port();
         run_utils_is_valid_http_url_delegates_to_http_schemes();
         run_utils_print_help_returns_success();
+        run_utils_format_progress_bar_renders_percent_fill();
+        run_utils_format_data_size_uses_configured_units();
+        run_utils_format_transfer_rate_uses_configured_units();
+        run_utils_unit_parsers_accept_config_keys();
         run_utils_print_help_handles_single_line();)

@@ -1,5 +1,6 @@
 ﻿#include <utils.h>
 #include <ctype.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -94,6 +95,195 @@ char *strndup(const char *s, size_t n) {
     memcpy(copy, s, len);
     copy[len] = '\0';
     return copy;
+}
+
+static bool str_ieq(const char *a, const char *b) {
+    if (a == NULL || b == NULL) {
+        return false;
+    }
+
+    while (*a != '\0' && *b != '\0') {
+        if (tolower((unsigned char) *a) != tolower((unsigned char) *b)) {
+            return false;
+        }
+        ++a;
+        ++b;
+    }
+
+    return *a == '\0' && *b == '\0';
+}
+
+static void format_scaled_value(double value, const char *suffix, char *buf, const size_t buflen) {
+    if (value < 10.0 && value != floor(value)) {
+        snprintf(buf, buflen, "%.1f %s", value, suffix);
+    } else {
+        snprintf(buf, buflen, "%.0f %s", value, suffix);
+    }
+}
+
+bool avar_size_unit_parse(const char *text, AvarSizeUnit *out) {
+    if (out == NULL) {
+        return false;
+    }
+
+    if (text == NULL || text[0] == '\0') {
+        *out = AVAR_SIZE_MIB;
+        return true;
+    }
+
+    if (str_ieq(text, "bytes") || str_ieq(text, "b")) {
+        *out = AVAR_SIZE_BYTES;
+        return true;
+    }
+    if (str_ieq(text, "kib")) {
+        *out = AVAR_SIZE_KIB;
+        return true;
+    }
+    if (str_ieq(text, "mib")) {
+        *out = AVAR_SIZE_MIB;
+        return true;
+    }
+    if (str_ieq(text, "gib")) {
+        *out = AVAR_SIZE_GIB;
+        return true;
+    }
+
+    return false;
+}
+
+bool avar_speed_unit_parse(const char *text, AvarSpeedUnit *out) {
+    if (out == NULL) {
+        return false;
+    }
+
+    if (text == NULL || text[0] == '\0') {
+        *out = AVAR_SPEED_MIBIT_PER_SEC;
+        return true;
+    }
+
+    if (str_ieq(text, "bytes/s")) {
+        *out = AVAR_SPEED_BYTES_PER_SEC;
+        return true;
+    }
+    if (str_ieq(text, "bits/s")) {
+        *out = AVAR_SPEED_BITS_PER_SEC;
+        return true;
+    }
+    if (strcmp(text, "KiB/s") == 0) {
+        *out = AVAR_SPEED_KIB_PER_SEC;
+        return true;
+    }
+    if (strcmp(text, "MiB/s") == 0) {
+        *out = AVAR_SPEED_MIB_PER_SEC;
+        return true;
+    }
+    if (strcmp(text, "GiB/s") == 0) {
+        *out = AVAR_SPEED_GIB_PER_SEC;
+        return true;
+    }
+    if (strcmp(text, "Kib/s") == 0) {
+        *out = AVAR_SPEED_KIBIT_PER_SEC;
+        return true;
+    }
+    if (strcmp(text, "Mib/s") == 0) {
+        *out = AVAR_SPEED_MIBIT_PER_SEC;
+        return true;
+    }
+    if (strcmp(text, "Gib/s") == 0) {
+        *out = AVAR_SPEED_GIBIT_PER_SEC;
+        return true;
+    }
+
+    return false;
+}
+
+char *format_data_size(const uint64_t bytes, const AvarSizeUnit unit, char *buf,
+                       const size_t buflen) {
+    if (buf == NULL || buflen == 0) {
+        return buf;
+    }
+
+    switch (unit) {
+    case AVAR_SIZE_BYTES:
+        snprintf(buf, buflen, "%llu Bytes", (unsigned long long) bytes);
+        break;
+    case AVAR_SIZE_KIB:
+        format_scaled_value((double) bytes / 1024.0, "KiB", buf, buflen);
+        break;
+    case AVAR_SIZE_MIB:
+        format_scaled_value((double) bytes / (1024.0 * 1024.0), "MiB", buf, buflen);
+        break;
+    case AVAR_SIZE_GIB:
+        format_scaled_value((double) bytes / (1024.0 * 1024.0 * 1024.0), "GiB", buf, buflen);
+        break;
+    }
+
+    return buf;
+}
+
+char *format_transfer_rate(const double bytes_per_sec, const AvarSpeedUnit unit, char *buf,
+                           const size_t buflen) {
+    if (buf == NULL || buflen == 0) {
+        return buf;
+    }
+
+    switch (unit) {
+    case AVAR_SPEED_BYTES_PER_SEC:
+        format_scaled_value(bytes_per_sec, "Bytes/s", buf, buflen);
+        break;
+    case AVAR_SPEED_BITS_PER_SEC:
+        format_scaled_value(bytes_per_sec * 8.0, "bits/s", buf, buflen);
+        break;
+    case AVAR_SPEED_KIB_PER_SEC:
+        format_scaled_value(bytes_per_sec / 1024.0, "KiB/s", buf, buflen);
+        break;
+    case AVAR_SPEED_MIB_PER_SEC:
+        format_scaled_value(bytes_per_sec / (1024.0 * 1024.0), "MiB/s", buf, buflen);
+        break;
+    case AVAR_SPEED_GIB_PER_SEC:
+        format_scaled_value(bytes_per_sec / (1024.0 * 1024.0 * 1024.0), "GiB/s", buf, buflen);
+        break;
+    case AVAR_SPEED_KIBIT_PER_SEC:
+        format_scaled_value((bytes_per_sec * 8.0) / 1024.0, "Kib/s", buf, buflen);
+        break;
+    case AVAR_SPEED_MIBIT_PER_SEC:
+        format_scaled_value((bytes_per_sec * 8.0) / (1024.0 * 1024.0), "Mib/s", buf, buflen);
+        break;
+    case AVAR_SPEED_GIBIT_PER_SEC:
+        format_scaled_value((bytes_per_sec * 8.0) / (1024.0 * 1024.0 * 1024.0), "Gib/s", buf,
+                            buflen);
+        break;
+    }
+
+    return buf;
+}
+
+char *format_progress_bar(const int percent, const int width, char *buf, const size_t buflen) {
+    if (buf == NULL || buflen == 0 || width <= 0) {
+        return buf;
+    }
+
+    const size_t need = (size_t) width + 3;
+    if (buflen < need) {
+        buf[0] = '\0';
+        return buf;
+    }
+
+    int clamped = percent;
+    if (clamped < 0) {
+        clamped = 0;
+    } else if (clamped > 100) {
+        clamped = 100;
+    }
+
+    const int filled = (clamped * width) / 100;
+    buf[0] = '[';
+    for (int i = 0; i < width; ++i) {
+        buf[(size_t) i + 1] = i < filled ? '=' : ' ';
+    }
+    buf[(size_t) width + 1] = ']';
+    buf[(size_t) width + 2] = '\0';
+    return buf;
 }
 
 int print_help(int help_message_n, const char *help_message[]) {
