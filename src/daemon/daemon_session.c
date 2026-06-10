@@ -1,8 +1,8 @@
 #include <cJSON.h>
 
-#include <daemon_session.h>
-#include <daemon_rpc.h>
-#include <daemon_transport.h>
+#include <daemon/daemon_session.h>
+#include <daemon/daemon_rpc.h>
+#include <daemon/daemon_transport.h>
 #include <download.h>
 #include <logger.h>
 

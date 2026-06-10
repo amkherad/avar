@@ -55,6 +55,15 @@ avar_add_test(test_config_array
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
 
+avar_add_test(test_config_env
+        test_config_env.c
+        "${SRC_DIR}/config.c"
+        "${SRC_DIR}/file-system.c"
+        "${SRC_DIR}/logger.c"
+        "${SRC_DIR}/utils.c"
+        "${SRC_DIR}/third_party/cJSON/cJSON.c"
+)
+
 avar_add_test(test_queue
         test_queue.c
         "${SRC_DIR}/queue.c"
@@ -95,12 +104,12 @@ set(AVAR_DAEMON_TEST_SOURCES
         "${SRC_DIR}/download.c"
         "${SRC_DIR}/transport.c"
         "${SRC_DIR}/torrent.c"
-        "${SRC_DIR}/daemon.c"
-        "${SRC_DIR}/daemon_config.c"
-        "${SRC_DIR}/daemon_session.c"
-        "${SRC_DIR}/daemon_transport.c"
-        "${SRC_DIR}/daemon_rpc.c"
-        "${SRC_DIR}/daemon_install.c"
+        "${SRC_DIR}/daemon/daemon.c"
+        "${SRC_DIR}/daemon/daemon_config.c"
+        "${SRC_DIR}/daemon/daemon_session.c"
+        "${SRC_DIR}/daemon/daemon_transport.c"
+        "${SRC_DIR}/daemon/daemon_rpc.c"
+        "${SRC_DIR}/daemon/daemon_install.c"
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
         "${SRC_DIR}/cli/cli.c"
@@ -110,7 +119,7 @@ set(AVAR_DAEMON_TEST_SOURCES
         "${SRC_DIR}/cli/config_cli.c"
         "${SRC_DIR}/cli/profile_cli.c"
         "${SRC_DIR}/cli/scheduler_cli.c"
-        "${SRC_DIR}/cli/daemon_cli.c"
+        "${SRC_DIR}/daemon/daemon_cli.c"
         "${SRC_DIR}/third_party/argtable3/argtable3.c"
 )
 

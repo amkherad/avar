@@ -29,6 +29,7 @@ struct ConfigPaths {
 
 static struct ConfigContext _config = {0};
 
+static char *get_config_from_env(stringa key);
 static struct ConfigPaths get_config_path(bool user);
 static void ensure_initialized(void);
 static int persist_config(const char *path);
@@ -303,7 +304,31 @@ static void prune_empty_parents(cJSON *root, const char *key) {
     free(path);
 }
 
+static char *get_config_from_env(stringa key) {
+    if (key == NULL) {
+        return NULL;
+    }
+
+    char env_name[AVAR_CONFIG_PATH_MAX];
+    const int written = snprintf(env_name, sizeof env_name, "%s%s", AVAR_ENV_PREFIX, key);
+    if (written < 0 || (size_t)written >= sizeof env_name) {
+        return NULL;
+    }
+
+    const char *value = getenv(env_name);
+    if (value == NULL) {
+        return NULL;
+    }
+
+    return strdup(value);
+}
+
 char *get_config(stringa key) {
+    char *env_value = get_config_from_env(key);
+    if (env_value != NULL) {
+        return env_value;
+    }
+
     ensure_initialized();
 
     char *leaf = NULL;

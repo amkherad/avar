@@ -77,6 +77,9 @@
 #define AVAR_CONFIG_TMP_SUFFIX ".tmp"
 #define AVAR_CONFIG_PATH_MAX 256U
 
+/* Environment variables override config.json: avar.<config-key> (e.g. avar.daemon.session.mode). */
+#define AVAR_ENV_PREFIX "avar."
+
 #define AVAR_DIR_DOWNLOAD_TEMP "download-temp"
 #define AVAR_DIR_DOWNLOADS "Downloads"
 #define AVAR_DIR_LOCAL_SHARE ".local/share"

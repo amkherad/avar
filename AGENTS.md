@@ -30,14 +30,14 @@ When modifying C code:
 CLI and daemon share one executable. Use the **daemon-mode** skill for all daemon, IPC, and session-routing work:
 
 - Config lives at `daemon` in `config.json` (`daemon.session` controls local vs remote).
-- CLI commands delegate through `daemon_session.c`; transports live in `daemon_transport.c`.
+- CLI commands delegate through `daemon/daemon_session.c`; transports live in `daemon/daemon_transport.c`.
 - Do not run the transfer engine in the CLI when `daemon.session.mode` is `remote`.
 - Deferred work belongs in `tasks/daemon-mode-deferred.md`.
 
 Project layout:
 
-- include/ -> public headers
-- src/ -> implementation files
+- include/ -> public headers (`include/daemon/` for daemon APIs)
+- src/ -> implementation files (`src/daemon/` for daemon module)
 - scripts/ -> automation scripts
 - third_party/ -> vendored dependencies
 

@@ -1,7 +1,7 @@
 #include <avar.h>
 #include <cli.h>
 #include <config.h>
-#include <daemon_session.h>
+#include <daemon/daemon_session.h>
 #include <queue.h>
 
 #include <stdint.h>

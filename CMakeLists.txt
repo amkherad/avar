@@ -22,12 +22,12 @@ set(AVAR_CORE_SOURCES
         "${SRC_DIR}/download.c"
         "${SRC_DIR}/transport.c"
         "${SRC_DIR}/torrent.c"
-        "${SRC_DIR}/daemon.c"
-        "${SRC_DIR}/daemon_config.c"
-        "${SRC_DIR}/daemon_session.c"
-        "${SRC_DIR}/daemon_transport.c"
-        "${SRC_DIR}/daemon_rpc.c"
-        "${SRC_DIR}/daemon_install.c"
+        "${SRC_DIR}/daemon/daemon.c"
+        "${SRC_DIR}/daemon/daemon_config.c"
+        "${SRC_DIR}/daemon/daemon_session.c"
+        "${SRC_DIR}/daemon/daemon_transport.c"
+        "${SRC_DIR}/daemon/daemon_rpc.c"
+        "${SRC_DIR}/daemon/daemon_install.c"
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
@@ -42,7 +42,7 @@ add_executable(${PROJECT_NAME}
         "${SRC_DIR}/cli/config_cli.c"
         "${SRC_DIR}/cli/profile_cli.c"
         "${SRC_DIR}/cli/scheduler_cli.c"
-        "${SRC_DIR}/cli/daemon_cli.c"
+        "${SRC_DIR}/daemon/daemon_cli.c"
         "${SRC_DIR}/third_party/argtable3/argtable3.c"
 )
 

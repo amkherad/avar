@@ -6,8 +6,8 @@
 
 #include "avar.h"
 #include "config.h"
-#include "daemon.h"
-#include "daemon_transport.h"
+#include <daemon/daemon.h>
+#include <daemon/daemon_transport.h>
 #include "file-system.h"
 #include "logger.h"
 

@@ -1,6 +1,6 @@
 #include <cli.h>
 #include <avar.h>
-#include <daemon_session.h>
+#include <daemon/daemon_session.h>
 
 #include <stdio.h>
 #include <stdlib.h>

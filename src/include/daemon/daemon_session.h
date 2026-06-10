@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#include "daemon.h"
+#include <daemon/daemon.h>
 #include "utils.h"
 
 typedef enum {

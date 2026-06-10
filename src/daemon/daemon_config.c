@@ -1,5 +1,5 @@
 #include <config.h>
-#include <daemon.h>
+#include <daemon/daemon.h>
 #include <file-system.h>
 #include <logger.h>
 #include <utils.h>

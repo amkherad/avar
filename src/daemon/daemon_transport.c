@@ -1,5 +1,5 @@
-#include <daemon_rpc.h>
-#include <daemon_transport.h>
+#include <daemon/daemon_rpc.h>
+#include <daemon/daemon_transport.h>
 #include <logger.h>
 
 #include <mongoose.h>

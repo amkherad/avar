@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "daemon.h"
+#include <daemon/daemon.h>
 
 struct mg_http_message;
 

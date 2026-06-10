@@ -5,6 +5,11 @@
 
 /* Dot-separated keys, e.g. "download.limiter.speed". */
 
+/*
+ * Environment overrides: when set, get_config() and get_config_or_default() always return
+ * the environment value (variable name: AVAR_ENV_PREFIX + key, e.g. avar.daemon.session.mode).
+ */
+
 /* Returns a newly allocated string, or NULL if missing. Caller must free(). */
 char *get_config(stringa key);
 

@@ -2,9 +2,9 @@
 
 #include <avar.h>
 #include <cli.h>
-#include <daemon.h>
-#include <daemon_rpc.h>
-#include <daemon_session.h>
+#include <daemon/daemon.h>
+#include <daemon/daemon_rpc.h>
+#include <daemon/daemon_session.h>
 
 #include <stdio.h>
 #include <string.h>

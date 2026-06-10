@@ -14,9 +14,9 @@ The CLI and daemon are the **same executable**. Operations route through two lay
 | Layer | Location | Responsibility |
 |-------|----------|----------------|
 | CLI commands | `src/cli/*_cli.c` | Parse args, call session or local APIs |
-| Session router | `daemon_session.c` | Choose local execution vs remote delegation |
-| Transport | `daemon_transport.c` | HTTP, named pipe, unix socket adapters |
-| Daemon server | `daemon.c` | Lifecycle, PID file, channel startup |
+| Session router | `daemon/daemon_session.c` | Choose local execution vs remote delegation |
+| Transport | `daemon/daemon_transport.c` | HTTP, named pipe, unix socket adapters |
+| Daemon server | `daemon/daemon.c` | Lifecycle, PID file, channel startup |
 
 ```
 CLI command ──► daemon_session ──► local module API
@@ -70,16 +70,19 @@ Root key: `daemon`.
 
 Constants live in `avar.h` (`AVAR_CFG_DAEMON_*`, `AVAR_DAEMON_TRANSPORT_*`).
 
+Environment overrides use the `avar.` prefix plus the config key (e.g. `avar.daemon.session.mode=remote`).
+When set, `get_config()` always returns the environment value over `config.json`.
+
 ## Module Boundaries
 
 | Module | Responsibility |
 |--------|----------------|
-| `daemon_config.c` | Load defaults, merge CLI overrides |
-| `daemon.c` | Server start/stop/restart, PID file |
-| `daemon_transport.c` | Channel vtables (server + client ping) |
-| `daemon_session.c` | CLI routing: local vs delegate |
-| `daemon_install.c` | systemd unit generation (Linux) |
-| `daemon_cli.c` | `avar daemon` subcommands |
+| `daemon/daemon_config.c` | Load defaults, merge CLI overrides |
+| `daemon/daemon.c` | Server start/stop/restart, PID file |
+| `daemon/daemon_transport.c` | Channel vtables (server + client ping) |
+| `daemon/daemon_session.c` | CLI routing: local vs delegate |
+| `daemon/daemon_install.c` | systemd unit generation (Linux) |
+| `daemon/daemon_cli.c` | `avar daemon` subcommands |
 
 ## CLI Contract
 
@@ -115,8 +118,8 @@ Common extensions (add when needed):
 
 ## Review Checklist
 
-- Session routing goes through `daemon_session.c`
-- Transport code stays in `daemon_transport.c`
+- Session routing goes through `daemon/daemon_session.c`
+- Transport code stays in `daemon/daemon_transport.c`
 - Config keys defined once in `avar.h`
 - CLI help matches implemented subcommands
 - Remote mode does not silently fall back to local execution
