@@ -109,6 +109,21 @@
 #define AVAR_CFG_DM_PROGRESS_SIZE_UNIT "dm.progress.sizeUnit"
 #define AVAR_CFG_DM_PROGRESS_SPEED_UNIT "dm.progress.speedUnit"
 
+#define AVAR_CFG_DM_SEGMENTATION "dm.segmentation"
+#define AVAR_CFG_DM_SEGMENTATION_ENABLED "dm.segmentation.enabled"
+#define AVAR_CFG_DM_SEGMENTATION_STRATEGY "dm.segmentation.strategy"
+#define AVAR_CFG_DM_SEGMENTATION_CONCURRENCY "dm.segmentation.concurrency"
+#define AVAR_CFG_DM_SEGMENTATION_CHUNK_SIZE "dm.segmentation.chunkSize"
+#define AVAR_CFG_DM_SEGMENTATION_MIN_FILE_SIZE "dm.segmentation.minFileSize"
+#define AVAR_CFG_DM_SEGMENTATION_LEFT_HEAVY_RATIO "dm.segmentation.leftHeavyFrontRatio"
+
+#define AVAR_SEGMENT_STRATEGY_BALANCED "balanced"
+#define AVAR_SEGMENT_STRATEGY_LEFT_HEAVY "left-heavy"
+
+#define DL_DEFAULT_SEGMENT_CONCURRENCY 4U
+#define DL_DEFAULT_MIN_SEGMENT_FILE_SIZE AVAR_MIB
+#define DL_DEFAULT_LEFT_HEAVY_FRONT_RATIO 0.25
+
 /* -------------------------------------------------------------------------- */
 /* Download manager                                                           */
 /* -------------------------------------------------------------------------- */

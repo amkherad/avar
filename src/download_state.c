@@ -87,6 +87,37 @@ DownloadState *download_state_create(const char *url, const char *filename,
     return state;
 }
 
+int download_state_init_chunks(DownloadState *state, const uint64_t total_size,
+                               const size_t chunk_size) {
+    if (state == NULL || total_size == 0) {
+        return -1;
+    }
+
+    const size_t new_chunk_size = chunk_size > 0 ? chunk_size : DL_CHUNK_SIZE;
+    const size_t new_chunk_count =
+            (size_t)((total_size + new_chunk_size - 1U) / new_chunk_size);
+
+    bool *new_done = calloc(new_chunk_count, sizeof(bool));
+    if (new_done == NULL) {
+        return -1;
+    }
+
+    if (state->chunks_done != NULL && state->chunk_count > 0) {
+        const size_t preserve = state->chunk_count < new_chunk_count ? state->chunk_count
+                                                                     : new_chunk_count;
+        for (size_t i = 0; i < preserve; i++) {
+            new_done[i] = state->chunks_done[i];
+        }
+    }
+
+    free(state->chunks_done);
+    state->chunks_done = new_done;
+    state->total_size = total_size;
+    state->chunk_size = new_chunk_size;
+    state->chunk_count = new_chunk_count;
+    return 0;
+}
+
 DownloadState *download_state_load(const char *path) {
     if (path == NULL) {
         return NULL;

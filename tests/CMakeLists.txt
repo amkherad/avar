@@ -74,6 +74,13 @@ avar_add_test(test_queue
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
 
+avar_add_test(test_download_segment
+        test_download_segment.c
+        "${SRC_DIR}/download_state.c"
+        "${SRC_DIR}/download_segment.c"
+        "${SRC_DIR}/third_party/cJSON/cJSON.c"
+)
+
 set(AVAR_DOWNLOAD_TEST_SOURCES
         "${SRC_DIR}/logger.c"
         "${SRC_DIR}/utils.c"
@@ -82,6 +89,10 @@ set(AVAR_DOWNLOAD_TEST_SOURCES
         "${SRC_DIR}/queue.c"
         "${SRC_DIR}/http.c"
         "${SRC_DIR}/download_state.c"
+        "${SRC_DIR}/download_sync.c"
+        "${SRC_DIR}/download_segment.c"
+        "${SRC_DIR}/download_config.c"
+        "${SRC_DIR}/thread_pool.c"
         "${SRC_DIR}/download.c"
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
@@ -101,6 +112,10 @@ set(AVAR_DAEMON_TEST_SOURCES
         "${SRC_DIR}/queue.c"
         "${SRC_DIR}/http.c"
         "${SRC_DIR}/download_state.c"
+        "${SRC_DIR}/download_sync.c"
+        "${SRC_DIR}/download_segment.c"
+        "${SRC_DIR}/download_config.c"
+        "${SRC_DIR}/thread_pool.c"
         "${SRC_DIR}/download.c"
         "${SRC_DIR}/transport.c"
         "${SRC_DIR}/torrent.c"

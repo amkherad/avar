@@ -5,6 +5,10 @@
 #include <utils.h>
 #include <download.h>
 #include <download_state.h>
+#include <download_config.h>
+#include <download_segment.h>
+#include <download_sync.h>
+#include <thread_pool.h>
 #include <file-system.h>
 #include <queue.h>
 #include <http.h>
@@ -62,7 +66,26 @@ typedef enum {
     DL_STEP_STREAM,
 } DlStep;
 
-typedef struct {
+typedef struct DownloadJob DownloadJob;
+
+typedef struct ChunkSlot {
+    struct mg_connection *conn;
+    size_t chunk_index;
+    uint64_t chunk_write_offset;
+    uint64_t chunk_received;
+    uint64_t chunk_expected;
+    bool headers_received;
+    bool streaming;
+    bool request_sent;
+    bool in_use;
+} ChunkSlot;
+
+typedef struct DlConnCtx {
+    DownloadJob *job;
+    ChunkSlot *slot;
+} DlConnCtx;
+
+typedef struct DownloadJob {
     struct mg_mgr mgr;
     char *url;
     char *current_url;
@@ -73,6 +96,11 @@ typedef struct {
     char *state_path;
     DownloadState *state;
     FILE *fp;
+    AvarMutex *mutex;
+    ChunkSlot *slots;
+    size_t slot_capacity;
+    DownloadSegmentConfig seg_cfg;
+    bool segment_mode;
     DlStep step;
     size_t active_chunk;
     uint64_t chunk_write_offset;
@@ -138,7 +166,7 @@ static uint64_t existing_file_size(const char *path);
 
 static void send_request(DownloadJob *job, struct mg_connection *c, uint64_t range_start, uint64_t range_end);
 
-static void send_request_for_step(DownloadJob *job, struct mg_connection *c);
+static void send_request_for_slot(DownloadJob *job, struct mg_connection *c, ChunkSlot *slot);
 
 static void init_download_tls(struct mg_connection *c, const char *url);
 
@@ -154,9 +182,10 @@ static bool append_stream(DownloadJob *job, const void *data, size_t len);
 
 static void begin_stream_body(DownloadJob *job, struct mg_connection *c, struct mg_http_message *hm);
 
-static void begin_chunk_body(DownloadJob *job, struct mg_connection *c, struct mg_http_message *hm);
+static void begin_chunk_body(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c,
+                             struct mg_http_message *hm);
 
-static bool complete_active_chunk(DownloadJob *job, struct mg_connection *c);
+static bool complete_chunk_slot(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c);
 
 static bool store_header_value(char **dest, struct mg_str value);
 
@@ -168,16 +197,36 @@ static bool finalize_download(DownloadJob *job);
 
 static void request_close(DownloadJob *job, struct mg_connection *c, bool schedule_after_close);
 
+static void schedule_pending_chunks(DownloadJob *job);
+
+static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot);
+
+static void dl_conn_ctx_free(struct mg_connection *c);
+
+static ChunkSlot *chunk_slot_find(DownloadJob *job, const struct mg_connection *c);
+
+static ChunkSlot *chunk_slot_acquire(DownloadJob *job, size_t chunk_index);
+
+static void chunk_slot_release(DownloadJob *job, ChunkSlot *slot);
+
+static size_t count_active_slots(const DownloadJob *job);
+
+static bool chunk_in_flight_predicate(const void *ctx, size_t chunk_index);
+
+static void disable_segment_mode(DownloadJob *job);
+
+static bool try_enable_segment_mode(DownloadJob *job);
+
 static void schedule_next(DownloadJob *job);
 
-static void flush_recv_body(DownloadJob *job, struct mg_connection *c);
+static void flush_recv_body(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c);
 
-static bool try_parse_pending_response(DownloadJob *job, struct mg_connection *c);
+static bool try_parse_pending_response(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c);
 
-static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
+static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c,
                                     struct mg_http_message *hm);
 
-static void on_connection_closed(DownloadJob *job, struct mg_connection *c);
+static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c);
 
 static void dl_handler(struct mg_connection *c, int ev, void *ev_data);
 
@@ -262,7 +311,13 @@ static uint64_t job_bytes_done(const DownloadJob *job) {
     }
 
     uint64_t bytes = download_state_bytes_done(job->state);
-    if (job->streaming) {
+    if (job->slots != NULL) {
+        for (size_t i = 0; i < job->slot_capacity; i++) {
+            if (job->slots[i].in_use && job->slots[i].streaming) {
+                bytes += job->slots[i].chunk_received;
+            }
+        }
+    } else if (job->streaming) {
         bytes += job->chunk_received;
     }
     return bytes;
@@ -271,6 +326,10 @@ static uint64_t job_bytes_done(const DownloadJob *job) {
 static void sync_state_metadata(DownloadJob *job, const char *status) {
     if (job == NULL || job->state == NULL || job->state_path == NULL) {
         return;
+    }
+
+    if (job->mutex != NULL) {
+        avar_mutex_lock(job->mutex);
     }
 
     free(job->state->status);
@@ -282,7 +341,11 @@ static void sync_state_metadata(DownloadJob *job, const char *status) {
         job->state->id = strdup(job->item_id);
     }
 
-    (void) download_state_save(job->state, job->state_path);
+    (void)download_state_save(job->state, job->state_path);
+
+    if (job->mutex != NULL) {
+        avar_mutex_unlock(job->mutex);
+    }
 }
 
 static void remove_job_work_dir(const char *state_path) {
@@ -537,6 +600,163 @@ static size_t next_chunk_index(const DownloadJob *job) {
     return job->state->chunk_count;
 }
 
+static ChunkSlot *chunk_slot_find(DownloadJob *job, const struct mg_connection *c) {
+    if (job == NULL || job->slots == NULL || c == NULL) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < job->slot_capacity; i++) {
+        if (job->slots[i].in_use && job->slots[i].conn == c) {
+            return &job->slots[i];
+        }
+    }
+
+    return NULL;
+}
+
+static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot) {
+    DlConnCtx *ctx = malloc(sizeof(*ctx));
+    if (ctx == NULL) {
+        return NULL;
+    }
+
+    ctx->job = job;
+    ctx->slot = slot;
+    return ctx;
+}
+
+static void dl_conn_ctx_free(struct mg_connection *c) {
+    if (c == NULL || c->fn_data == NULL) {
+        return;
+    }
+
+    free(c->fn_data);
+    c->fn_data = NULL;
+}
+
+static bool dl_connect(DownloadJob *job, ChunkSlot *slot, struct mg_connection **conn_out) {
+    if (job == NULL || conn_out == NULL) {
+        return false;
+    }
+
+    DlConnCtx *ctx = dl_conn_ctx_create(job, slot);
+    if (ctx == NULL) {
+        set_error(job, "Out of memory");
+        return false;
+    }
+
+    struct mg_connection *c = mg_http_connect(&job->mgr, job->current_url, dl_handler, ctx);
+    if (c == NULL) {
+        free(ctx);
+        set_error(job, "Failed to connect to %s", job->current_url);
+        return false;
+    }
+
+    if (slot != NULL) {
+        slot->conn = c;
+    }
+
+    *conn_out = c;
+    return true;
+}
+
+static ChunkSlot *chunk_slot_acquire(DownloadJob *job, const size_t chunk_index) {
+    if (job == NULL || job->slots == NULL) {
+        return NULL;
+    }
+
+    for (size_t i = 0; i < job->slot_capacity; i++) {
+        if (!job->slots[i].in_use) {
+            ChunkSlot *slot = &job->slots[i];
+            memset(slot, 0, sizeof(*slot));
+            slot->in_use = true;
+            slot->chunk_index = chunk_index;
+            return slot;
+        }
+    }
+
+    return NULL;
+}
+
+static void chunk_slot_release(DownloadJob *job, ChunkSlot *slot) {
+    if (job == NULL || slot == NULL) {
+        return;
+    }
+
+    memset(slot, 0, sizeof(*slot));
+}
+
+static size_t count_active_slots(const DownloadJob *job) {
+    if (job == NULL || job->slots == NULL) {
+        return 0;
+    }
+
+    size_t count = 0;
+    for (size_t i = 0; i < job->slot_capacity; i++) {
+        if (job->slots[i].in_use) {
+            count++;
+        }
+    }
+    return count;
+}
+
+static bool chunk_in_flight_predicate(const void *ctx, const size_t chunk_index) {
+    const DownloadJob *job = (const DownloadJob *)ctx;
+    if (job == NULL || job->slots == NULL) {
+        return true;
+    }
+
+    for (size_t i = 0; i < job->slot_capacity; i++) {
+        if (job->slots[i].in_use && job->slots[i].chunk_index == chunk_index) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void disable_segment_mode(DownloadJob *job) {
+    if (job == NULL) {
+        return;
+    }
+
+    job->segment_mode = false;
+    job->step = DL_STEP_STREAM;
+    job->use_ranges = false;
+
+    if (job->slots != NULL) {
+        for (size_t i = 0; i < job->slot_capacity; i++) {
+            if (job->slots[i].in_use && job->slots[i].conn != NULL) {
+                job->slots[i].conn->is_draining = 1;
+            }
+        }
+    }
+}
+
+static bool try_enable_segment_mode(DownloadJob *job) {
+    if (job == NULL || job->state == NULL || !job->use_ranges) {
+        return false;
+    }
+
+    if (job->stream_received > 0) {
+        return false;
+    }
+
+    if (!segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)) {
+        return false;
+    }
+
+    if (job->state->chunk_count == 0
+        && download_state_init_chunks(job->state, job->state->total_size, job->seg_cfg.chunk_size)
+               != 0) {
+        return false;
+    }
+
+    job->segment_mode = true;
+    job->step = DL_STEP_CHUNK;
+    return true;
+}
+
 static uint64_t existing_file_size(const char *path) {
     if (path == NULL) {
         return 0;
@@ -623,20 +843,22 @@ static void init_download_tls(struct mg_connection *c, const char *url) {
 #endif
 }
 
-static void send_request_for_step(DownloadJob *job, struct mg_connection *c) {
+static void send_request_for_slot(DownloadJob *job, struct mg_connection *c, ChunkSlot *slot) {
     if (c->data[0] != '\0') {
         return;
     }
 
     c->data[0] = 1;
-    job->request_sent = true;
+    if (slot != NULL) {
+        slot->request_sent = true;
+    } else {
+        job->request_sent = true;
+    }
 
-    if (job->step == DL_STEP_CHUNK) {
-        const uint64_t start = (uint64_t) job->active_chunk * (uint64_t) job->state->chunk_size;
-        uint64_t end = start + (uint64_t) job->state->chunk_size - 1;
-        if (job->state->total_size > 0 && end >= job->state->total_size) {
-            end = job->state->total_size - 1;
-        }
+    if (slot != NULL && job->step == DL_STEP_CHUNK) {
+        uint64_t start = 0;
+        uint64_t end = 0;
+        segment_chunk_range(job->state, slot->chunk_index, &start, &end);
         send_request(job, c, start, end);
     } else if (job->step == DL_STEP_STREAM) {
         send_request(job, c, job->stream_received, 0);
@@ -679,29 +901,46 @@ static bool open_temp_file(DownloadJob *job, const char *mode) {
 
 static bool write_at_offset(DownloadJob *job, const void *data, const size_t len,
                             const uint64_t offset) {
+    if (job->mutex != NULL) {
+        avar_mutex_lock(job->mutex);
+    }
+
     if (job->fp == NULL) {
         if (!open_temp_file(job, "r+b") && !open_temp_file(job, "w+b")) {
+            if (job->mutex != NULL) {
+                avar_mutex_unlock(job->mutex);
+            }
             set_error(job, "Failed to open temp file: %s", job->temp_path);
             return false;
         }
     }
 
 #if defined(_WIN32)
-    if (_fseeki64(job->fp, (__int64) offset, SEEK_SET) != 0) {
+    if (_fseeki64(job->fp, (__int64)offset, SEEK_SET) != 0) {
 #else
-        if (fseeko(job->fp, (off_t) offset, SEEK_SET) != 0) {
+    if (fseeko(job->fp, (off_t)offset, SEEK_SET) != 0) {
 #endif
+        if (job->mutex != NULL) {
+            avar_mutex_unlock(job->mutex);
+        }
         set_error(job, "Failed to seek in temp file");
         return false;
     }
 
     if (!fwrite_chunks(job->fp, data, len)) {
+        if (job->mutex != NULL) {
+            avar_mutex_unlock(job->mutex);
+        }
         set_error(job, "Failed to write temp file: %s", strerror(errno));
         return false;
     }
 
     fflush(job->fp);
     job->last_activity_ms = mg_millis();
+
+    if (job->mutex != NULL) {
+        avar_mutex_unlock(job->mutex);
+    }
     return true;
 }
 
@@ -771,52 +1010,83 @@ static void begin_stream_body(DownloadJob *job, struct mg_connection *c,
     (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
 }
 
-static void begin_chunk_body(DownloadJob *job, struct mg_connection *c,
+static void begin_chunk_body(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c,
                              struct mg_http_message *hm) {
-    job->streaming = true;
+    if (job == NULL) {
+        return;
+    }
+
+    const size_t chunk_index = slot != NULL ? slot->chunk_index : job->active_chunk;
+    if (slot != NULL) {
+        slot->streaming = true;
+    } else {
+        job->streaming = true;
+    }
     c->pfn = NULL;
-    job->chunk_write_offset = (uint64_t) job->active_chunk * (uint64_t) job->state->chunk_size;
-    job->chunk_received = 0;
+
+    uint64_t end = 0;
+    uint64_t write_offset = 0;
+    segment_chunk_range(job->state, chunk_index, &write_offset, &end);
+    if (slot != NULL) {
+        slot->chunk_write_offset = write_offset;
+        slot->chunk_received = 0;
+    } else {
+        job->chunk_write_offset = write_offset;
+        job->chunk_received = 0;
+    }
 
     const size_t to_write = buffered_http_body(c, hm);
     if (to_write > 0) {
-        if (!write_at_offset(job, hm->body.buf, to_write, job->chunk_write_offset)) {
+        if (!write_at_offset(job, hm->body.buf, to_write, write_offset)) {
             c->is_draining = 1;
             return;
         }
-        job->chunk_received += to_write;
+        if (slot != NULL) {
+            slot->chunk_received += to_write;
+        } else {
+            job->chunk_received += to_write;
+        }
     }
 
     mg_iobuf_del(&c->recv, 0, hm->head.len + to_write);
     print_progress(job);
-    (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
 }
 
-static bool complete_active_chunk(DownloadJob *job, struct mg_connection *c) {
-    if (job == NULL || job->state == NULL) {
+static bool complete_chunk_slot(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c) {
+    if (job == NULL || slot == NULL || job->state == NULL) {
         return false;
     }
 
-    if (job->state->chunks_done[job->active_chunk]) {
+    if (job->state->chunks_done[slot->chunk_index]) {
+        chunk_slot_release(job, slot);
         return true;
     }
 
-    flush_recv_body(job, c);
+    flush_recv_body(job, slot, c);
 
-    if (job->chunk_expected > 0 && job->chunk_received < job->chunk_expected) {
-        set_error(job, "Incomplete chunk %zu (%llu / %llu bytes)", job->active_chunk,
-                  (unsigned long long) job->chunk_received,
-                  (unsigned long long) job->chunk_expected);
+    if (slot->chunk_expected > 0 && slot->chunk_received < slot->chunk_expected) {
+        set_error(job, "Incomplete chunk %zu (%llu / %llu bytes)", slot->chunk_index,
+                  (unsigned long long)slot->chunk_received,
+                  (unsigned long long)slot->chunk_expected);
         return false;
     }
 
     sync_temp_file(job);
 
-    job->state->chunks_done[job->active_chunk] = true;
-    job->streaming = false;
-    job->chunk_received = 0;
-    job->chunk_expected = 0;
-    (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+    if (job->mutex != NULL) {
+        avar_mutex_lock(job->mutex);
+    }
+    job->state->chunks_done[slot->chunk_index] = true;
+    if (job->mutex != NULL) {
+        avar_mutex_unlock(job->mutex);
+    }
+
+    slot->streaming = false;
+    slot->chunk_received = 0;
+    slot->chunk_expected = 0;
+    chunk_slot_release(job, slot);
+    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
     print_progress(job);
     return true;
 }
@@ -966,8 +1236,22 @@ static void request_close(DownloadJob *job, struct mg_connection *c, const bool 
     c->is_draining = 1;
 }
 
-static void flush_recv_body(DownloadJob *job, struct mg_connection *c) {
-    if (job == NULL || c == NULL || !job->streaming || c->recv.len == 0) {
+static void flush_recv_body(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c) {
+    if (job == NULL || c == NULL || c->recv.len == 0) {
+        return;
+    }
+
+    if (slot != NULL && slot->streaming) {
+        const size_t len = c->recv.len;
+        if (!write_at_offset(job, c->recv.buf, len, slot->chunk_write_offset + slot->chunk_received)) {
+            return;
+        }
+        slot->chunk_received += len;
+        c->recv.len = 0;
+        return;
+    }
+
+    if (!job->streaming || c->recv.len == 0) {
         return;
     }
 
@@ -984,80 +1268,128 @@ static void flush_recv_body(DownloadJob *job, struct mg_connection *c) {
     c->recv.len = 0;
 }
 
-static bool try_parse_pending_response(DownloadJob *job, struct mg_connection *c) {
-    if (job->headers_received || c == NULL || c->recv.len == 0) {
+static bool try_parse_pending_response(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c) {
+    if ((slot != NULL ? slot->headers_received : job->headers_received) || c == NULL
+        || c->recv.len == 0) {
         return false;
     }
 
     struct mg_http_message hm;
-    const int n = mg_http_parse((char *) c->recv.buf, c->recv.len, &hm);
+    const int n = mg_http_parse((char *)c->recv.buf, c->recv.len, &hm);
     if (n <= 0) {
         return false;
     }
 
-    job->headers_received = true;
-    handle_response_headers(job, c, &hm);
+    if (slot != NULL) {
+        slot->headers_received = true;
+    } else {
+        job->headers_received = true;
+    }
+    handle_response_headers(job, slot, c, &hm);
     return true;
 }
 
-static void on_connection_closed(DownloadJob *job, struct mg_connection *c) {
+static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c) {
     if (job == NULL || job->done || job->failed) {
+        dl_conn_ctx_free(c);
         return;
     }
 
-    LOG_DEBUG("Connection closed, step=%d streaming=%d pending_schedule=%d headers_received=%d",
-              (int) job->step, job->streaming, job->pending_schedule, job->headers_received);
+    const bool headers_received = slot != NULL ? slot->headers_received : job->headers_received;
+    const bool streaming = slot != NULL ? slot->streaming : job->streaming;
+    const bool request_sent = slot != NULL ? slot->request_sent : job->request_sent;
 
-    if (c != NULL && !job->headers_received) {
-        (void) try_parse_pending_response(job, c);
+    LOG_DEBUG("Connection closed, step=%d streaming=%d pending_schedule=%d headers_received=%d",
+              (int)job->step, streaming, job->pending_schedule, headers_received);
+
+    if (c != NULL && !headers_received) {
+        (void)try_parse_pending_response(job, slot, c);
     }
 
-    flush_recv_body(job, c);
+    flush_recv_body(job, slot, c);
 
     if (job->pending_schedule) {
         job->pending_schedule = false;
+        if (slot != NULL) {
+            chunk_slot_release(job, slot);
+        }
         job->schedule_deferred = true;
+        dl_conn_ctx_free(c);
         return;
     }
 
-    if (job->step == DL_STEP_CHUNK && job->headers_received
-        && (job->streaming || job->chunk_received > 0)) {
-        if (!complete_active_chunk(job, c)) {
-            (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
-            return;
+    if (job->step == DL_STEP_CHUNK && headers_received
+        && (streaming || (slot != NULL ? slot->chunk_received : job->chunk_received) > 0)) {
+        if (slot != NULL) {
+            if (!complete_chunk_slot(job, slot, c)) {
+                chunk_slot_release(job, slot);
+                job->schedule_deferred = true;
+                dl_conn_ctx_free(c);
+                return;
+            }
+        } else {
+            flush_recv_body(job, NULL, c);
+            if (job->chunk_expected > 0 && job->chunk_received < job->chunk_expected) {
+                set_error(job, "Incomplete chunk %zu (%llu / %llu bytes)", job->active_chunk,
+                          (unsigned long long)job->chunk_received,
+                          (unsigned long long)job->chunk_expected);
+                (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+                dl_conn_ctx_free(c);
+                return;
+            }
+            sync_temp_file(job);
+            if (job->mutex != NULL) {
+                avar_mutex_lock(job->mutex);
+            }
+            job->state->chunks_done[job->active_chunk] = true;
+            if (job->mutex != NULL) {
+                avar_mutex_unlock(job->mutex);
+            }
+            job->streaming = false;
+            job->chunk_received = 0;
+            job->chunk_expected = 0;
+            (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+            print_progress(job);
         }
 
         if (download_state_all_chunks_done(job->state)) {
-            (void) finalize_download(job);
+            (void)finalize_download(job);
         } else {
             job->schedule_deferred = true;
         }
+        dl_conn_ctx_free(c);
         return;
     }
 
-    if (job->step == DL_STEP_STREAM && (job->streaming || job->stream_received > 0)) {
+    if (job->step == DL_STEP_STREAM && (streaming || job->stream_received > 0)) {
         if (job->stream_expected == 0 || job->stream_received >= job->stream_expected) {
-            (void) finalize_download(job);
+            (void)finalize_download(job);
         } else {
             set_error(job, "Connection closed before download completed (%llu / %llu bytes)",
-                      (unsigned long long) job->stream_received,
-                      (unsigned long long) job->stream_expected);
-            (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+                      (unsigned long long)job->stream_received,
+                      (unsigned long long)job->stream_expected);
+            (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
         }
+        dl_conn_ctx_free(c);
         return;
     }
 
     if (job->step == DL_STEP_CHUNK) {
-        if (download_state_all_chunks_done(job->state)) {
-            (void) finalize_download(job);
-        } else {
-            set_error(job, "Connection closed before all chunks were downloaded");
-            (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+        if (slot != NULL) {
+            chunk_slot_release(job, slot);
         }
+        if (download_state_all_chunks_done(job->state)) {
+            (void)finalize_download(job);
+        } else if (count_active_slots(job) == 0) {
+            job->schedule_deferred = true;
+        } else {
+            job->schedule_deferred = true;
+        }
+        dl_conn_ctx_free(c);
         return;
     }
 
-    if (!job->request_sent) {
+    if (!request_sent) {
         if (job->redirect_count > 0) {
             set_error(job, "Connection failed while following redirect to %s",
                       job->current_url != NULL ? job->current_url : job->url);
@@ -1067,13 +1399,60 @@ static void on_connection_closed(DownloadJob *job, struct mg_connection *c) {
     } else {
         set_error(job, "Connection closed before the download started");
     }
-    (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+    (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+    dl_conn_ctx_free(c);
+}
+
+static void schedule_pending_chunks(DownloadJob *job) {
+    if (job == NULL || job->failed || job->done || job->step != DL_STEP_CHUNK
+        || job->state == NULL) {
+        return;
+    }
+
+    if (download_state_all_chunks_done(job->state)) {
+        (void)finalize_download(job);
+        return;
+    }
+
+    const size_t active = count_active_slots(job);
+    if (active >= job->seg_cfg.concurrency) {
+        return;
+    }
+
+    const size_t capacity = job->seg_cfg.concurrency - active;
+    size_t indices[32];
+    const size_t max_select = capacity < (sizeof indices / sizeof indices[0]) ? capacity
+                                                                              : (sizeof indices / sizeof indices[0]);
+    const size_t selected =
+            segment_select_chunks(&job->seg_cfg, job->state, max_select, chunk_in_flight_predicate,
+                                  job, indices);
+    if (selected == 0) {
+        return;
+    }
+
+    for (size_t i = 0; i < selected; i++) {
+        ChunkSlot *slot = chunk_slot_acquire(job, indices[i]);
+        if (slot == NULL) {
+            break;
+        }
+
+        struct mg_connection *c = NULL;
+        if (!dl_connect(job, slot, &c)) {
+            chunk_slot_release(job, slot);
+            return;
+        }
+    }
 }
 
 static void schedule_next(DownloadJob *job) {
     LOG_DEBUG("Scheduling a job, jobId: %s", job->item_id);
 
     if (job->failed || job->done) {
+        return;
+    }
+
+    if (job->step == DL_STEP_CHUNK && job->segment_mode) {
+        schedule_pending_chunks(job);
         return;
     }
 
@@ -1087,15 +1466,15 @@ static void schedule_next(DownloadJob *job) {
     if (job->step == DL_STEP_CHUNK) {
         const size_t chunk = next_chunk_index(job);
         if (chunk >= job->state->chunk_count) {
-            (void) finalize_download(job);
+            (void)finalize_download(job);
             return;
         }
         job->active_chunk = chunk;
     }
 
-    struct mg_connection *c = mg_http_connect(&job->mgr, job->current_url, dl_handler, job);
-    if (c == NULL) {
-        set_error(job, "Failed to connect to %s", job->current_url);
+    struct mg_connection *c = NULL;
+    if (!dl_connect(job, NULL, &c)) {
+        return;
     }
 }
 
@@ -1137,9 +1516,14 @@ static bool handle_redirect(DownloadJob *job, struct mg_connection *c,
     return true;
 }
 
-static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
+static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c,
                                     struct mg_http_message *hm) {
-    job->headers_received = true;
+    if (slot != NULL) {
+        slot->headers_received = true;
+    } else {
+        job->headers_received = true;
+    }
+
     const int status = mg_http_status(hm);
 
     if (handle_redirect(job, c, hm)) {
@@ -1148,10 +1532,21 @@ static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
 
     if (status == 416) {
         if (job->step == DL_STEP_CHUNK && download_state_all_chunks_done(job->state)) {
-            (void) finalize_download(job);
+            (void)finalize_download(job);
         } else {
             set_error(job, "Server rejected range request");
         }
+        request_close(job, c, false);
+        return;
+    }
+
+    if (job->step == DL_STEP_CHUNK && status != 206) {
+        LOG_DEBUG("Range request returned HTTP %d; falling back to stream mode", status);
+        disable_segment_mode(job);
+        if (slot != NULL) {
+            chunk_slot_release(job, slot);
+        }
+        job->schedule_deferred = true;
         request_close(job, c, false);
         return;
     }
@@ -1170,12 +1565,12 @@ static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
 
     struct mg_str *etag = mg_http_get_header(hm, "ETag");
     if (etag != NULL) {
-        (void) store_header_value(&job->state->etag, *etag);
+        (void)store_header_value(&job->state->etag, *etag);
     }
 
     struct mg_str *last_modified = mg_http_get_header(hm, "Last-Modified");
     if (last_modified != NULL) {
-        (void) store_header_value(&job->state->last_modified, *last_modified);
+        (void)store_header_value(&job->state->last_modified, *last_modified);
     }
 
     struct mg_str *accept_ranges = mg_http_get_header(hm, "Accept-Ranges");
@@ -1185,7 +1580,7 @@ static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
 
     struct mg_str *content_range = mg_http_get_header(hm, "Content-Range");
     if (content_range != NULL && job->state->total_size == 0) {
-        (void) parse_content_range_total(*content_range, &job->state->total_size);
+        (void)parse_content_range_total(*content_range, &job->state->total_size);
     }
 
     struct mg_str *content_length = mg_http_get_header(hm, "Content-Length");
@@ -1195,7 +1590,9 @@ static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
         buffer[content_length->len] = '\0';
         const uint64_t len = strtoull(buffer, NULL, 10);
 
-        if (job->step == DL_STEP_CHUNK) {
+        if (slot != NULL && job->step == DL_STEP_CHUNK) {
+            slot->chunk_expected = len;
+        } else if (job->step == DL_STEP_CHUNK) {
             job->chunk_expected = len;
         } else if (job->step == DL_STEP_STREAM && job->stream_expected == 0) {
             job->stream_expected = job->stream_received + len;
@@ -1205,87 +1602,99 @@ static void handle_response_headers(DownloadJob *job, struct mg_connection *c,
         }
     }
 
-    if (job->step == DL_STEP_CHUNK && job->chunk_expected == 0) {
-        const uint64_t start = (uint64_t) job->active_chunk * (uint64_t) job->state->chunk_size;
-        uint64_t end = start + (uint64_t) job->state->chunk_size - 1;
-        if (job->state->total_size > 0 && end >= job->state->total_size) {
-            end = job->state->total_size - 1;
-        }
-        job->chunk_expected = end - start + 1;
+    if (job->step == DL_STEP_STREAM && job->state->total_size > 0 && !job->segment_mode
+        && try_enable_segment_mode(job)) {
+        request_close(job, c, false);
+        job->schedule_deferred = true;
+        return;
+    }
+
+    if (slot != NULL && job->step == DL_STEP_CHUNK && slot->chunk_expected == 0) {
+        uint64_t start = 0;
+        uint64_t end = 0;
+        segment_chunk_range(job->state, slot->chunk_index, &start, &end);
+        slot->chunk_expected = end - start + 1U;
+    } else if (slot == NULL && job->step == DL_STEP_CHUNK && job->chunk_expected == 0) {
+        uint64_t start = 0;
+        uint64_t end = 0;
+        segment_chunk_range(job->state, job->active_chunk, &start, &end);
+        job->chunk_expected = end - start + 1U;
     }
 
     if (job->step == DL_STEP_CHUNK) {
-        begin_chunk_body(job, c, hm);
+        if (slot != NULL) {
+            begin_chunk_body(job, slot, c, hm);
+        } else {
+            begin_chunk_body(job, NULL, c, hm);
+        }
     } else if (job->step == DL_STEP_STREAM) {
         begin_stream_body(job, c, hm);
     }
 }
 
 static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
-    DownloadJob *job = (DownloadJob *) c->fn_data;
+    DlConnCtx *ctx = (DlConnCtx *)c->fn_data;
+    if (ctx == NULL) {
+        return;
+    }
+
+    DownloadJob *job = ctx->job;
+    ChunkSlot *slot = ctx->slot;
     if (job == NULL || job->done) {
         return;
     }
 
     if (ev == MG_EV_POLL) {
-        // Check this early to improve performance
         if (mg_millis() > job->connect_deadline_ms && (c->is_connecting || c->is_resolving)) {
             mg_error(c, "Connect timeout");
-
             LOG_ERROR("Connect timeout, jobId: %s", job->item_id);
         }
 
         if (!job->failed && mg_millis() - job->last_activity_ms > DL_IDLE_TIMEOUT_MS) {
             mg_error(c, "Download stalled");
-
             LOG_ERROR("Download stalled, jobId: %s", job->item_id);
         }
-
-        // return;
     }
 
     LOG_DUMP("Mongoose event '%s' (%d) was received", mg_event_message(ev), ev);
 
-    if (ev == MG_EV_RESOLVE) {
-        // LOG_INFO(
-        //     "Data: %d.%d.%d.%d (%d) (%d)",
-        //     (c->loc.addr.ip4 & 0xff),
-        //     (c->loc.addr.ip4 & 0xff00) >> 8,
-        //     (c->loc.addr.ip4 & 0xff0000) >> 16,
-        //     (c->loc.addr.ip4 & 0xff000000) >> 24,
-        //     c->loc.addr.ip4,
-        //     c->loc.addr.ip6
-        // );
-    } else if (ev == MG_EV_OPEN) {
-        //LOG_DUMP("Mongoose MG_EV_OPEN");
-
+    if (ev == MG_EV_OPEN) {
         job->connect_deadline_ms = mg_millis() + DL_CONNECT_TIMEOUT_MS;
         job->last_activity_ms = mg_millis();
     } else if (ev == MG_EV_CONNECT) {
         c->data[0] = '\0';
-        job->headers_received = false;
-        job->request_sent = false;
-        job->streaming = false;
+        if (slot != NULL) {
+            slot->headers_received = false;
+            slot->request_sent = false;
+            slot->streaming = false;
+        } else {
+            job->headers_received = false;
+            job->request_sent = false;
+            job->streaming = false;
+        }
         if (c->is_tls) {
             const struct mg_str host = mg_url_host(job->current_url);
-            LOG_DEBUG("Starting TLS to %.*s", (int) host.len,
-                      host.buf != NULL ? host.buf : "");
+            LOG_DEBUG("Starting TLS to %.*s", (int)host.len, host.buf != NULL ? host.buf : "");
             init_download_tls(c, job->current_url);
         } else {
-            send_request_for_step(job, c);
+            send_request_for_slot(job, c, slot);
         }
     } else if (ev == MG_EV_TLS_HS) {
-        send_request_for_step(job, c);
+        send_request_for_slot(job, c, slot);
     } else if (ev == MG_EV_WRITE) {
-        if (!job->request_sent && !c->is_connecting && !c->is_tls_hs) {
-            send_request_for_step(job, c);
+        const bool request_sent = slot != NULL ? slot->request_sent : job->request_sent;
+        if (!request_sent && !c->is_connecting && !c->is_tls_hs) {
+            send_request_for_slot(job, c, slot);
         }
     } else if (ev == MG_EV_HTTP_HDRS) {
-        handle_response_headers(job, c, (struct mg_http_message *) ev_data);
+        handle_response_headers(job, slot, c, (struct mg_http_message *)ev_data);
     } else if (ev == MG_EV_HTTP_MSG) {
-        struct mg_http_message *hm = (struct mg_http_message *) ev_data;
+        struct mg_http_message *hm = (struct mg_http_message *)ev_data;
+        const bool streaming = slot != NULL ? slot->streaming : job->streaming;
+        const bool headers_received = slot != NULL ? slot->headers_received : job->headers_received;
+        const size_t chunk_index = slot != NULL ? slot->chunk_index : job->active_chunk;
 
-        if (job->streaming) {
+        if (streaming || headers_received) {
             return;
         }
 
@@ -1294,32 +1703,49 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
 
         if (hm->body.len == 0) {
-            set_error(job, "Empty chunk response for chunk %zu", job->active_chunk);
-            request_close(job, c, false);
             return;
         }
 
-        const uint64_t offset =
-                (uint64_t) job->active_chunk * (uint64_t) job->state->chunk_size;
+        uint64_t offset = 0;
+        uint64_t end = 0;
+        segment_chunk_range(job->state, chunk_index, &offset, &end);
         if (!write_at_offset(job, hm->body.buf, hm->body.len, offset)) {
             request_close(job, c, false);
             return;
         }
 
         sync_temp_file(job);
-        job->state->chunks_done[job->active_chunk] = true;
-        (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+        if (job->mutex != NULL) {
+            avar_mutex_lock(job->mutex);
+        }
+        job->state->chunks_done[chunk_index] = true;
+        if (job->mutex != NULL) {
+            avar_mutex_unlock(job->mutex);
+        }
+        if (slot != NULL) {
+            chunk_slot_release(job, slot);
+        }
+        (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
         print_progress(job);
 
         if (download_state_all_chunks_done(job->state)) {
             request_close(job, c, false);
-            (void) finalize_download(job);
+            (void)finalize_download(job);
         } else {
             request_close(job, c, true);
         }
     } else if (ev == MG_EV_READ) {
-        if (job->streaming && c->recv.len > 0) {
-            if (job->step == DL_STEP_CHUNK) {
+        const bool streaming = slot != NULL ? slot->streaming : job->streaming;
+        if (streaming && c->recv.len > 0) {
+            if (slot != NULL) {
+                const size_t len = c->recv.len;
+                if (!write_at_offset(job, c->recv.buf, len,
+                                     slot->chunk_write_offset + slot->chunk_received)) {
+                    request_close(job, c, false);
+                    return;
+                }
+                slot->chunk_received += len;
+            } else if (job->step == DL_STEP_CHUNK) {
                 const size_t len = c->recv.len;
                 if (!write_at_offset(job, c->recv.buf, len,
                                      job->chunk_write_offset + job->chunk_received)) {
@@ -1338,22 +1764,27 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
 
             if (mg_millis() - job->last_progress_ms >= 200) {
                 print_progress(job);
-                (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+                (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
             }
         }
     } else if (ev == MG_EV_CLOSE) {
-        on_connection_closed(job, c);
+        on_connection_closed(job, slot, c);
     } else if (ev == MG_EV_ERROR) {
-        if (!job->done) {
-            const char *message = (const char *) ev_data;
+        if (!job->done && !job->failed) {
+            const char *message = (const char *)ev_data;
             LOG_DEBUG("Connection error on %s: %s", job->current_url != NULL ? job->current_url : job->url,
                       message != NULL && message[0] != '\0' ? message : "(none)");
-            if (message != NULL && message[0] != '\0') {
-                set_error(job, "%s", message);
+            if (slot != NULL && job->segment_mode) {
+                chunk_slot_release(job, slot);
+                job->schedule_deferred = true;
             } else {
-                set_error(job, "Network error");
+                if (message != NULL && message[0] != '\0') {
+                    set_error(job, "%s", message);
+                } else {
+                    set_error(job, "Network error");
+                }
+                (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
             }
-            (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
         }
     }
 }
@@ -1361,6 +1792,17 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
 static int run_download(DownloadJob *job) {
     mg_mgr_init(&job->mgr);
     mg_log_set(MG_LL_ERROR);
+
+    job->seg_cfg = download_config_load(job->state != NULL ? job->state->queue_id : NULL);
+    job->mutex = avar_mutex_create();
+    job->slot_capacity = job->seg_cfg.concurrency;
+    if (job->slot_capacity > 0) {
+        job->slots = calloc(job->slot_capacity, sizeof(ChunkSlot));
+        if (job->slots == NULL) {
+            set_error(job, "Out of memory");
+            return EXIT_FAILURE;
+        }
+    }
 
     job->stream_received = existing_file_size(job->temp_path);
     if (job->step == DL_STEP_STREAM && job->stream_received > 0 && job->state->total_size == 0
@@ -1376,6 +1818,9 @@ static int run_download(DownloadJob *job) {
     if (job->state->total_size > 0 && job->state->chunk_count > 0
         && !download_state_all_chunks_done(job->state)) {
         job->step = DL_STEP_CHUNK;
+        if (segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)) {
+            job->segment_mode = true;
+        }
         job->active_chunk = next_chunk_index(job);
     } else {
         job->step = DL_STEP_STREAM;
@@ -1387,10 +1832,11 @@ static int run_download(DownloadJob *job) {
         return EXIT_FAILURE;
     }
 
-    LOG_DEBUG("Scheduling download job, jobId: %s", job->item_id);
+    LOG_DEBUG("Scheduling download job, jobId: %s segment_mode=%d concurrency=%zu", job->item_id,
+              job->segment_mode, job->seg_cfg.concurrency);
     schedule_next(job);
     while (!job->done && !job->failed) {
-        mg_mgr_poll(&job->mgr, (int) DL_POLL_MS);
+        mg_mgr_poll(&job->mgr, (int)DL_POLL_MS);
         if (job->schedule_deferred) {
             job->schedule_deferred = false;
             schedule_next(job);
@@ -1410,6 +1856,8 @@ static void job_free(DownloadJob *job) {
     }
 
     close_file(job);
+    free(job->slots);
+    avar_mutex_destroy(job->mutex);
     free(job->url);
     free(job->current_url);
     free(job->item_id);
@@ -1622,6 +2070,10 @@ static void *background_download_thread(void *arg) {
 #endif
 }
 
+static void background_download_task(void *arg) {
+    (void)background_download_thread(arg);
+}
+
 int download_start_background(const char *url, const char *queue, const char *name, char **id_out) {
     if (url == NULL || !is_valid_http_url(url)) {
         return EXIT_FAILURE;
@@ -1649,6 +2101,11 @@ int download_start_background(const char *url, const char *queue, const char *na
         snprintf(generated, sizeof generated, "%s%llu", AVAR_DL_ID_PREFIX,
                  (unsigned long long)time(NULL));
         *id_out = strdup(generated);
+    }
+
+    ThreadPool *pool = thread_pool_global();
+    if (pool != NULL && thread_pool_submit(pool, background_download_task, args)) {
+        return EXIT_SUCCESS;
     }
 
 #if defined(_WIN32)

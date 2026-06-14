@@ -48,6 +48,9 @@ size_t download_state_completed_chunks(const DownloadState *state);
 
 uint64_t download_state_bytes_done(const DownloadState *state);
 
+/* Rebuilds chunk tracking for total_size. Preserves completed flags when possible. */
+int download_state_init_chunks(DownloadState *state, uint64_t total_size, size_t chunk_size);
+
 bool download_state_all_chunks_done(const DownloadState *state);
 
 #endif
