@@ -199,6 +199,7 @@
 #define AVAR_STATE_FIELD_DEST_PATH "dest_path"
 #define AVAR_STATE_FIELD_CHUNK_SIZE "chunk_size"
 #define AVAR_STATE_FIELD_CHUNK_COUNT "chunk_count"
+#define AVAR_STATE_FIELD_DONE_RANGES "done_ranges"
 #define AVAR_STATE_FIELD_TOTAL_SIZE "total_size"
 #define AVAR_STATE_TMP_SUFFIX ".tmp"
 

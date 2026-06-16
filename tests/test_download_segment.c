@@ -9,12 +9,12 @@ AVAR_TEST(segment_select_left_heavy_orders_from_start) {
                                                  1024U * 1024U, 256U * 1024U);
     AVAR_ASSERT_NOT_NULL(state);
 
-    size_t indices[4] = {0};
-    const size_t selected = segment_select_left_heavy(state, 3, NULL, NULL, indices);
+    ByteRange ranges[4] = {{0}};
+    const size_t selected = segment_select_left_heavy(state, 3, NULL, NULL, ranges);
     AVAR_ASSERT_EQ(selected, 3U);
-    AVAR_ASSERT_EQ(indices[0], 0U);
-    AVAR_ASSERT_EQ(indices[1], 1U);
-    AVAR_ASSERT_EQ(indices[2], 2U);
+    AVAR_ASSERT_EQ(ranges[0].start, 0U);
+    AVAR_ASSERT_EQ(ranges[1].start, 256U * 1024U);
+    AVAR_ASSERT_EQ(ranges[2].start, 512U * 1024U);
 
     download_state_free(state);
 }
@@ -32,13 +32,13 @@ AVAR_TEST(segment_select_balanced_spreads_across_file) {
             .min_file_size = 1024U,
     };
 
-    size_t indices[4] = {0};
-    const size_t selected = segment_select_chunks(&cfg, state, 4, NULL, NULL, indices);
+    ByteRange ranges[4] = {{0}};
+    const size_t selected = segment_select_chunks(&cfg, state, 4, NULL, NULL, ranges);
     AVAR_ASSERT_EQ(selected, 4U);
-    AVAR_ASSERT_EQ(indices[0], 0U);
-    AVAR_ASSERT_EQ(indices[1], 1U);
-    AVAR_ASSERT_EQ(indices[2], 2U);
-    AVAR_ASSERT_EQ(indices[3], 3U);
+    AVAR_ASSERT_EQ(ranges[0].start, 0U);
+    AVAR_ASSERT_EQ(ranges[1].start, 2U * 256U * 1024U);
+    AVAR_ASSERT_EQ(ranges[2].start, 4U * 256U * 1024U);
+    AVAR_ASSERT_EQ(ranges[3].start, 6U * 256U * 1024U);
 
     download_state_free(state);
 }
@@ -60,15 +60,15 @@ AVAR_TEST(segment_should_enable_respects_ranges_and_size) {
     AVAR_ASSERT(!segment_should_enable(&cfg, 2U * AVAR_MIB, true));
 }
 
-AVAR_TEST(download_state_init_chunks_preserves_done_flags) {
+AVAR_TEST(download_state_init_chunks_preserves_done_ranges) {
     DownloadState *state = download_state_create("https://example.com/a", "a.bin", "/t/a", "/d/a",
                                                  600000U, DL_CHUNK_SIZE);
     AVAR_ASSERT_NOT_NULL(state);
-    state->chunks_done[0] = true;
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 0U, DL_CHUNK_SIZE - 1U), 0);
 
     AVAR_ASSERT_EQ(download_state_init_chunks(state, 600000U, DL_CHUNK_SIZE), 0);
-    AVAR_ASSERT(state->chunks_done[0]);
-    AVAR_ASSERT(!state->chunks_done[1]);
+    AVAR_ASSERT(download_state_is_segment_done(state, 0U));
+    AVAR_ASSERT(!download_state_is_segment_done(state, 1U));
 
     download_state_free(state);
 }
@@ -106,16 +106,20 @@ AVAR_TEST(segment_chunk_range_last_chunk_is_short) {
 
     uint64_t start = 0U;
     uint64_t end = 0U;
-    segment_chunk_range(state, state->chunk_count - 1U, &start, &end);
+    const size_t last_segment = download_state_segment_count(state) - 1U;
+    segment_chunk_range(state, last_segment, &start, &end);
     AVAR_ASSERT_EQ(start, 524288U);
     AVAR_ASSERT_EQ(end, 599999U);
 
     download_state_free(state);
 }
 
-static bool skip_chunk_one(const void *ctx, const size_t chunk_index) {
+static bool skip_segment_one(const void *ctx, const uint64_t start, const uint64_t end) {
     (void)ctx;
-    return chunk_index != 1U;
+    uint64_t seg_start = 0U;
+    uint64_t seg_end = 0U;
+    segment_index_range(8U * 256U * 1024U, 256U * 1024U, 1U, &seg_start, &seg_end);
+    return start != seg_start || end != seg_end;
 }
 
 AVAR_TEST(segment_select_balanced_skips_in_flight_chunks) {
@@ -131,11 +135,15 @@ AVAR_TEST(segment_select_balanced_skips_in_flight_chunks) {
             .min_file_size = 1024U,
     };
 
-    size_t indices[4] = {0};
-    const size_t selected = segment_select_chunks(&cfg, state, 4, skip_chunk_one, NULL, indices);
+    ByteRange ranges[4] = {{0}};
+    const size_t selected = segment_select_chunks(&cfg, state, 4, skip_segment_one, NULL, ranges);
     AVAR_ASSERT_EQ(selected, 4U);
+
+    uint64_t seg_start = 0U;
+    uint64_t seg_end = 0U;
+    segment_index_range(8U * 256U * 1024U, 256U * 1024U, 1U, &seg_start, &seg_end);
     for (size_t i = 0; i < selected; i++) {
-        AVAR_ASSERT(indices[i] != 1U);
+        AVAR_ASSERT(ranges[i].start != seg_start || ranges[i].end != seg_end);
     }
 
     download_state_free(state);
@@ -145,7 +153,7 @@ AVAR_TEST_MAIN(
         run_segment_select_left_heavy_orders_from_start();
         run_segment_select_balanced_spreads_across_file();
         run_segment_should_enable_respects_ranges_and_size();
-        run_download_state_init_chunks_preserves_done_flags();
+        run_download_state_init_chunks_preserves_done_ranges();
         run_segment_chunk_range_single_byte_file();
         run_segment_should_enable_requires_enabled_flag();
         run_segment_chunk_range_last_chunk_is_short();

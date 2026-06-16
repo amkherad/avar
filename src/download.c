@@ -116,7 +116,8 @@ typedef struct DownloadJob DownloadJob;
 
 typedef struct ChunkSlot {
     struct mg_connection *conn;
-    size_t chunk_index;
+    uint64_t range_start;
+    uint64_t range_end;
     uint64_t chunk_write_offset;
     uint64_t chunk_received;
     uint64_t chunk_expected;
@@ -150,7 +151,8 @@ typedef struct DownloadJob {
     bool segment_disabled;
     bool pending_segment_enable;
     DlStep step;
-    size_t active_chunk;
+    uint64_t active_range_start;
+    uint64_t active_range_end;
     uint64_t chunk_write_offset;
     uint64_t chunk_received;
     uint64_t chunk_expected;
@@ -210,7 +212,7 @@ static void print_progress(DownloadJob *job);
 
 static void report_cli(const DownloadJob *job);
 
-static size_t next_chunk_index(const DownloadJob *job);
+static bool next_pending_segment(const DownloadJob *job, uint64_t *start_out, uint64_t *end_out);
 
 static uint64_t existing_file_size(const char *path);
 
@@ -255,13 +257,13 @@ static void dl_conn_ctx_free(struct mg_connection *c);
 
 static ChunkSlot *chunk_slot_find(DownloadJob *job, const struct mg_connection *c);
 
-static ChunkSlot *chunk_slot_acquire(DownloadJob *job, size_t chunk_index);
+static ChunkSlot *chunk_slot_acquire(DownloadJob *job, uint64_t range_start, uint64_t range_end);
 
 static void chunk_slot_release(DownloadJob *job, ChunkSlot *slot);
 
 static size_t count_active_slots(const DownloadJob *job);
 
-static bool chunk_in_flight_predicate(const void *ctx, size_t chunk_index);
+static bool range_in_flight_predicate(const void *ctx, uint64_t start, uint64_t end);
 
 static void disable_segment_mode(DownloadJob *job);
 
@@ -588,21 +590,6 @@ static void write_progress_line(DownloadJob *job, const char *line) {
     fflush(stderr);
 }
 
-static int progress_bar_equals_count(const char *bar) {
-    if (bar == NULL || bar[0] != '[') {
-        return 0;
-    }
-
-    int count = 0;
-    for (const char *p = bar + 1; *p != '\0' && *p != ']'; ++p) {
-        if (*p == '=') {
-            count++;
-        }
-    }
-
-    return count;
-}
-
 static bool column_overlaps_range(const uint64_t col_start, const uint64_t col_end,
                                   const uint64_t range_start, const uint64_t range_end) {
     return col_start < range_end && range_start < col_end;
@@ -614,16 +601,10 @@ static bool progress_column_filled(const uint64_t col_start, const uint64_t col_
         return false;
     }
 
-    if (job->state != NULL && job->state->chunks_done != NULL) {
-        for (size_t i = 0; i < job->state->chunk_count; i++) {
-            if (!job->state->chunks_done[i]) {
-                continue;
-            }
-
-            uint64_t start = 0;
-            uint64_t end = 0;
-            segment_chunk_range(job->state, i, &start, &end);
-            if (column_overlaps_range(col_start, col_end, start, end + 1U)) {
+    if (job->state != NULL && job->state->done_range_count > 0U) {
+        for (size_t i = 0U; i < job->state->done_range_count; i++) {
+            const ByteRange *range = &job->state->done_ranges[i];
+            if (column_overlaps_range(col_start, col_end, range->start, range->end + 1U)) {
                 return true;
             }
         }
@@ -747,11 +728,6 @@ static void print_progress(DownloadJob *job) {
                                && progress_style == AVAR_PROGRESS_SEGMENTED;
     if (use_segmented) {
         format_spatial_progress_bar_fn(total, progress_column_filled, job, bar_width, bar, sizeof bar);
-        const int filled_cols = progress_bar_equals_count(bar);
-        const int expected_cols = (percent * bar_width + 99) / 100;
-        if (filled_cols > expected_cols + 1) {
-            format_progress_bar(percent, bar_width, bar, sizeof bar);
-        }
     } else {
         format_progress_bar(percent, bar_width, bar, sizeof bar);
     }
@@ -764,11 +740,6 @@ static void print_progress(DownloadJob *job) {
             if (use_segmented) {
                 format_spatial_progress_bar_fn(total, progress_column_filled, job, bar_width, bar,
                                                sizeof bar);
-                const int filled_cols = progress_bar_equals_count(bar);
-                const int expected_cols = (percent * bar_width + 99) / 100;
-                if (filled_cols > expected_cols + 1) {
-                    format_progress_bar(percent, bar_width, bar, sizeof bar);
-                }
             } else {
                 format_progress_bar(percent, bar_width, bar, sizeof bar);
             }
@@ -793,17 +764,23 @@ static void report_cli(const DownloadJob *job) {
     fprintf(stderr, "Download complete: %s\n", job->dest_path);
 }
 
-static size_t next_chunk_index(const DownloadJob *job) {
-    if (job->state == NULL || job->state->chunks_done == NULL) {
-        return 0;
+static bool next_pending_segment(const DownloadJob *job, uint64_t *start_out, uint64_t *end_out) {
+    if (job == NULL || job->state == NULL || job->state->total_size == 0U || start_out == NULL
+        || end_out == NULL) {
+        return false;
     }
 
-    for (size_t i = 0; i < job->state->chunk_count; i++) {
-        if (!job->state->chunks_done[i]) {
-            return i;
+    const size_t segment_count = download_state_segment_count(job->state);
+    for (size_t i = 0U; i < segment_count; i++) {
+        if (download_state_is_segment_done(job->state, i)) {
+            continue;
         }
+
+        segment_chunk_range(job->state, i, start_out, end_out);
+        return true;
     }
-    return job->state->chunk_count;
+
+    return false;
 }
 
 static ChunkSlot *chunk_slot_find(DownloadJob *job, const struct mg_connection *c) {
@@ -866,7 +843,8 @@ static bool dl_connect(DownloadJob *job, ChunkSlot *slot, struct mg_connection *
     return true;
 }
 
-static ChunkSlot *chunk_slot_acquire(DownloadJob *job, const size_t chunk_index) {
+static ChunkSlot *chunk_slot_acquire(DownloadJob *job, const uint64_t range_start,
+                                     const uint64_t range_end) {
     if (job == NULL || job->slots == NULL) {
         return NULL;
     }
@@ -876,7 +854,8 @@ static ChunkSlot *chunk_slot_acquire(DownloadJob *job, const size_t chunk_index)
             ChunkSlot *slot = &job->slots[i];
             memset(slot, 0, sizeof(*slot));
             slot->in_use = true;
-            slot->chunk_index = chunk_index;
+            slot->range_start = range_start;
+            slot->range_end = range_end;
             return slot;
         }
     }
@@ -906,14 +885,15 @@ static size_t count_active_slots(const DownloadJob *job) {
     return count;
 }
 
-static bool chunk_in_flight_predicate(const void *ctx, const size_t chunk_index) {
+static bool range_in_flight_predicate(const void *ctx, const uint64_t start, const uint64_t end) {
     const DownloadJob *job = (const DownloadJob *)ctx;
     if (job == NULL || job->slots == NULL) {
         return true;
     }
 
     for (size_t i = 0; i < job->slot_capacity; i++) {
-        if (job->slots[i].in_use && job->slots[i].chunk_index == chunk_index) {
+        if (job->slots[i].in_use && job->slots[i].range_start == start
+            && job->slots[i].range_end == end) {
             return false;
         }
     }
@@ -926,9 +906,10 @@ static void reset_chunk_progress(DownloadState *state) {
         return;
     }
 
-    free(state->chunks_done);
-    state->chunks_done = NULL;
-    state->chunk_count = 0;
+    free(state->done_ranges);
+    state->done_ranges = NULL;
+    state->done_range_count = 0U;
+    state->done_range_capacity = 0U;
 }
 
 static void disable_segment_mode(DownloadJob *job) {
@@ -989,8 +970,7 @@ static bool apply_segment_mode(DownloadJob *job) {
         return false;
     }
 
-    if (job->state->chunk_count == 0
-        && download_state_init_chunks(job->state, job->state->total_size, job->seg_cfg.chunk_size)
+    if (download_state_init_chunks(job->state, job->state->total_size, job->seg_cfg.chunk_size)
                != 0) {
         return false;
     }
@@ -1103,10 +1083,9 @@ static void send_request_for_slot(DownloadJob *job, struct mg_connection *c, Chu
     }
 
     if (slot != NULL && job->step == DL_STEP_CHUNK) {
-        uint64_t start = 0;
-        uint64_t end = 0;
-        segment_chunk_range(job->state, slot->chunk_index, &start, &end);
-        send_request(job, c, start, end);
+        send_request(job, c, slot->range_start, slot->range_end);
+    } else if (job->step == DL_STEP_CHUNK) {
+        send_request(job, c, job->active_range_start, job->active_range_end);
     } else if (job->step == DL_STEP_STREAM) {
         send_request(job, c, job->stream_received, 0);
     } else {
@@ -1263,7 +1242,8 @@ static void begin_chunk_body(DownloadJob *job, ChunkSlot *slot, struct mg_connec
         return;
     }
 
-    const size_t chunk_index = slot != NULL ? slot->chunk_index : job->active_chunk;
+    const uint64_t range_start = slot != NULL ? slot->range_start : job->active_range_start;
+    const uint64_t range_end = slot != NULL ? slot->range_end : job->active_range_end;
     if (slot != NULL) {
         slot->streaming = true;
     } else {
@@ -1271,9 +1251,7 @@ static void begin_chunk_body(DownloadJob *job, ChunkSlot *slot, struct mg_connec
     }
     c->pfn = NULL;
 
-    uint64_t end = 0;
-    uint64_t write_offset = 0;
-    segment_chunk_range(job->state, chunk_index, &write_offset, &end);
+    const uint64_t write_offset = range_start;
     if (slot != NULL) {
         slot->chunk_write_offset = write_offset;
         slot->chunk_received = 0;
@@ -1305,7 +1283,7 @@ static bool complete_chunk_slot(DownloadJob *job, ChunkSlot *slot, struct mg_con
         return false;
     }
 
-    if (job->state->chunks_done[slot->chunk_index]) {
+    if (download_state_is_range_done(job->state, slot->range_start, slot->range_end)) {
         chunk_slot_release(job, slot);
         return true;
     }
@@ -1313,7 +1291,8 @@ static bool complete_chunk_slot(DownloadJob *job, ChunkSlot *slot, struct mg_con
     flush_recv_body(job, slot, c);
 
     if (slot->chunk_expected > 0 && slot->chunk_received < slot->chunk_expected) {
-        set_error(job, "Incomplete chunk %zu (%llu / %llu bytes)", slot->chunk_index,
+        set_error(job, "Incomplete range %llu-%llu (%llu / %llu bytes)",
+                  (unsigned long long)slot->range_start, (unsigned long long)slot->range_end,
                   (unsigned long long)slot->chunk_received,
                   (unsigned long long)slot->chunk_expected);
         return false;
@@ -1324,7 +1303,7 @@ static bool complete_chunk_slot(DownloadJob *job, ChunkSlot *slot, struct mg_con
     if (job->mutex != NULL) {
         avar_mutex_lock(job->mutex);
     }
-    job->state->chunks_done[slot->chunk_index] = true;
+    (void)download_state_mark_range_done(job->state, slot->range_start, slot->range_end);
     if (job->mutex != NULL) {
         avar_mutex_unlock(job->mutex);
     }
@@ -1577,7 +1556,9 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
         } else {
             flush_recv_body(job, NULL, c);
             if (job->chunk_expected > 0 && job->chunk_received < job->chunk_expected) {
-                set_error(job, "Incomplete chunk %zu (%llu / %llu bytes)", job->active_chunk,
+                set_error(job, "Incomplete range %llu-%llu (%llu / %llu bytes)",
+                          (unsigned long long)job->active_range_start,
+                          (unsigned long long)job->active_range_end,
                           (unsigned long long)job->chunk_received,
                           (unsigned long long)job->chunk_expected);
                 (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
@@ -1588,7 +1569,8 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
             if (job->mutex != NULL) {
                 avar_mutex_lock(job->mutex);
             }
-            job->state->chunks_done[job->active_chunk] = true;
+            (void)download_state_mark_range_done(job->state, job->active_range_start,
+                                                 job->active_range_end);
             if (job->mutex != NULL) {
                 avar_mutex_unlock(job->mutex);
             }
@@ -1679,18 +1661,18 @@ static void schedule_pending_chunks(DownloadJob *job) {
     }
 
     const size_t capacity = job->seg_cfg.concurrency - active;
-    size_t indices[32];
-    const size_t max_select = capacity < (sizeof indices / sizeof indices[0]) ? capacity
-                                                                              : (sizeof indices / sizeof indices[0]);
+    ByteRange ranges[32];
+    const size_t max_select = capacity < (sizeof ranges / sizeof ranges[0]) ? capacity
+                                                                            : (sizeof ranges / sizeof ranges[0]);
     const size_t selected =
-            segment_select_chunks(&job->seg_cfg, job->state, max_select, chunk_in_flight_predicate,
-                                  job, indices);
+            segment_select_chunks(&job->seg_cfg, job->state, max_select, range_in_flight_predicate,
+                                  job, ranges);
     if (selected == 0) {
         return;
     }
 
     for (size_t i = 0; i < selected; i++) {
-        ChunkSlot *slot = chunk_slot_acquire(job, indices[i]);
+        ChunkSlot *slot = chunk_slot_acquire(job, ranges[i].start, ranges[i].end);
         if (slot == NULL) {
             break;
         }
@@ -1723,12 +1705,14 @@ static void schedule_next(DownloadJob *job) {
     job->chunk_write_offset = 0;
 
     if (job->step == DL_STEP_CHUNK) {
-        const size_t chunk = next_chunk_index(job);
-        if (chunk >= job->state->chunk_count) {
+        uint64_t start = 0U;
+        uint64_t end = 0U;
+        if (!next_pending_segment(job, &start, &end)) {
             (void)finalize_download(job);
             return;
         }
-        job->active_chunk = chunk;
+        job->active_range_start = start;
+        job->active_range_end = end;
     }
 
     struct mg_connection *c = NULL;
@@ -1871,15 +1855,9 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
     }
 
     if (slot != NULL && job->step == DL_STEP_CHUNK && slot->chunk_expected == 0) {
-        uint64_t start = 0;
-        uint64_t end = 0;
-        segment_chunk_range(job->state, slot->chunk_index, &start, &end);
-        slot->chunk_expected = end - start + 1U;
+        slot->chunk_expected = slot->range_end - slot->range_start + 1U;
     } else if (slot == NULL && job->step == DL_STEP_CHUNK && job->chunk_expected == 0) {
-        uint64_t start = 0;
-        uint64_t end = 0;
-        segment_chunk_range(job->state, job->active_chunk, &start, &end);
-        job->chunk_expected = end - start + 1U;
+        job->chunk_expected = job->active_range_end - job->active_range_start + 1U;
     }
 
     if (job->step == DL_STEP_CHUNK) {
@@ -1953,7 +1931,8 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         struct mg_http_message *hm = (struct mg_http_message *)ev_data;
         const bool streaming = slot != NULL ? slot->streaming : job->streaming;
         const bool headers_received = slot != NULL ? slot->headers_received : job->headers_received;
-        const size_t chunk_index = slot != NULL ? slot->chunk_index : job->active_chunk;
+        const uint64_t range_start = slot != NULL ? slot->range_start : job->active_range_start;
+        const uint64_t range_end = slot != NULL ? slot->range_end : job->active_range_end;
 
         if (streaming || headers_received) {
             return;
@@ -1967,10 +1946,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             return;
         }
 
-        uint64_t offset = 0;
-        uint64_t end = 0;
-        segment_chunk_range(job->state, chunk_index, &offset, &end);
-        if (!write_at_offset(job, hm->body.buf, hm->body.len, offset)) {
+        if (!write_at_offset(job, hm->body.buf, hm->body.len, range_start)) {
             request_close(job, c, false);
             return;
         }
@@ -1979,7 +1955,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         if (job->mutex != NULL) {
             avar_mutex_lock(job->mutex);
         }
-        job->state->chunks_done[chunk_index] = true;
+        (void)download_state_mark_range_done(job->state, range_start, range_end);
         if (job->mutex != NULL) {
             avar_mutex_unlock(job->mutex);
         }
@@ -2038,7 +2014,8 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             if (slot != NULL && job->segment_mode) {
                 chunk_slot_release(job, slot);
                 job->segment_error_count++;
-                if (job->segment_error_count > job->state->chunk_count * 4U) {
+                if (job->segment_error_count
+                    > download_state_segment_count(job->state) * 4U) {
                     set_error(job, "Too many segment connection errors");
                     (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
                 } else {
@@ -2057,18 +2034,17 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
 }
 
 static bool prepare_chunk_download(DownloadJob *job) {
-    if (job == NULL || job->state == NULL || job->state->total_size == 0) {
+    if (job == NULL || job->state == NULL || job->state->total_size == 0U) {
         return false;
     }
 
-    if (job->state->chunk_count == 0
-        && segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)
+    if (segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)
         && download_state_init_chunks(job->state, job->state->total_size, job->seg_cfg.chunk_size)
                != 0) {
         return false;
     }
 
-    if (job->state->chunk_count == 0 || download_state_all_chunks_done(job->state)) {
+    if (download_state_all_chunks_done(job->state)) {
         return false;
     }
 
@@ -2076,7 +2052,15 @@ static bool prepare_chunk_download(DownloadJob *job) {
     if (segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)) {
         job->segment_mode = true;
     }
-    job->active_chunk = next_chunk_index(job);
+
+    uint64_t start = 0U;
+    uint64_t end = 0U;
+    if (!next_pending_segment(job, &start, &end)) {
+        return false;
+    }
+
+    job->active_range_start = start;
+    job->active_range_end = end;
     return true;
 }
 

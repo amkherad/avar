@@ -29,6 +29,254 @@ static void json_add_string_or_null(cJSON *obj, const char *key, const char *val
     }
 }
 
+static int ensure_range_capacity(DownloadState *state, const size_t needed) {
+    if (state == NULL || needed <= state->done_range_capacity) {
+        return 0;
+    }
+
+    size_t new_cap = state->done_range_capacity == 0 ? 4U : state->done_range_capacity * 2U;
+    while (new_cap < needed) {
+        new_cap *= 2U;
+    }
+
+    ByteRange *ranges = realloc(state->done_ranges, new_cap * sizeof(*ranges));
+    if (ranges == NULL) {
+        return -1;
+    }
+
+    state->done_ranges = ranges;
+    state->done_range_capacity = new_cap;
+    return 0;
+}
+
+static void coalesce_done_ranges(DownloadState *state) {
+    if (state == NULL || state->done_range_count <= 1U) {
+        return;
+    }
+
+    size_t write = 0U;
+    for (size_t read = 1U; read < state->done_range_count; read++) {
+        ByteRange *current = &state->done_ranges[write];
+        const ByteRange *next = &state->done_ranges[read];
+
+        if (next->start <= current->end + 1U) {
+            if (next->end > current->end) {
+                current->end = next->end;
+            }
+            continue;
+        }
+
+        write++;
+        state->done_ranges[write] = *next;
+    }
+
+    state->done_range_count = write + 1U;
+}
+
+static void clip_done_ranges(DownloadState *state) {
+    if (state == NULL || state->done_range_count == 0U) {
+        return;
+    }
+
+    size_t write = 0U;
+    const uint64_t max_end =
+            state->total_size > 0U ? state->total_size - 1U : UINT64_MAX;
+
+    for (size_t read = 0U; read < state->done_range_count; read++) {
+        ByteRange range = state->done_ranges[read];
+        if (state->total_size > 0U) {
+            if (range.start >= state->total_size) {
+                continue;
+            }
+            if (range.end > max_end) {
+                range.end = max_end;
+            }
+        }
+
+        if (range.start > range.end) {
+            continue;
+        }
+
+        state->done_ranges[write++] = range;
+    }
+
+    state->done_range_count = write;
+    coalesce_done_ranges(state);
+}
+
+static int insert_sorted_range(DownloadState *state, const ByteRange range) {
+    if (ensure_range_capacity(state, state->done_range_count + 1U) != 0) {
+        return -1;
+    }
+
+    size_t insert_at = 0U;
+    while (insert_at < state->done_range_count
+           && state->done_ranges[insert_at].start < range.start) {
+        insert_at++;
+    }
+
+    if (insert_at < state->done_range_count) {
+        memmove(&state->done_ranges[insert_at + 1U], &state->done_ranges[insert_at],
+                (state->done_range_count - insert_at) * sizeof(ByteRange));
+    }
+
+    state->done_ranges[insert_at] = range;
+    state->done_range_count++;
+    return 0;
+}
+
+int download_state_mark_range_done(DownloadState *state, uint64_t start, uint64_t end) {
+    if (state == NULL || start > end) {
+        return -1;
+    }
+
+    if (state->total_size > 0U && start >= state->total_size) {
+        return 0;
+    }
+
+    if (state->total_size > 0U && end >= state->total_size) {
+        end = state->total_size - 1U;
+    }
+
+    if (download_state_is_range_done(state, start, end)) {
+        return 0;
+    }
+
+    size_t lo = 0U;
+    while (lo < state->done_range_count && state->done_ranges[lo].end + 1U < start) {
+        lo++;
+    }
+
+    uint64_t merge_start = start;
+    uint64_t merge_end = end;
+    size_t hi = lo;
+    while (hi < state->done_range_count && state->done_ranges[hi].start <= merge_end + 1U) {
+        if (state->done_ranges[hi].start < merge_start) {
+            merge_start = state->done_ranges[hi].start;
+        }
+        if (state->done_ranges[hi].end > merge_end) {
+            merge_end = state->done_ranges[hi].end;
+        }
+        hi++;
+    }
+
+    const ByteRange merged = {.start = merge_start, .end = merge_end};
+    if (hi > lo) {
+        state->done_ranges[lo] = merged;
+        if (hi < state->done_range_count) {
+            memmove(&state->done_ranges[lo + 1U], &state->done_ranges[hi],
+                    (state->done_range_count - hi) * sizeof(ByteRange));
+        }
+        state->done_range_count -= hi - lo - 1U;
+        return 0;
+    }
+
+    return insert_sorted_range(state, merged);
+}
+
+bool download_state_is_range_done(const DownloadState *state, const uint64_t start,
+                                  const uint64_t end) {
+    if (state == NULL || start > end) {
+        return false;
+    }
+
+    for (size_t i = 0U; i < state->done_range_count; i++) {
+        const ByteRange *range = &state->done_ranges[i];
+        if (range->end < start) {
+            continue;
+        }
+        if (range->start > start) {
+            return false;
+        }
+        if (range->end >= end) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+size_t download_state_segment_count(const DownloadState *state) {
+    if (state == NULL || state->total_size == 0U) {
+        return 0U;
+    }
+
+    const size_t chunk_size = state->chunk_size > 0U ? state->chunk_size : DL_CHUNK_SIZE;
+    return (size_t)((state->total_size + chunk_size - 1U) / chunk_size);
+}
+
+bool download_state_is_segment_done(const DownloadState *state, const size_t segment_index) {
+    if (state == NULL || state->total_size == 0U) {
+        return false;
+    }
+
+    const size_t chunk_size = state->chunk_size > 0U ? state->chunk_size : DL_CHUNK_SIZE;
+    const uint64_t start = (uint64_t)segment_index * (uint64_t)chunk_size;
+    uint64_t end = start + (uint64_t)chunk_size - 1U;
+    if (end >= state->total_size) {
+        end = state->total_size - 1U;
+    }
+
+    return download_state_is_range_done(state, start, end);
+}
+
+static int load_legacy_chunks(DownloadState *state, const cJSON *chunks, const size_t chunk_count) {
+    if (state == NULL || chunks == NULL || !cJSON_IsArray(chunks) || chunk_count == 0U) {
+        return 0;
+    }
+
+    const size_t chunk_size = state->chunk_size > 0U ? state->chunk_size : DL_CHUNK_SIZE;
+    const int count = cJSON_GetArraySize(chunks);
+    const size_t limit = (size_t)count < chunk_count ? (size_t)count : chunk_count;
+
+    for (size_t i = 0U; i < limit; i++) {
+        const cJSON *item = cJSON_GetArrayItem(chunks, (int)i);
+        if (!cJSON_IsTrue(item)) {
+            continue;
+        }
+
+        const uint64_t start = (uint64_t)i * (uint64_t)chunk_size;
+        uint64_t end = start + (uint64_t)chunk_size - 1U;
+        if (state->total_size > 0U && end >= state->total_size) {
+            end = state->total_size - 1U;
+        }
+
+        if (download_state_mark_range_done(state, start, end) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static int load_done_ranges(DownloadState *state, const cJSON *ranges) {
+    if (state == NULL || ranges == NULL || !cJSON_IsArray(ranges)) {
+        return -1;
+    }
+
+    const int count = cJSON_GetArraySize(ranges);
+    for (int i = 0; i < count; i++) {
+        const cJSON *item = cJSON_GetArrayItem(ranges, i);
+        if (item == NULL || !cJSON_IsArray(item) || cJSON_GetArraySize(item) < 2) {
+            continue;
+        }
+
+        const cJSON *start_item = cJSON_GetArrayItem(item, 0);
+        const cJSON *end_item = cJSON_GetArrayItem(item, 1);
+        if (!cJSON_IsNumber(start_item) || !cJSON_IsNumber(end_item)) {
+            continue;
+        }
+
+        const uint64_t start = (uint64_t)start_item->valuedouble;
+        const uint64_t end = (uint64_t)end_item->valuedouble;
+        if (download_state_mark_range_done(state, start, end) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 void download_state_free(DownloadState *state) {
     if (state == NULL) {
         return;
@@ -50,7 +298,7 @@ void download_state_free(DownloadState *state) {
     free(state->queue_id);
     free(state->etag);
     free(state->last_modified);
-    free(state->chunks_done);
+    free(state->done_ranges);
     free(state);
 }
 
@@ -68,53 +316,20 @@ DownloadState *download_state_create(const char *url, const char *filename,
     state->dest_path = dest_path != NULL ? strdup(dest_path) : NULL;
     state->added_through = strdup(AVAR_DL_ADDED_DIRECT);
     state->total_size = total_size;
-    state->chunk_size = chunk_size > 0 ? chunk_size : DL_CHUNK_SIZE;
-
-    if (total_size > 0) {
-        state->chunk_count = (size_t)((total_size + state->chunk_size - 1) / state->chunk_size);
-    } else {
-        state->chunk_count = 0;
-    }
-
-    if (state->chunk_count > 0) {
-        state->chunks_done = calloc(state->chunk_count, sizeof(bool));
-        if (state->chunks_done == NULL) {
-            download_state_free(state);
-            return NULL;
-        }
-    }
+    state->chunk_size = chunk_size > 0U ? chunk_size : DL_CHUNK_SIZE;
 
     return state;
 }
 
 int download_state_init_chunks(DownloadState *state, const uint64_t total_size,
                                const size_t chunk_size) {
-    if (state == NULL || total_size == 0) {
+    if (state == NULL || total_size == 0U) {
         return -1;
     }
 
-    const size_t new_chunk_size = chunk_size > 0 ? chunk_size : DL_CHUNK_SIZE;
-    const size_t new_chunk_count =
-            (size_t)((total_size + new_chunk_size - 1U) / new_chunk_size);
-
-    bool *new_done = calloc(new_chunk_count, sizeof(bool));
-    if (new_done == NULL) {
-        return -1;
-    }
-
-    if (state->chunks_done != NULL && state->chunk_count > 0) {
-        const size_t preserve = state->chunk_count < new_chunk_count ? state->chunk_count
-                                                                     : new_chunk_count;
-        for (size_t i = 0; i < preserve; i++) {
-            new_done[i] = state->chunks_done[i];
-        }
-    }
-
-    free(state->chunks_done);
-    state->chunks_done = new_done;
     state->total_size = total_size;
-    state->chunk_size = new_chunk_size;
-    state->chunk_count = new_chunk_count;
+    state->chunk_size = chunk_size > 0U ? chunk_size : DL_CHUNK_SIZE;
+    clip_done_ranges(state);
     return 0;
 }
 
@@ -144,7 +359,7 @@ DownloadState *download_state_load(const char *path) {
         return NULL;
     }
 
-    char *buffer = malloc((size_t)size + 1);
+    char *buffer = malloc((size_t)size + 1U);
     if (buffer == NULL) {
         fclose(file);
         return NULL;
@@ -185,7 +400,7 @@ DownloadState *download_state_load(const char *path) {
     state->last_modified = json_get_string(root, AVAR_FIELD_LAST_MODIFIED);
 
     state->total_size = json_get_u64(root, AVAR_FIELD_TOTAL_BYTES);
-    if (state->total_size == 0) {
+    if (state->total_size == 0U) {
         state->total_size = json_get_u64(root, AVAR_STATE_FIELD_TOTAL_SIZE);
     }
     state->bytes_downloaded = json_get_u64(root, AVAR_FIELD_BYTES_DOWNLOADED);
@@ -196,36 +411,37 @@ DownloadState *download_state_load(const char *path) {
     } else {
         state->chunk_size = DL_CHUNK_SIZE;
     }
-    if (state->chunk_size == 0) {
+    if (state->chunk_size == 0U) {
         state->chunk_size = DL_CHUNK_SIZE;
     }
 
-    const cJSON *chunk_count = cJSON_GetObjectItemCaseSensitive(root, AVAR_STATE_FIELD_CHUNK_COUNT);
-    if (chunk_count != NULL && cJSON_IsNumber(chunk_count)) {
-        state->chunk_count = (size_t)chunk_count->valuedouble;
-    } else if (state->total_size > 0) {
-        state->chunk_count =
-            (size_t)((state->total_size + state->chunk_size - 1) / state->chunk_size);
-    }
-
-    if (state->chunk_count > 0) {
-        state->chunks_done = calloc(state->chunk_count, sizeof(bool));
-        if (state->chunks_done == NULL) {
+    const cJSON *done_ranges =
+            cJSON_GetObjectItemCaseSensitive(root, AVAR_STATE_FIELD_DONE_RANGES);
+    if (done_ranges != NULL && cJSON_IsArray(done_ranges)) {
+        if (load_done_ranges(state, done_ranges) != 0) {
             cJSON_Delete(root);
             download_state_free(state);
             return NULL;
         }
+    } else {
+        size_t chunk_count = 0U;
+        const cJSON *chunk_count_item =
+                cJSON_GetObjectItemCaseSensitive(root, AVAR_STATE_FIELD_CHUNK_COUNT);
+        if (chunk_count_item != NULL && cJSON_IsNumber(chunk_count_item)) {
+            chunk_count = (size_t)chunk_count_item->valuedouble;
+        } else if (state->total_size > 0U) {
+            chunk_count = download_state_segment_count(state);
+        }
 
         const cJSON *chunks = cJSON_GetObjectItemCaseSensitive(root, AVAR_FIELD_CHUNKS);
-        if (chunks != NULL && cJSON_IsArray(chunks)) {
-            const int count = cJSON_GetArraySize(chunks);
-            for (int i = 0; i < count && (size_t)i < state->chunk_count; i++) {
-                const cJSON *item = cJSON_GetArrayItem(chunks, i);
-                state->chunks_done[i] = cJSON_IsTrue(item);
-            }
+        if (load_legacy_chunks(state, chunks, chunk_count) != 0) {
+            cJSON_Delete(root);
+            download_state_free(state);
+            return NULL;
         }
     }
 
+    clip_done_ranges(state);
     cJSON_Delete(root);
 
     if (state->url == NULL || state->filename == NULL || state->temp_path == NULL
@@ -256,8 +472,8 @@ int download_state_save(const DownloadState *state, const char *path) {
     json_add_string_or_null(root, AVAR_FIELD_FILENAME, state->filename);
     json_add_string_or_null(root, AVAR_FIELD_STATUS, state->status);
     json_add_string_or_null(root, AVAR_FIELD_PROXY, state->proxy);
-    cJSON_AddNumberToObject(root, AVAR_FIELD_BYTES_DOWNLOADED, (double) state->bytes_downloaded);
-    cJSON_AddNumberToObject(root, AVAR_FIELD_TOTAL_BYTES, (double) state->total_size);
+    cJSON_AddNumberToObject(root, AVAR_FIELD_BYTES_DOWNLOADED, (double)state->bytes_downloaded);
+    cJSON_AddNumberToObject(root, AVAR_FIELD_TOTAL_BYTES, (double)state->total_size);
     json_add_string_or_null(root, AVAR_FIELD_QUEUED_AT, state->queued_at);
     json_add_string_or_null(root, AVAR_FIELD_LAST_TRY_AT, state->last_try_at);
     json_add_string_or_null(root, AVAR_FIELD_DESCRIPTION, state->description);
@@ -281,17 +497,23 @@ int download_state_save(const DownloadState *state, const char *path) {
         cJSON_AddStringToObject(root, AVAR_FIELD_LAST_MODIFIED, state->last_modified);
     }
 
-    cJSON_AddNumberToObject(root, AVAR_STATE_FIELD_CHUNK_SIZE, (double) state->chunk_size);
-    cJSON_AddNumberToObject(root, AVAR_STATE_FIELD_CHUNK_COUNT, (double) state->chunk_count);
+    cJSON_AddNumberToObject(root, AVAR_STATE_FIELD_CHUNK_SIZE, (double)state->chunk_size);
 
-    cJSON *chunks = cJSON_AddArrayToObject(root, AVAR_FIELD_CHUNKS);
-    if (chunks == NULL) {
+    cJSON *ranges = cJSON_AddArrayToObject(root, AVAR_STATE_FIELD_DONE_RANGES);
+    if (ranges == NULL) {
         cJSON_Delete(root);
         return -1;
     }
 
-    for (size_t i = 0; i < state->chunk_count; i++) {
-        cJSON_AddItemToArray(chunks, cJSON_CreateBool(state->chunks_done[i]));
+    for (size_t i = 0U; i < state->done_range_count; i++) {
+        cJSON *pair = cJSON_CreateArray();
+        if (pair == NULL) {
+            cJSON_Delete(root);
+            return -1;
+        }
+        cJSON_AddItemToArray(pair, cJSON_CreateNumber((double)state->done_ranges[i].start));
+        cJSON_AddItemToArray(pair, cJSON_CreateNumber((double)state->done_ranges[i].end));
+        cJSON_AddItemToArray(ranges, pair);
     }
 
     char *json = cJSON_PrintUnformatted(root);
@@ -341,46 +563,26 @@ int download_state_save(const DownloadState *state, const char *path) {
     return 0;
 }
 
-size_t download_state_completed_chunks(const DownloadState *state) {
-    if (state == NULL || state->chunks_done == NULL) {
-        return 0;
-    }
-
-    size_t count = 0;
-    for (size_t i = 0; i < state->chunk_count; i++) {
-        if (state->chunks_done[i]) {
-            count++;
-        }
-    }
-    return count;
-}
-
 uint64_t download_state_bytes_done(const DownloadState *state) {
-    if (state == NULL || state->chunks_done == NULL || state->chunk_count == 0) {
-        return state != NULL ? state->bytes_downloaded : 0;
+    if (state == NULL) {
+        return 0U;
     }
 
-    const size_t chunk_size = state->chunk_size > 0 ? state->chunk_size : DL_CHUNK_SIZE;
-    uint64_t bytes = 0;
-    for (size_t i = 0; i < state->chunk_count; i++) {
-        if (!state->chunks_done[i]) {
-            continue;
-        }
+    if (state->done_range_count == 0U) {
+        return state->bytes_downloaded;
+    }
 
-        const uint64_t start = (uint64_t)i * (uint64_t)chunk_size;
-        uint64_t end = start + (uint64_t)chunk_size - 1U;
-        if (state->total_size > 0 && end >= state->total_size) {
-            end = state->total_size - 1U;
-        }
-        bytes += end - start + 1U;
+    uint64_t bytes = 0U;
+    for (size_t i = 0U; i < state->done_range_count; i++) {
+        bytes += state->done_ranges[i].end - state->done_ranges[i].start + 1U;
     }
     return bytes;
 }
 
 bool download_state_all_chunks_done(const DownloadState *state) {
-    if (state == NULL || state->chunk_count == 0) {
+    if (state == NULL || state->total_size == 0U) {
         return false;
     }
 
-    return download_state_completed_chunks(state) == state->chunk_count;
+    return download_state_is_range_done(state, 0U, state->total_size - 1U);
 }
