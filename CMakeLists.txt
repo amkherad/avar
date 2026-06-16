@@ -14,6 +14,7 @@ endif()
 set(AVAR_CORE_SOURCES
         "${SRC_DIR}/logger.c"
         "${SRC_DIR}/utils.c"
+        "${SRC_DIR}/instance.c"
         "${SRC_DIR}/file-system.c"
         "${SRC_DIR}/config.c"
         "${SRC_DIR}/queue.c"
@@ -77,6 +78,8 @@ elseif(UNIX AND NOT APPLE)
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE m pthread mbedtls_vendor)
 endif()
+
+enable_testing()
 
 add_subdirectory(tests)
 

@@ -254,3 +254,41 @@ ThreadPool *thread_pool_global(void) {
     }
     return g_global_pool;
 }
+
+#if defined(AVAR_TESTING)
+void thread_pool_reset_global(void) {
+    if (g_global_pool != NULL) {
+        thread_pool_destroy(g_global_pool);
+        g_global_pool = NULL;
+    }
+}
+
+size_t thread_pool_worker_count(ThreadPool *pool) {
+    return pool != NULL ? pool->worker_count : 0U;
+}
+
+size_t thread_pool_queue_depth(ThreadPool *pool) {
+    if (pool == NULL) {
+        return 0U;
+    }
+
+#if defined(_WIN32)
+    EnterCriticalSection(&pool->lock);
+#else
+    pthread_mutex_lock(&pool->lock);
+#endif
+
+    size_t depth = 0U;
+    for (ThreadPoolWork *work = pool->head; work != NULL; work = work->next) {
+        depth++;
+    }
+
+#if defined(_WIN32)
+    LeaveCriticalSection(&pool->lock);
+#else
+    pthread_mutex_unlock(&pool->lock);
+#endif
+
+    return depth;
+}
+#endif

@@ -97,6 +97,7 @@
 #define AVAR_ENV_XDG_DATA_HOME "XDG_DATA_HOME"
 #define AVAR_ENV_XDG_DOWNLOAD_DIR "XDG_DOWNLOAD_DIR"
 #define AVAR_ENV_TEMP "TEMP"
+#define AVAR_ENV_INSTANCE "AVAR_INSTANCE"
 
 /* -------------------------------------------------------------------------- */
 /* Config keys                                                                */

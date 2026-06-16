@@ -16,6 +16,7 @@
     #include <windows.h>
 #else
     #include <fcntl.h>
+    #include <sys/file.h>
     #include <sys/stat.h>
     #include <unistd.h>
 #endif
@@ -31,6 +32,12 @@ typedef struct {
 } DaemonRuntime;
 
 static DaemonRuntime _runtime = {0};
+
+#if defined(_WIN32)
+static HANDLE g_pid_file_handle = INVALID_HANDLE_VALUE;
+#else
+static int g_pid_file_fd = -1;
+#endif
 
 static void (*_user_ctrl_c_handler)(void) = NULL;
 
@@ -141,6 +148,46 @@ bool daemon_cleanup_stale_pid_file(const char *path) {
     return true;
 }
 
+static bool pid_process_is_alive(const int pid) {
+    if (pid <= 0) {
+        return false;
+    }
+
+#if defined(_WIN32)
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, (DWORD)pid);
+    if (process == NULL) {
+        return false;
+    }
+    DWORD exit_code = 0;
+    const BOOL alive = GetExitCodeProcess(process, &exit_code) && exit_code == STILL_ACTIVE;
+    CloseHandle(process);
+    return alive;
+#else
+    return kill((pid_t)pid, 0) == 0;
+#endif
+}
+
+static bool read_pid_file_value(const char *path, int *pid_out) {
+    if (path == NULL || pid_out == NULL) {
+        return false;
+    }
+
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) {
+        return false;
+    }
+
+    int pid = 0;
+    const bool ok = fscanf(file, "%d", &pid) == 1 && pid > 0;
+    fclose(file);
+    if (!ok) {
+        return false;
+    }
+
+    *pid_out = pid;
+    return true;
+}
+
 int daemon_write_pid_file(const char *path) {
     if (path == NULL) {
         return -1;
@@ -161,6 +208,112 @@ int daemon_write_pid_file(const char *path) {
     fprintf(file, "%d\n", (int)pid);
     fclose(file);
     return 0;
+}
+
+static int daemon_acquire_pid_file(const char *path) {
+    if (path == NULL) {
+        return -1;
+    }
+
+    (void)daemon_cleanup_stale_pid_file(path);
+
+#if defined(_WIN32)
+    const DWORD pid = GetCurrentProcessId();
+    char payload[32];
+    snprintf(payload, sizeof payload, "%d\n", (int)pid);
+
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        g_pid_file_handle = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_NEW,
+                                        FILE_ATTRIBUTE_NORMAL, NULL);
+        if (g_pid_file_handle != INVALID_HANDLE_VALUE) {
+            DWORD written = 0;
+            if (!WriteFile(g_pid_file_handle, payload, (DWORD)strlen(payload), &written, NULL)
+                || written != strlen(payload)) {
+                CloseHandle(g_pid_file_handle);
+                g_pid_file_handle = INVALID_HANDLE_VALUE;
+                (void)remove(path);
+                LOG_ERROR("Failed to write pid file '%s'", path);
+                return -1;
+            }
+            return 0;
+        }
+
+        if (GetLastError() != ERROR_FILE_EXISTS) {
+            LOG_ERROR("Failed to create pid file '%s'", path);
+            return -1;
+        }
+
+        int existing_pid = 0;
+        if (read_pid_file_value(path, &existing_pid) && pid_process_is_alive(existing_pid)) {
+            LOG_ERROR("Daemon already running (pid %d)", existing_pid);
+            return -1;
+        }
+
+        (void)remove(path);
+    }
+
+    LOG_ERROR("Failed to acquire pid file '%s'", path);
+    return -1;
+#else
+    const pid_t pid = getpid();
+
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        g_pid_file_fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0644);
+        if (g_pid_file_fd >= 0) {
+            if (flock(g_pid_file_fd, LOCK_EX | LOCK_NB) != 0) {
+                close(g_pid_file_fd);
+                g_pid_file_fd = -1;
+                (void)remove(path);
+                LOG_ERROR("Failed to lock pid file '%s'", path);
+                return -1;
+            }
+
+            char payload[32];
+            const int len = snprintf(payload, sizeof payload, "%d\n", (int)pid);
+            if (len <= 0 || write(g_pid_file_fd, payload, (size_t)len) != (ssize_t)len) {
+                flock(g_pid_file_fd, LOCK_UN);
+                close(g_pid_file_fd);
+                g_pid_file_fd = -1;
+                (void)remove(path);
+                LOG_ERROR("Failed to write pid file '%s'", path);
+                return -1;
+            }
+            return 0;
+        }
+
+        if (errno != EEXIST) {
+            LOG_ERROR("Failed to create pid file '%s'", path);
+            return -1;
+        }
+
+        int existing_pid = 0;
+        if (read_pid_file_value(path, &existing_pid) && pid_process_is_alive(existing_pid)) {
+            LOG_ERROR("Daemon already running (pid %d)", existing_pid);
+            return -1;
+        }
+
+        (void)remove(path);
+    }
+
+    LOG_ERROR("Failed to acquire pid file '%s'", path);
+    return -1;
+#endif
+}
+
+static void daemon_release_pid_file(const char *path) {
+#if defined(_WIN32)
+    if (g_pid_file_handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(g_pid_file_handle);
+        g_pid_file_handle = INVALID_HANDLE_VALUE;
+    }
+#else
+    if (g_pid_file_fd >= 0) {
+        flock(g_pid_file_fd, LOCK_UN);
+        close(g_pid_file_fd);
+        g_pid_file_fd = -1;
+    }
+#endif
+    (void)daemon_remove_pid_file(path);
 }
 
 int daemon_remove_pid_file(const char *path) {
@@ -460,7 +613,7 @@ int daemon_start(const DaemonConfig *cfg) {
         return EXIT_FAILURE;
     }
 
-    if (daemon_write_pid_file(cfg->server.pid_file) != 0) {
+    if (daemon_acquire_pid_file(cfg->server.pid_file) != 0) {
         destroy_runtime_transports();
         return EXIT_FAILURE;
     }
@@ -492,7 +645,7 @@ int daemon_start(const DaemonConfig *cfg) {
 
     remove_ctrl_c_handler();
     destroy_runtime_transports();
-    daemon_remove_pid_file(cfg->server.pid_file);
+    daemon_release_pid_file(cfg->server.pid_file);
     LOG_INFO("Daemon stopped");
     return EXIT_SUCCESS;
 }

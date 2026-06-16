@@ -12,6 +12,7 @@
 #endif
 
 #include <avar.h>
+#include <instance.h>
 #include <logger.h>
 #include <utils.h>
 
@@ -40,7 +41,7 @@ static struct ConfigPaths get_config_path(bool user) {
     (void)user;
     const size_t path_buffer_size = AVAR_CONFIG_PATH_MAX;
 
-    char *dir = config_path(APP_ID);
+    char *dir = config_path(avar_app_name());
     if (dir == NULL) {
         return (struct ConfigPaths){.dir = NULL, .file = NULL};
     }

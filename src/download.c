@@ -147,6 +147,8 @@ typedef struct DownloadJob {
     size_t slot_capacity;
     DownloadSegmentConfig seg_cfg;
     bool segment_mode;
+    bool segment_disabled;
+    bool pending_segment_enable;
     DlStep step;
     size_t active_chunk;
     uint64_t chunk_write_offset;
@@ -175,6 +177,7 @@ typedef struct DownloadJob {
     size_t progress_line_max_len;
     bool last_progress_had_total;
     int last_progress_bar_width;
+    size_t segment_error_count;
 } DownloadJob;
 
 static void set_error(DownloadJob *job, const char *fmt, ...);
@@ -918,6 +921,16 @@ static bool chunk_in_flight_predicate(const void *ctx, const size_t chunk_index)
     return true;
 }
 
+static void reset_chunk_progress(DownloadState *state) {
+    if (state == NULL) {
+        return;
+    }
+
+    free(state->chunks_done);
+    state->chunks_done = NULL;
+    state->chunk_count = 0;
+}
+
 static void disable_segment_mode(DownloadJob *job) {
     if (job == NULL) {
         return;
@@ -926,18 +939,37 @@ static void disable_segment_mode(DownloadJob *job) {
     job->segment_mode = false;
     job->step = DL_STEP_STREAM;
     job->use_ranges = false;
+    job->segment_disabled = true;
+
+    close_file(job);
 
     if (job->slots != NULL) {
         for (size_t i = 0; i < job->slot_capacity; i++) {
             if (job->slots[i].in_use && job->slots[i].conn != NULL) {
                 job->slots[i].conn->is_draining = 1;
             }
+            memset(&job->slots[i], 0, sizeof(ChunkSlot));
         }
     }
+
+    reset_chunk_progress(job->state);
+
+    if (job->temp_path != NULL) {
+        remove(job->temp_path);
+    }
+
+    job->stream_received = 0;
+    job->stream_expected = 0;
+    job->chunk_received = 0;
+    job->chunk_expected = 0;
+    job->chunk_write_offset = 0;
+    job->streaming = false;
+    job->headers_received = false;
+    job->request_sent = false;
 }
 
-static bool try_enable_segment_mode(DownloadJob *job) {
-    if (job == NULL || job->state == NULL || !job->use_ranges) {
+static bool can_enable_segment_mode(const DownloadJob *job) {
+    if (job == NULL || job->state == NULL || !job->use_ranges || job->segment_disabled) {
         return false;
     }
 
@@ -946,6 +978,14 @@ static bool try_enable_segment_mode(DownloadJob *job) {
     }
 
     if (!segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool apply_segment_mode(DownloadJob *job) {
+    if (!can_enable_segment_mode(job)) {
         return false;
     }
 
@@ -958,6 +998,10 @@ static bool try_enable_segment_mode(DownloadJob *job) {
     job->segment_mode = true;
     job->step = DL_STEP_CHUNK;
     return true;
+}
+
+static bool try_enable_segment_mode(DownloadJob *job) {
+    return apply_segment_mode(job);
 }
 
 static uint64_t existing_file_size(const char *path) {
@@ -1577,6 +1621,18 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
         return;
     }
 
+    if (job->step == DL_STEP_STREAM && job->pending_segment_enable) {
+        job->pending_segment_enable = false;
+        if (apply_segment_mode(job)) {
+            job->schedule_deferred = true;
+        } else {
+            set_error(job, "Failed to enable segmented download");
+            (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+        }
+        dl_conn_ctx_free(c);
+        return;
+    }
+
     if (job->step == DL_STEP_CHUNK) {
         if (slot != NULL) {
             chunk_slot_release(job, slot);
@@ -1777,7 +1833,7 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
     }
 
     struct mg_str *accept_ranges = mg_http_get_header(hm, "Accept-Ranges");
-    if (accept_ranges != NULL) {
+    if (accept_ranges != NULL && !job->segment_disabled) {
         job->use_ranges = mg_strcasecmp(*accept_ranges, mg_str("none")) != 0;
     }
 
@@ -1806,8 +1862,9 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
     }
 
     if (job->step == DL_STEP_STREAM && job->state->total_size > 0 && !job->segment_mode
-        && try_enable_segment_mode(job)) {
+        && can_enable_segment_mode(job)) {
         clear_progress_line(job);
+        job->pending_segment_enable = true;
         request_close(job, c, false);
         job->schedule_deferred = true;
         return;
@@ -1980,7 +2037,13 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
                       message != NULL && message[0] != '\0' ? message : "(none)");
             if (slot != NULL && job->segment_mode) {
                 chunk_slot_release(job, slot);
-                job->schedule_deferred = true;
+                job->segment_error_count++;
+                if (job->segment_error_count > job->state->chunk_count * 4U) {
+                    set_error(job, "Too many segment connection errors");
+                    (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+                } else {
+                    job->schedule_deferred = true;
+                }
             } else {
                 if (message != NULL && message[0] != '\0') {
                     set_error(job, "%s", message);
@@ -1991,6 +2054,30 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             }
         }
     }
+}
+
+static bool prepare_chunk_download(DownloadJob *job) {
+    if (job == NULL || job->state == NULL || job->state->total_size == 0) {
+        return false;
+    }
+
+    if (job->state->chunk_count == 0
+        && segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)
+        && download_state_init_chunks(job->state, job->state->total_size, job->seg_cfg.chunk_size)
+               != 0) {
+        return false;
+    }
+
+    if (job->state->chunk_count == 0 || download_state_all_chunks_done(job->state)) {
+        return false;
+    }
+
+    job->step = DL_STEP_CHUNK;
+    if (segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)) {
+        job->segment_mode = true;
+    }
+    job->active_chunk = next_chunk_index(job);
+    return true;
 }
 
 static int run_download(DownloadJob *job) {
@@ -2013,14 +2100,9 @@ static int run_download(DownloadJob *job) {
     job->last_progress_ms = mg_millis();
     job->last_speed_sample_ms = mg_millis();
 
-    if (job->state->total_size > 0 && job->state->chunk_count > 0
-        && !download_state_all_chunks_done(job->state)) {
-        job->step = DL_STEP_CHUNK;
-        if (segment_should_enable(&job->seg_cfg, job->state->total_size, job->use_ranges)) {
-            job->segment_mode = true;
-        }
-        job->active_chunk = next_chunk_index(job);
-    } else {
+    job->step = DL_STEP_STREAM;
+    job->segment_mode = false;
+    if (!prepare_chunk_download(job)) {
         job->step = DL_STEP_STREAM;
     }
 
@@ -2227,6 +2309,7 @@ static int run_transient_download(const char *url, const char *queue, const char
     job->state_path = state_path;
     job->state = state;
     job->use_ranges = true;
+    job->segment_disabled = false;
     job->last_progress_ms = mg_millis();
     job->last_speed_sample_ms = mg_millis();
 

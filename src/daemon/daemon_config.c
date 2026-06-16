@@ -1,6 +1,7 @@
 #include <config.h>
 #include <daemon/daemon.h>
 #include <file-system.h>
+#include <instance.h>
 #include <logger.h>
 #include <utils.h>
 
@@ -115,6 +116,20 @@ void daemon_config_apply_defaults(DaemonConfig *cfg) {
     cfg->server.unix_socket.enabled = false;
     snprintf(cfg->server.unix_socket.path, sizeof cfg->server.unix_socket.path, "%s",
              AVAR_SOCK_DEFAULT);
+
+    if (avar_instance_configured()) {
+        avar_path_with_instance(cfg->server.pid_file, sizeof cfg->server.pid_file,
+                                cfg->server.pid_file);
+        avar_named_resource_with_instance(cfg->server.pipe.name, sizeof cfg->server.pipe.name,
+                                          cfg->server.pipe.name);
+        avar_path_with_instance(cfg->server.unix_socket.path, sizeof cfg->server.unix_socket.path,
+                                cfg->server.unix_socket.path);
+
+        const uint16_t offset = avar_instance_port_offset();
+        cfg->server.http.port = (uint16_t)(cfg->server.http.port + offset);
+        cfg->server.https.port = (uint16_t)(cfg->server.https.port + offset);
+        cfg->session.remote_port = (uint16_t)(cfg->session.remote_port + offset);
+    }
 }
 
 static void load_bool_key(stringa key, bool *out) {

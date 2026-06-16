@@ -16,4 +16,12 @@ bool thread_pool_submit(ThreadPool *pool, ThreadPoolTask task, void *arg);
 
 ThreadPool *thread_pool_global(void);
 
+#if defined(AVAR_TESTING)
+void thread_pool_reset_global(void);
+
+size_t thread_pool_worker_count(ThreadPool *pool);
+
+size_t thread_pool_queue_depth(ThreadPool *pool);
+#endif
+
 #endif

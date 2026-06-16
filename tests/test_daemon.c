@@ -1,4 +1,5 @@
 #include "avar_test.h"
+#include "test_guard.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,34 +19,29 @@
     #include <unistd.h>
 #endif
 
-static char g_config_path[512];
+static TestGuard g_guard;
 static char g_pid_path[512];
 static char g_pipe_path[512];
 
 static void setup_daemon_test_config(void) {
+    AVAR_ASSERT(test_guard_init(&g_guard, "avar-test-daemon"));
+
 #if defined(_WIN32)
-    const char *base = getenv("TEMP");
-    snprintf(g_pipe_path, sizeof g_pipe_path, "\\\\.\\pipe\\avar-test-%d", (int)GetCurrentProcessId());
+    snprintf(g_pipe_path, sizeof g_pipe_path, "\\\\.\\pipe\\%s", g_guard.instance_id);
 #else
-    const char *base = "/tmp";
-    snprintf(g_pipe_path, sizeof g_pipe_path, "/tmp/avar-test-%d.pipe", (int)getpid());
+    snprintf(g_pipe_path, sizeof g_pipe_path, "/tmp/%s.pipe", g_guard.instance_id);
 #endif
 
-    if (base == NULL) {
-        base = ".";
-    }
+    snprintf(g_pid_path, sizeof g_pid_path, "%s%cdaemon.pid", g_guard.work_dir, PATH_SEPARATOR);
 
-    snprintf(g_config_path, sizeof g_config_path, "%s%cavar-test-daemon.json", base, PATH_SEPARATOR);
-    snprintf(g_pid_path, sizeof g_pid_path, "%s%cavar-test-daemon.pid", base, PATH_SEPARATOR);
-
-    remove(g_config_path);
+    remove(g_guard.config_path);
     remove(g_pid_path);
 #if !defined(_WIN32)
     remove(g_pipe_path);
 #endif
 
     init_logger(false);
-    AVAR_ASSERT_EQ(config_open_at(g_config_path), 0);
+    AVAR_ASSERT_EQ(config_open_at(g_guard.config_path), 0);
 
     AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_SESSION_MODE, AVAR_DAEMON_SESSION_MODE_REMOTE), 0);
     AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_SESSION_TRANSPORT, AVAR_DAEMON_TRANSPORT_PIPE), 0);
@@ -109,7 +105,7 @@ AVAR_TEST(daemon_start_ping_stop) {
     pthread_join(thread, NULL);
 #endif
 
-    remove(g_config_path);
+    remove(g_guard.config_path);
     remove(g_pid_path);
 #if !defined(_WIN32)
     remove(g_pipe_path);
