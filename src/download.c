@@ -29,6 +29,7 @@
     #include <direct.h>
     #include <io.h>
     #include <process.h>
+    #include <windows.h>
 #else
     #include <pthread.h>
     #include <unistd.h>
@@ -128,6 +129,7 @@ typedef struct DownloadJob {
     int last_progress_total_num_width;
     size_t progress_line_max_len;
     bool last_progress_had_total;
+    int last_progress_bar_width;
 } DownloadJob;
 
 static void set_error(DownloadJob *job, const char *fmt, ...);
@@ -478,16 +480,55 @@ static void clear_progress_line(DownloadJob *job) {
         return;
     }
 
-    fprintf(stderr, "\r%*s\r", (int) job->progress_line_max_len, "");
+#if defined(_WIN32)
+    static bool vt_enabled = false;
+    if (!vt_enabled && avar_stderr_is_tty()) {
+        HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
+        DWORD mode = 0;
+        if (h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode)) {
+            SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+        vt_enabled = true;
+    }
+#endif
+
+    if (avar_stderr_is_tty()) {
+        fputs("\033[2K\r", stderr);
+    } else {
+        fprintf(stderr, "\r%*s\r", (int) job->progress_line_max_len, "");
+    }
     job->progress_line_max_len = 0;
+    fflush(stderr);
 }
 
 static void write_progress_line(DownloadJob *job, const char *line) {
-    const size_t len = strlen(line);
-    size_t pad_to = job->progress_line_max_len;
+    const int cols = avar_terminal_columns();
+    size_t len = strlen(line);
+    if (cols > 0 && len > (size_t) cols) {
+        len = (size_t) cols;
+    }
 
-    fputs("\r", stderr);
-    fputs(line, stderr);
+#if defined(_WIN32)
+    static bool vt_enabled = false;
+    if (!vt_enabled && avar_stderr_is_tty()) {
+        HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
+        DWORD mode = 0;
+        if (h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode)) {
+            SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+        vt_enabled = true;
+    }
+#endif
+
+    if (avar_stderr_is_tty()) {
+        fputs("\033[2K\r", stderr);
+    } else {
+        fputs("\r", stderr);
+    }
+
+    fwrite(line, 1, len, stderr);
+
+    const size_t pad_to = job->progress_line_max_len;
     if (len < pad_to) {
         for (size_t i = len; i < pad_to; ++i) {
             fputc(' ', stderr);
@@ -497,6 +538,74 @@ static void write_progress_line(DownloadJob *job, const char *line) {
     }
 
     fflush(stderr);
+}
+
+static int progress_bar_equals_count(const char *bar) {
+    if (bar == NULL || bar[0] != '[') {
+        return 0;
+    }
+
+    int count = 0;
+    for (const char *p = bar + 1; *p != '\0' && *p != ']'; ++p) {
+        if (*p == '=') {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+static bool column_overlaps_range(const uint64_t col_start, const uint64_t col_end,
+                                  const uint64_t range_start, const uint64_t range_end) {
+    return col_start < range_end && range_start < col_end;
+}
+
+static bool progress_column_filled(const uint64_t col_start, const uint64_t col_end, void *ctx) {
+    const DownloadJob *job = (const DownloadJob *) ctx;
+    if (job == NULL || col_start >= col_end) {
+        return false;
+    }
+
+    if (job->state != NULL && job->state->chunks_done != NULL) {
+        for (size_t i = 0; i < job->state->chunk_count; i++) {
+            if (!job->state->chunks_done[i]) {
+                continue;
+            }
+
+            uint64_t start = 0;
+            uint64_t end = 0;
+            segment_chunk_range(job->state, i, &start, &end);
+            if (column_overlaps_range(col_start, col_end, start, end + 1U)) {
+                return true;
+            }
+        }
+    }
+
+    if (job->slots != NULL && job->state != NULL) {
+        for (size_t i = 0; i < job->slot_capacity; i++) {
+            const ChunkSlot *slot = &job->slots[i];
+            if (!slot->in_use || !slot->streaming || slot->chunk_received == 0) {
+                continue;
+            }
+
+            const uint64_t recv_end = slot->chunk_write_offset + slot->chunk_received;
+            if (column_overlaps_range(col_start, col_end, slot->chunk_write_offset, recv_end)) {
+                return true;
+            }
+        }
+    } else if (job->step == DL_STEP_CHUNK && job->streaming && job->chunk_received > 0) {
+        const uint64_t start = job->chunk_write_offset;
+        const uint64_t end = job->chunk_write_offset + job->chunk_received;
+        if (column_overlaps_range(col_start, col_end, start, end)) {
+            return true;
+        }
+    } else if (job->step == DL_STEP_STREAM && job->stream_received > 0) {
+        if (column_overlaps_range(col_start, col_end, 0, job->stream_received)) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 static void print_progress(DownloadJob *job) {
@@ -550,14 +659,13 @@ static void print_progress(DownloadJob *job) {
         clear_progress_line(job);
     }
 
-    char bar[DL_PROGRESS_BAR_WIDTH + 3];
     char percent_str[DL_PROGRESS_PERCENT_WIDTH + 2];
     char done_str[32];
     char total_str[32];
     char speed_str[32];
+    char suffix[192];
     char line[DL_PROGRESS_LINE_BUF_SIZE];
 
-    format_progress_bar(percent, DL_PROGRESS_BAR_WIDTH, bar, sizeof bar);
     format_progress_percent(percent, percent_str, sizeof percent_str);
     format_data_size_padded(done_bytes, size_unit, done_num_width, done_str, sizeof done_str);
     format_transfer_rate_padded(job->last_speed_bps, speed_unit, DL_PROGRESS_SPEED_NUMBER_WIDTH,
@@ -565,16 +673,66 @@ static void print_progress(DownloadJob *job) {
 
     if (has_total) {
         format_data_size_padded(total, size_unit, total_num_width, total_str, sizeof total_str);
-        snprintf(line, sizeof line, "%s %s, %s, (%s / %s)", bar, percent_str, speed_str, done_str,
+        snprintf(suffix, sizeof suffix, " %s, %s, (%s / %s)", percent_str, speed_str, done_str,
                  total_str);
     } else {
-        snprintf(line, sizeof line, "%s %s, (%s)", bar, speed_str, done_str);
+        snprintf(suffix, sizeof suffix, " %s, (%s)", speed_str, done_str);
+    }
+
+    const int term_cols = avar_terminal_columns();
+    int bar_width = avar_progress_bar_width((int) strlen(suffix));
+    if (term_cols > 0) {
+        bar_width = avar_progress_bar_width_for_columns(term_cols, (int) strlen(suffix));
+    }
+    if (job->last_progress_bar_width > 0 && bar_width != job->last_progress_bar_width) {
+        clear_progress_line(job);
+    }
+
+    AvarProgressStyle progress_style = AVAR_PROGRESS_SEGMENTED;
+    char *style_cfg =
+            get_config_or_default(AVAR_CFG_DM_PROGRESS_STYLE, AVAR_DEFAULT_PROGRESS_STYLE);
+    (void) avar_progress_style_parse(style_cfg, &progress_style);
+    free(style_cfg);
+
+    char bar[DL_PROGRESS_BAR_WIDTH_MAX + 3];
+    const bool use_segmented = has_total && job->segment_mode && job->seg_cfg.concurrency > 1U
+                               && progress_style == AVAR_PROGRESS_SEGMENTED;
+    if (use_segmented) {
+        format_spatial_progress_bar_fn(total, progress_column_filled, job, bar_width, bar, sizeof bar);
+        const int filled_cols = progress_bar_equals_count(bar);
+        const int expected_cols = (percent * bar_width + 99) / 100;
+        if (filled_cols > expected_cols + 1) {
+            format_progress_bar(percent, bar_width, bar, sizeof bar);
+        }
+    } else {
+        format_progress_bar(percent, bar_width, bar, sizeof bar);
+    }
+
+    snprintf(line, sizeof line, "%s%s", bar, suffix);
+
+    if (term_cols > 0) {
+        while (strlen(line) > (size_t) term_cols && bar_width > DL_PROGRESS_BAR_WIDTH_MIN) {
+            bar_width--;
+            if (use_segmented) {
+                format_spatial_progress_bar_fn(total, progress_column_filled, job, bar_width, bar,
+                                               sizeof bar);
+                const int filled_cols = progress_bar_equals_count(bar);
+                const int expected_cols = (percent * bar_width + 99) / 100;
+                if (filled_cols > expected_cols + 1) {
+                    format_progress_bar(percent, bar_width, bar, sizeof bar);
+                }
+            } else {
+                format_progress_bar(percent, bar_width, bar, sizeof bar);
+            }
+            snprintf(line, sizeof line, "%s%s", bar, suffix);
+        }
     }
 
     write_progress_line(job, line);
     job->last_progress_total = total;
     job->last_progress_total_num_width = total_num_width;
     job->last_progress_had_total = has_total;
+    job->last_progress_bar_width = bar_width;
     job->last_progress_ms = now;
 }
 
@@ -1604,6 +1762,7 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
 
     if (job->step == DL_STEP_STREAM && job->state->total_size > 0 && !job->segment_mode
         && try_enable_segment_mode(job)) {
+        clear_progress_line(job);
         request_close(job, c, false);
         job->schedule_deferred = true;
         return;
@@ -1804,16 +1963,10 @@ static int run_download(DownloadJob *job) {
         }
     }
 
-    job->stream_received = existing_file_size(job->temp_path);
-    if (job->step == DL_STEP_STREAM && job->stream_received > 0 && job->state->total_size == 0
-        && download_state_bytes_done(job->state) == 0) {
-        remove(job->temp_path);
-        job->stream_received = 0;
-    }
+    job->stream_received = 0;
     job->last_activity_ms = mg_millis();
     job->last_progress_ms = mg_millis();
     job->last_speed_sample_ms = mg_millis();
-    job->last_speed_bytes = job_bytes_done(job);
 
     if (job->state->total_size > 0 && job->state->chunk_count > 0
         && !download_state_all_chunks_done(job->state)) {
@@ -1825,6 +1978,17 @@ static int run_download(DownloadJob *job) {
     } else {
         job->step = DL_STEP_STREAM;
     }
+
+    if (job->step == DL_STEP_STREAM) {
+        job->stream_received = existing_file_size(job->temp_path);
+        if (job->stream_received > 0 && job->state->total_size == 0
+            && download_state_bytes_done(job->state) == 0) {
+            remove(job->temp_path);
+            job->stream_received = 0;
+        }
+    }
+
+    job->last_speed_bytes = job_bytes_done(job);
 
     job->current_url = strdup(job->url);
     if (job->current_url == NULL) {

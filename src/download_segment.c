@@ -11,8 +11,9 @@ void segment_chunk_range(const DownloadState *state, const size_t chunk_index, u
         return;
     }
 
-    const uint64_t start = (uint64_t)chunk_index * (uint64_t)state->chunk_size;
-    uint64_t end = start + (uint64_t)state->chunk_size - 1U;
+    const size_t chunk_size = state->chunk_size > 0 ? state->chunk_size : DL_CHUNK_SIZE;
+    const uint64_t start = (uint64_t)chunk_index * (uint64_t)chunk_size;
+    uint64_t end = start + (uint64_t)chunk_size - 1U;
     if (state->total_size > 0 && end >= state->total_size) {
         end = state->total_size - 1U;
     }

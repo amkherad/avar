@@ -23,6 +23,18 @@ typedef enum {
 } AvarSizeUnit;
 
 typedef enum {
+    AVAR_PROGRESS_AGGREGATE,
+    AVAR_PROGRESS_SEGMENTED,
+} AvarProgressStyle;
+
+typedef struct {
+    uint64_t start;
+    uint64_t end; /* inclusive */
+} AvarByteRange;
+
+typedef bool (*AvarColumnFilledFn)(uint64_t col_start, uint64_t col_end, void *ctx);
+
+typedef enum {
     AVAR_SPEED_BYTES_PER_SEC,
     AVAR_SPEED_BITS_PER_SEC,
     AVAR_SPEED_KIB_PER_SEC,
@@ -36,6 +48,20 @@ typedef enum {
 bool avar_size_unit_parse(stringa text, AvarSizeUnit *out);
 
 bool avar_speed_unit_parse(stringa text, AvarSpeedUnit *out);
+
+bool avar_progress_style_parse(stringa text, AvarProgressStyle *out);
+
+/* True when stderr is an interactive terminal (progress may use full width). */
+bool avar_stderr_is_tty(void);
+
+/* Terminal width in columns, or 0 when unknown. */
+int avar_terminal_columns(void);
+
+/* Inner bar width so "[bar]" plus suffix fits within cols (or fixed width when cols <= 0). */
+int avar_progress_bar_width_for_columns(int cols, int suffix_len);
+
+/* Bar width for the suffix already formatted after the bar (leading space included). */
+int avar_progress_bar_width(int suffix_len);
 
 /* Formats bytes using the requested size unit. Returns buf. */
 char *format_data_size(uint64_t bytes, AvarSizeUnit unit, char *buf, size_t buflen);
@@ -59,5 +85,13 @@ char *format_transfer_rate_padded(double bytes_per_sec, AvarSpeedUnit unit, int 
 
 /* Builds an ASCII progress bar like "[=======              ]". Returns buf. */
 char *format_progress_bar(int percent, int width, char *buf, size_t buflen);
+
+/* Maps downloaded byte ranges onto a single spatial bar. Returns buf. */
+char *format_spatial_progress_bar(uint64_t total_size, const AvarByteRange *ranges,
+                                  size_t range_count, int width, char *buf, size_t buflen);
+
+/* Like format_spatial_progress_bar(), but asks is_filled() per column slice. Returns buf. */
+char *format_spatial_progress_bar_fn(uint64_t total_size, AvarColumnFilledFn is_filled, void *ctx,
+                                     int width, char *buf, size_t buflen);
 
 #endif

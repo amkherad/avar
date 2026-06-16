@@ -6,7 +6,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ws2tcpip.h>
+
+#if defined(_WIN32)
+    #include <io.h>
+    #include <windows.h>
+#else
+    #include <sys/ioctl.h>
+    #include <unistd.h>
+#endif
 
 /* ---------- helper predicates --------------------------------------- */
 static bool is_scheme(const char *s, size_t len) {
@@ -374,6 +381,169 @@ char *format_transfer_rate(const double bytes_per_sec, const AvarSpeedUnit unit,
         break;
     }
 
+    return buf;
+}
+
+bool avar_progress_style_parse(const char *text, AvarProgressStyle *out) {
+    if (out == NULL) {
+        return false;
+    }
+
+    if (text == NULL) {
+        *out = AVAR_PROGRESS_AGGREGATE;
+        return true;
+    }
+
+    if (strcmp(text, AVAR_PROGRESS_STYLE_SEGMENTED) == 0) {
+        *out = AVAR_PROGRESS_SEGMENTED;
+        return true;
+    }
+
+    if (strcmp(text, AVAR_PROGRESS_STYLE_AGGREGATE) == 0) {
+        *out = AVAR_PROGRESS_AGGREGATE;
+        return true;
+    }
+
+    return false;
+}
+
+bool avar_stderr_is_tty(void) {
+#if defined(_WIN32)
+    return _isatty(_fileno(stderr)) != 0;
+#else
+    return isatty(STDERR_FILENO) != 0;
+#endif
+}
+
+static int terminal_columns(void) {
+#if defined(_WIN32)
+    CONSOLE_SCREEN_BUFFER_INFO info;
+    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_ERROR_HANDLE), &info)) {
+        const int cols = (int) (info.srWindow.Right - info.srWindow.Left + 1);
+        if (cols > 0) {
+            return cols;
+        }
+    }
+#else
+    struct winsize ws;
+    if (ioctl(STDERR_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+        return (int) ws.ws_col;
+    }
+#endif
+
+    const char *columns = getenv("COLUMNS");
+    if (columns != NULL) {
+        char *end = NULL;
+        const long parsed = strtol(columns, &end, 10);
+        if (end != columns && parsed > 0) {
+            return (int) parsed;
+        }
+    }
+
+    return 0;
+}
+
+int avar_terminal_columns(void) {
+    if (!avar_stderr_is_tty()) {
+        return 0;
+    }
+
+    return terminal_columns();
+}
+
+int avar_progress_bar_width_for_columns(const int cols, const int suffix_len) {
+    if (cols <= 0) {
+        return DL_PROGRESS_BAR_WIDTH;
+    }
+
+    /* Account for the '[' and ']' wrapping the bar. */
+    int bar = cols - suffix_len - 2;
+    if (bar < DL_PROGRESS_BAR_WIDTH_MIN) {
+        bar = DL_PROGRESS_BAR_WIDTH_MIN;
+    }
+    if (bar > DL_PROGRESS_BAR_WIDTH_MAX) {
+        bar = DL_PROGRESS_BAR_WIDTH_MAX;
+    }
+
+    return bar;
+}
+
+int avar_progress_bar_width(const int suffix_len) {
+    if (!avar_stderr_is_tty()) {
+        return DL_PROGRESS_BAR_WIDTH;
+    }
+
+    return avar_progress_bar_width_for_columns(terminal_columns(), suffix_len);
+}
+
+static bool byte_range_overlaps_column(const uint64_t total_size, const int width, const int column,
+                                       const AvarByteRange *range) {
+    if (total_size == 0 || width <= 0 || range == NULL || range->end < range->start) {
+        return false;
+    }
+
+    const uint64_t col_start = ((uint64_t) column * total_size) / (uint64_t) width;
+    const uint64_t col_end = ((uint64_t) (column + 1) * total_size) / (uint64_t) width;
+    const uint64_t range_end = range->end + 1U;
+
+    return col_start < range_end && range->start < col_end;
+}
+
+char *format_spatial_progress_bar_fn(const uint64_t total_size, const AvarColumnFilledFn is_filled,
+                                     void *ctx, const int width, char *buf, const size_t buflen) {
+    if (buf == NULL || buflen == 0 || width <= 0) {
+        return buf;
+    }
+
+    const size_t need = (size_t) width + 3U;
+    if (buflen < need) {
+        buf[0] = '\0';
+        return buf;
+    }
+
+    buf[0] = '[';
+    for (int i = 0; i < width; ++i) {
+        bool filled = false;
+        if (total_size > 0 && is_filled != NULL) {
+            const uint64_t col_start = ((uint64_t) i * total_size) / (uint64_t) width;
+            const uint64_t col_end = ((uint64_t) (i + 1) * total_size) / (uint64_t) width;
+            filled = is_filled(col_start, col_end, ctx);
+        }
+        buf[(size_t) i + 1U] = filled ? '=' : ' ';
+    }
+    buf[(size_t) width + 1U] = ']';
+    buf[(size_t) width + 2U] = '\0';
+    return buf;
+}
+
+char *format_spatial_progress_bar(const uint64_t total_size, const AvarByteRange *ranges,
+                                  const size_t range_count, const int width, char *buf,
+                                  const size_t buflen) {
+    if (buf == NULL || buflen == 0 || width <= 0) {
+        return buf;
+    }
+
+    const size_t need = (size_t) width + 3U;
+    if (buflen < need) {
+        buf[0] = '\0';
+        return buf;
+    }
+
+    buf[0] = '[';
+    for (int i = 0; i < width; ++i) {
+        bool filled = false;
+        if (total_size > 0 && ranges != NULL) {
+            for (size_t r = 0; r < range_count; ++r) {
+                if (byte_range_overlaps_column(total_size, width, i, &ranges[r])) {
+                    filled = true;
+                    break;
+                }
+            }
+        }
+        buf[(size_t) i + 1U] = filled ? '=' : ' ';
+    }
+    buf[(size_t) width + 1U] = ']';
+    buf[(size_t) width + 2U] = '\0';
     return buf;
 }
 

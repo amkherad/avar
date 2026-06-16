@@ -196,6 +196,9 @@ DownloadState *download_state_load(const char *path) {
     } else {
         state->chunk_size = DL_CHUNK_SIZE;
     }
+    if (state->chunk_size == 0) {
+        state->chunk_size = DL_CHUNK_SIZE;
+    }
 
     const cJSON *chunk_count = cJSON_GetObjectItemCaseSensitive(root, AVAR_STATE_FIELD_CHUNK_COUNT);
     if (chunk_count != NULL && cJSON_IsNumber(chunk_count)) {
@@ -357,18 +360,19 @@ uint64_t download_state_bytes_done(const DownloadState *state) {
         return state != NULL ? state->bytes_downloaded : 0;
     }
 
+    const size_t chunk_size = state->chunk_size > 0 ? state->chunk_size : DL_CHUNK_SIZE;
     uint64_t bytes = 0;
     for (size_t i = 0; i < state->chunk_count; i++) {
         if (!state->chunks_done[i]) {
             continue;
         }
 
-        const uint64_t start = (uint64_t)i * (uint64_t)state->chunk_size;
-        uint64_t end = start + (uint64_t)state->chunk_size - 1;
+        const uint64_t start = (uint64_t)i * (uint64_t)chunk_size;
+        uint64_t end = start + (uint64_t)chunk_size - 1U;
         if (state->total_size > 0 && end >= state->total_size) {
-            end = state->total_size - 1;
+            end = state->total_size - 1U;
         }
-        bytes += end - start + 1;
+        bytes += end - start + 1U;
     }
     return bytes;
 }
