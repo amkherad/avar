@@ -47,6 +47,51 @@ size_t download_active_count(void) {
     return (size_t)atomic_load(&g_active_downloads);
 }
 
+size_t download_active_list(DownloadActiveInfo *items, const size_t max_items) {
+    size_t written = 0U;
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < count; ++i) {
+        char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_STATUS);
+        if (status == NULL || strcmp(status, AVAR_DL_STATUS_DOWNLOADING) != 0) {
+            free(status);
+            continue;
+        }
+        free(status);
+
+        if (items != NULL && written < max_items) {
+            DownloadActiveInfo *out = &items[written];
+            memset(out, 0, sizeof(*out));
+
+            char *id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
+            char *filename = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_FILENAME);
+            char *done_str =
+                get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_BYTES_DOWNLOADED);
+            char *total_str = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_TOTAL_BYTES);
+
+            if (id != NULL) {
+                snprintf(out->id, sizeof out->id, "%s", id);
+            }
+            if (filename != NULL) {
+                snprintf(out->filename, sizeof out->filename, "%s", filename);
+            }
+            if (done_str != NULL) {
+                out->bytes_downloaded = strtoull(done_str, NULL, 10);
+            }
+            if (total_str != NULL) {
+                out->total_bytes = strtoull(total_str, NULL, 10);
+            }
+
+            free(id);
+            free(filename);
+            free(done_str);
+            free(total_str);
+        }
+
+        written++;
+    }
+    return written;
+}
+
 bool download_wait_idle(const unsigned timeout_ms) {
     const unsigned step_ms = 100U;
     for (unsigned elapsed = 0U; elapsed < timeout_ms; elapsed += step_ms) {

@@ -280,6 +280,36 @@ static cJSON *handle_health(void) {
         return NULL;
     }
 
+    const size_t active_total = download_active_list(NULL, 0U);
+    DownloadActiveInfo *active_items = NULL;
+    if (active_total > 0U) {
+        active_items = calloc(active_total, sizeof(DownloadActiveInfo));
+        if (active_items != NULL) {
+            (void)download_active_list(active_items, active_total);
+        }
+    }
+
+    cJSON *downloads = cJSON_CreateArray();
+    if (downloads != NULL) {
+        if (active_items != NULL) {
+            for (size_t i = 0; i < active_total; ++i) {
+                const DownloadActiveInfo *item = &active_items[i];
+                cJSON *entry = cJSON_CreateObject();
+                if (entry == NULL) {
+                    continue;
+                }
+                cJSON_AddStringToObject(entry, AVAR_FIELD_ID, item->id);
+                cJSON_AddStringToObject(entry, AVAR_FIELD_FILENAME, item->filename);
+                cJSON_AddNumberToObject(entry, AVAR_FIELD_BYTES_DOWNLOADED,
+                                        (double)item->bytes_downloaded);
+                cJSON_AddNumberToObject(entry, AVAR_FIELD_TOTAL_BYTES, (double)item->total_bytes);
+                cJSON_AddItemToArray(downloads, entry);
+            }
+        }
+        cJSON_AddItemToObject(result, "downloads", downloads);
+    }
+    free(active_items);
+
     cJSON_AddStringToObject(result, "status", "ok");
     cJSON_AddNumberToObject(result, "queueCount", (double)queue_count());
     cJSON_AddNumberToObject(result, "activeDownloads", (double)download_active_count());
