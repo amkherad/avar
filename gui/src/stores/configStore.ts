@@ -19,6 +19,7 @@ function mergeConfig(partial: Partial<GuiConfig>): GuiConfig {
     ...defaults,
     ...partial,
     sessions: partial.sessions ?? defaults.sessions,
+    shortcuts: { ...defaults.shortcuts, ...partial.shortcuts },
   };
 }
 

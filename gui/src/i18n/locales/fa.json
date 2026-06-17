@@ -6,7 +6,9 @@
   "nav": {
     "dashboard": "داشبورد",
     "settings": "تنظیمات",
+    "help": "راهنما",
     "settingsAria": "باز کردن تنظیمات",
+    "helpAria": "باز کردن راهنما",
     "themeLight": "تغییر به پوسته روشن",
     "themeDark": "تغییر به پوسته تیره"
   },
@@ -73,6 +75,8 @@
     "delete": "حذف",
     "deleteConfirmTitle": "حذف دانلود",
     "deleteConfirm": "«{{name}}» از صف حذف شود؟",
+    "deleteConfirmBatch": "{{count}} دانلود از صف حذف شوند؟",
+    "selectedCount": "{{count}} انتخاب‌شده",
     "detailPanel": "جزئیات",
     "toggleDetailPanel": "نمایش/مخفی کردن پنل جزئیات"
   },
@@ -114,7 +118,47 @@
     "syncSse": "رویدادهای ارسالی سرور",
     "syncWebSocket": "وب‌سوکت",
     "refresh": "فاصله به‌روزرسانی (ثانیه)",
-    "pingInterval": "فاصله بررسی اتصال (ثانیه)"
+    "pingInterval": "فاصله بررسی اتصال (ثانیه)",
+    "categories": {
+      "general": "عمومی",
+      "shortcuts": "میانبرها"
+    }
+  },
+  "shortcuts": {
+    "hint": "روی دکمه میانبر کلیک کنید، سپس ترکیب جدید را فشار دهید. Escape برای لغو.",
+    "resetAll": "بازنشانی همه به پیش‌فرض",
+    "category": {
+      "downloads": "دانلودها",
+      "navigation": "پیمایش",
+      "view": "نمایش"
+    },
+    "actions": {
+      "downloadAdd": "افزودن دانلود",
+      "downloadSearch": "فوکوس جستجو",
+      "downloadPause": "مکث / ادامه",
+      "downloadStart": "شروع",
+      "downloadStop": "توقف",
+      "downloadDelete": "حذف",
+      "navDashboard": "رفتن به داشبورد",
+      "navSettings": "باز کردن تنظیمات",
+      "navHelp": "باز کردن راهنما",
+      "consoleToggle": "نمایش/مخفی کنسول",
+      "detailPanelToggle": "نمایش/مخفی پنل جزئیات"
+    }
+  },
+  "help": {
+    "title": "راهنما",
+    "notFound": "موضوع راهنما یافت نشد.",
+    "topics": {
+      "index": "نمای کلی",
+      "downloads": "دانلودها",
+      "queues": "صف‌ها",
+      "sessions": "نشست‌ها",
+      "settings": "تنظیمات",
+      "shortcuts": "میانبرها",
+      "console": "کنسول",
+      "layout": "چیدمان"
+    }
   },
   "common": {
     "save": "ذخیره",

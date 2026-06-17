@@ -21,8 +21,13 @@ interface DataStoreState {
   error: string | null;
   selectedQueueId: string | null;
   selectedDownloadId: string | null;
+  selectedDownloadIds: string[];
+  selectionAnchorId: string | null;
   setSelectedQueueId: (id: string | null) => void;
   setSelectedDownloadId: (id: string | null) => void;
+  setSelectedDownloadIds: (ids: string[]) => void;
+  selectDownload: (id: string, options?: { additive?: boolean; range?: boolean; orderedIds?: string[] }) => void;
+  clearDownloadSelection: () => void;
   applySnapshot: (snapshot: SnapshotPayload) => void;
   refresh: () => Promise<void>;
   clear: () => void;
@@ -36,13 +41,78 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
   error: null,
   selectedQueueId: null,
   selectedDownloadId: null,
+  selectedDownloadIds: [],
+  selectionAnchorId: null,
 
   setSelectedQueueId: (id) => {
     appLogger.gui.debug("Queue selected", id ?? "default");
-    set({ selectedQueueId: id, selectedDownloadId: null });
+    set({
+      selectedQueueId: id,
+      selectedDownloadId: null,
+      selectedDownloadIds: [],
+      selectionAnchorId: null,
+    });
   },
 
-  setSelectedDownloadId: (id) => set({ selectedDownloadId: id }),
+  setSelectedDownloadId: (id) =>
+    set((state) => ({
+      selectedDownloadId: id,
+      selectedDownloadIds: id ? [id] : [],
+      selectionAnchorId: id,
+    })),
+
+  setSelectedDownloadIds: (ids) =>
+    set({
+      selectedDownloadIds: ids,
+      selectedDownloadId: ids[ids.length - 1] ?? null,
+      selectionAnchorId: ids[ids.length - 1] ?? null,
+    }),
+
+  selectDownload: (id, options = {}) => {
+    const { additive = false, range = false, orderedIds = [] } = options;
+    const state = get();
+
+    if (range && state.selectionAnchorId && orderedIds.length > 0) {
+      const anchorIndex = orderedIds.indexOf(state.selectionAnchorId);
+      const clickIndex = orderedIds.indexOf(id);
+      if (anchorIndex >= 0 && clickIndex >= 0) {
+        const start = Math.min(anchorIndex, clickIndex);
+        const end = Math.max(anchorIndex, clickIndex);
+        const rangeIds = orderedIds.slice(start, end + 1);
+        set({
+          selectedDownloadIds: rangeIds,
+          selectedDownloadId: id,
+        });
+        return;
+      }
+    }
+
+    if (additive) {
+      const exists = state.selectedDownloadIds.includes(id);
+      const nextIds = exists
+        ? state.selectedDownloadIds.filter((item) => item !== id)
+        : [...state.selectedDownloadIds, id];
+      set({
+        selectedDownloadIds: nextIds,
+        selectedDownloadId: id,
+        selectionAnchorId: id,
+      });
+      return;
+    }
+
+    set({
+      selectedDownloadIds: [id],
+      selectedDownloadId: id,
+      selectionAnchorId: id,
+    });
+  },
+
+  clearDownloadSelection: () =>
+    set({
+      selectedDownloadIds: [],
+      selectedDownloadId: null,
+      selectionAnchorId: null,
+    }),
 
   applySnapshot: (snapshot) => {
     set((state) => ({
@@ -104,6 +174,8 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
       status: "idle",
       error: null,
       selectedDownloadId: null,
+      selectedDownloadIds: [],
+      selectionAnchorId: null,
     }),
 }));
 
@@ -115,6 +187,14 @@ export function selectSelectedDownload(
     return null;
   }
   return downloads.find((d) => d.id === selectedId) ?? null;
+}
+
+export function selectSelectedDownloads(
+  downloads: DownloadInfo[],
+  selectedIds: string[],
+): DownloadInfo[] {
+  const idSet = new Set(selectedIds);
+  return downloads.filter((d) => idSet.has(d.id));
 }
 
 export function selectEffectiveQueueId(state: DataStoreState): string {

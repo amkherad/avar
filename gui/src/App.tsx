@@ -5,17 +5,24 @@ import { ThemeProvider } from "@/theme/ThemeContext";
 import { PopupHost } from "@/components/ui/PopupHost";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { HelpPage } from "@/pages/HelpPage";
 import { DownloadDetailPopupPage } from "@/pages/DownloadDetailPopupPage";
 import { useConfigStore } from "@/stores/configStore";
+import { useLayoutStore } from "@/stores/layoutStore";
+import { useConsoleStore } from "@/stores/consoleStore";
 import { initSyncCoordinator } from "@/sync/syncManager";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { parsePopupHash } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
+import { ShortcutProvider } from "@/shortcuts/ShortcutProvider";
+import { useShortcutAction } from "@/shortcuts/useShortcutAction";
 import i18n, { isRtlLocale } from "@/i18n";
 
 function AppContent() {
   const [page, setPage] = useState<AppPage>("dashboard");
   const locale = useConfigStore((s) => s.config.locale);
+  const toggleConsole = useConsoleStore((s) => s.toggleOpen);
+  const toggleDetailPanel = useLayoutStore((s) => s.toggleDetailPanel);
 
   useEffect(() => {
     void i18n.changeLanguage(locale);
@@ -34,10 +41,27 @@ function AppContent() {
     setPage(next);
   }
 
+  useShortcutAction("nav.dashboard", () => setPage("dashboard"));
+  useShortcutAction("nav.settings", () => setPage("settings"));
+  useShortcutAction("nav.help", () => setPage("help"));
+  useShortcutAction("console.toggle", () => toggleConsole());
+  useShortcutAction("detailPanel.toggle", () => toggleDetailPanel());
+
+  function renderPage() {
+    switch (page) {
+      case "settings":
+        return <SettingsPage />;
+      case "help":
+        return <HelpPage />;
+      default:
+        return <DashboardPage />;
+    }
+  }
+
   return (
     <>
       <AppShell page={page} onNavigate={handleNavigate}>
-        {page === "dashboard" ? <DashboardPage /> : <SettingsPage />}
+        {renderPage()}
       </AppShell>
       <PopupHost />
     </>
@@ -70,7 +94,9 @@ export function App() {
 
   return (
     <ThemeProvider>
-      {isPopup ? <PopupContent /> : <AppContent />}
+      <ShortcutProvider>
+        {isPopup ? <PopupContent /> : <AppContent />}
+      </ShortcutProvider>
     </ThemeProvider>
   );
 }

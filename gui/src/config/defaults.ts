@@ -1,3 +1,8 @@
+import {
+  defaultShortcutMap,
+  type ShortcutActionId,
+} from "@/shortcuts/definitions";
+
 export type ThemeId = "light" | "dark" | "system";
 
 export type LocaleId = "en" | "fa";
@@ -23,10 +28,11 @@ export interface GuiConfig {
   activeSessionId: string | null;
   sessions: GuiSession[];
   detailPanelMode: DetailPanelMode;
+  shortcuts: Record<ShortcutActionId, string>;
 }
 
 export const GUI_CONFIG_KEY = "avar.gui.config";
-export const GUI_CONFIG_VERSION = 3;
+export const GUI_CONFIG_VERSION = 4;
 
 export const defaultGuiConfig = (): GuiConfig => ({
   theme: "system",
@@ -44,4 +50,5 @@ export const defaultGuiConfig = (): GuiConfig => ({
     },
   ],
   detailPanelMode: "pinned",
+  shortcuts: defaultShortcutMap(),
 });

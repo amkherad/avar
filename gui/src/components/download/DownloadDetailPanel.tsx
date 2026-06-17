@@ -44,7 +44,7 @@ export function DownloadDetailPanel({ download, pinned = true }: DownloadDetailP
       <header className="avar-download-panel__header">
         <h2 className="avar-download-panel__title">{t("download.detailsTitle")}</h2>
         <div className="avar-download-panel__header-actions">
-          <DownloadControls download={download} />
+          <DownloadControls downloads={[download]} />
           <Button
             size="sm"
             variant="ghost"

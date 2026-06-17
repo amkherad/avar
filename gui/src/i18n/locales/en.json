@@ -6,7 +6,9 @@
   "nav": {
     "dashboard": "Dashboard",
     "settings": "Settings",
+    "help": "Help",
     "settingsAria": "Open settings",
+    "helpAria": "Open help",
     "themeLight": "Switch to light theme",
     "themeDark": "Switch to dark theme"
   },
@@ -73,6 +75,8 @@
     "delete": "Delete",
     "deleteConfirmTitle": "Delete download",
     "deleteConfirm": "Remove \"{{name}}\" from the queue?",
+    "deleteConfirmBatch": "Remove {{count}} download(s) from the queue?",
+    "selectedCount": "{{count}} selected",
     "detailPanel": "Details",
     "toggleDetailPanel": "Toggle detail panel"
   },
@@ -114,7 +118,47 @@
     "syncSse": "Server-sent events",
     "syncWebSocket": "WebSockets",
     "refresh": "Refresh interval (seconds)",
-    "pingInterval": "Connection check interval (seconds)"
+    "pingInterval": "Connection check interval (seconds)",
+    "categories": {
+      "general": "General",
+      "shortcuts": "Shortcuts"
+    }
+  },
+  "shortcuts": {
+    "hint": "Click a shortcut button, then press the new key combination. Press Escape to cancel.",
+    "resetAll": "Reset all to defaults",
+    "category": {
+      "downloads": "Downloads",
+      "navigation": "Navigation",
+      "view": "View"
+    },
+    "actions": {
+      "downloadAdd": "Add download",
+      "downloadSearch": "Focus search",
+      "downloadPause": "Pause / resume",
+      "downloadStart": "Start",
+      "downloadStop": "Stop",
+      "downloadDelete": "Delete",
+      "navDashboard": "Go to dashboard",
+      "navSettings": "Open settings",
+      "navHelp": "Open help",
+      "consoleToggle": "Toggle console",
+      "detailPanelToggle": "Toggle detail panel"
+    }
+  },
+  "help": {
+    "title": "Help",
+    "notFound": "Help topic not found.",
+    "topics": {
+      "index": "Overview",
+      "downloads": "Downloads",
+      "queues": "Queues",
+      "sessions": "Sessions",
+      "settings": "Settings",
+      "shortcuts": "Shortcuts",
+      "console": "Console",
+      "layout": "Layout"
+    }
   },
   "common": {
     "save": "Save",

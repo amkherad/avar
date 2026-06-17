@@ -1,7 +1,7 @@
 import { QueuePanel } from "@/components/queue/QueuePanel";
 import { SessionSelector } from "@/components/session/SessionSelector";
 
-export type AppPage = "dashboard" | "settings";
+export type AppPage = "dashboard" | "settings" | "help";
 
 export function Sidebar() {
   return (

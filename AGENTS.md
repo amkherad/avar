@@ -32,10 +32,12 @@ When modifying C code:
 
 - react-development
 - gui-code-style
+- gui-help-docs
 
 When modifying the web/desktop GUI:
 
 - Apply **gui-code-style** and **react-development**.
+- When adding or changing user-visible features, also apply **gui-help-docs** to keep `gui/docs/` in sync.
 - Do **not** apply C skills to TypeScript, CSS, or `gui/package.json`.
 - Pure SPA: no server-side code in the GUI.
 - Daemon access is HTTP JSON-RPC only (`src/api/daemon.ts`).
