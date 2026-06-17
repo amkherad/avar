@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { createDaemonClient, type DaemonClient } from "@/api/daemon";
 import { useConfigStore } from "@/stores/configStore";
 import { useDataStore } from "@/stores/dataStore";
+import { appLogger } from "@/lib/appLogger";
 import type { GuiSession } from "@/config/defaults";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
@@ -59,6 +60,10 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
 
   reconnectClient: () => {
     const session = resolveActiveSession();
+    appLogger.gui.debug(
+      "Reconnecting client",
+      session?.label ?? "no session",
+    );
     set({
       activeSession: session,
       client: buildClient(session),
@@ -70,6 +75,7 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
     const { client, connection: prevConnection } = get();
     if (!client) {
       if (prevConnection !== "disconnected") {
+        appLogger.gui.warn("No client — disconnected");
         set({ connection: "disconnected" });
       }
       return false;
@@ -79,9 +85,11 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
       set({ connection: "connecting" });
     }
 
+    appLogger.gui.debug("Ping daemon");
     const ok = await pingWithTimeout(client);
     const nextConnection = ok ? "connected" : "disconnected";
     if (nextConnection !== get().connection) {
+      appLogger.gui.info(ok ? "Daemon reachable" : "Daemon unreachable");
       set({ connection: nextConnection });
     }
     return ok;

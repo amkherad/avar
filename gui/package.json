@@ -14,10 +14,14 @@
     "build:desktop:current": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "^7.2.0",
+    "@fortawesome/free-solid-svg-icons": "^7.2.0",
+    "@fortawesome/react-fontawesome": "^3.3.1",
     "i18next": "^25.2.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^15.5.2",
+    "react-markdown": "^10.1.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { DownloadInfo, HealthInfo, QueueInfo } from "@/api/types";
 import { DEFAULT_QUEUE_ID, isDefaultQueue } from "@/queue/defaultQueue";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { appLogger } from "@/lib/appLogger";
 
 export type DataStatus = "idle" | "loading" | "error";
 
@@ -19,7 +20,9 @@ interface DataStoreState {
   status: DataStatus;
   error: string | null;
   selectedQueueId: string | null;
+  selectedDownloadId: string | null;
   setSelectedQueueId: (id: string | null) => void;
+  setSelectedDownloadId: (id: string | null) => void;
   applySnapshot: (snapshot: SnapshotPayload) => void;
   refresh: () => Promise<void>;
   clear: () => void;
@@ -32,8 +35,14 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
   status: "idle",
   error: null,
   selectedQueueId: null,
+  selectedDownloadId: null,
 
-  setSelectedQueueId: (id) => set({ selectedQueueId: id }),
+  setSelectedQueueId: (id) => {
+    appLogger.gui.debug("Queue selected", id ?? "default");
+    set({ selectedQueueId: id, selectedDownloadId: null });
+  },
+
+  setSelectedDownloadId: (id) => set({ selectedDownloadId: id }),
 
   applySnapshot: (snapshot) => {
     set((state) => ({
@@ -61,11 +70,15 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
     }
 
     try {
+      appLogger.gui.debug("Refreshing data from daemon");
       const [queueResult, health, downloadResult] = await Promise.all([
         client.listQueues(),
         client.health(),
         client.listDownloads(),
       ]);
+      appLogger.gui.debug(
+        `Data refresh OK (${queueResult.length} queues, ${downloadResult.length} downloads)`,
+      );
       set({
         queues: queueResult,
         health,
@@ -74,9 +87,11 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
         error: null,
       });
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      appLogger.gui.error("Data refresh failed", message);
       set({
         status: "error",
-        error: err instanceof Error ? err.message : "Unknown error",
+        error: message,
       });
     }
   },
@@ -88,8 +103,19 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
       downloads: [],
       status: "idle",
       error: null,
+      selectedDownloadId: null,
     }),
 }));
+
+export function selectSelectedDownload(
+  downloads: DownloadInfo[],
+  selectedId: string | null,
+): DownloadInfo | null {
+  if (!selectedId) {
+    return null;
+  }
+  return downloads.find((d) => d.id === selectedId) ?? null;
+}
 
 export function selectEffectiveQueueId(state: DataStoreState): string {
   return state.selectedQueueId ?? DEFAULT_QUEUE_ID;

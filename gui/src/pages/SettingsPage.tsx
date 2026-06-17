@@ -48,6 +48,8 @@ export function SettingsPage() {
 
   return (
 
+    <div className="avar-page-scroll">
+
     <Card title={t("settings.title")}>
 
       <form className="avar-settings-form" onSubmit={(e) => e.preventDefault()}>
@@ -171,6 +173,8 @@ export function SettingsPage() {
       </form>
 
     </Card>
+
+    </div>
 
   );
 

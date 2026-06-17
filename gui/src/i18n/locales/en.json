@@ -6,7 +6,9 @@
   "nav": {
     "dashboard": "Dashboard",
     "settings": "Settings",
-    "settingsAria": "Open settings"
+    "settingsAria": "Open settings",
+    "themeLight": "Switch to light theme",
+    "themeDark": "Switch to dark theme"
   },
   "session": {
     "title": "Sessions",
@@ -48,7 +50,51 @@
     "status": "Status",
     "progress": "Progress",
     "filename": "File",
-    "bytes": "{{done}} / {{total}}"
+    "bytes": "{{done}} / {{total}}",
+    "id": "ID",
+    "queue": "Queue",
+    "detailsTitle": "Download details",
+    "selectHint": "Select a download to view details",
+    "openWindow": "Open in window",
+    "togglePanelMode": "Toggle detail panel layout",
+    "notFound": "Download not found",
+    "added": "Download added: {{url}}",
+    "addFailed": "Failed to add download",
+    "search": "Search downloads",
+    "searchPlaceholder": "Search all download fields…",
+    "searchEmpty": "No downloads match your search",
+    "viewMode": "View mode",
+    "viewGrid": "Card view",
+    "viewCompact": "Table view",
+    "pause": "Pause",
+    "resume": "Resume",
+    "start": "Start",
+    "stop": "Stop",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete download",
+    "deleteConfirm": "Remove \"{{name}}\" from the queue?",
+    "detailPanel": "Details",
+    "toggleDetailPanel": "Toggle detail panel"
+  },
+  "console": {
+    "title": "Console",
+    "toggle": "Console",
+    "close": "Close console",
+    "clear": "Clear",
+    "empty": "No log entries yet",
+    "autoScroll": "Auto-scroll",
+    "showGui": "GUI logs",
+    "showDaemon": "Daemon logs",
+    "guiSeverity": "GUI min level",
+    "daemonSeverity": "Daemon min level",
+    "daemonFetchFailed": "Failed to fetch daemon logs",
+    "resize": "Resize console",
+    "level": {
+      "debug": "Debug",
+      "info": "Info",
+      "warn": "Warning",
+      "error": "Error"
+    }
   },
   "health": {
     "uptime": "Uptime",
@@ -76,6 +122,11 @@
     "retry": "Retry",
     "loading": "Loading…",
     "error": "Something went wrong",
-    "staleData": "Showing last known data — not connected to the daemon"
+    "staleData": "Showing last known data — not connected to the daemon",
+    "close": "Close"
+  },
+  "layout": {
+    "resizeSidebar": "Resize sidebar",
+    "resizeDetailPanel": "Resize detail panel"
   }
 }

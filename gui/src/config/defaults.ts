@@ -4,6 +4,8 @@ export type LocaleId = "en" | "fa";
 
 export type SyncChannelId = "poll" | "sse" | "websocket";
 
+export type DetailPanelMode = "pinned" | "inline";
+
 export interface GuiSession {
   id: string;
   label: string;
@@ -20,10 +22,11 @@ export interface GuiConfig {
   syncChannel: SyncChannelId;
   activeSessionId: string | null;
   sessions: GuiSession[];
+  detailPanelMode: DetailPanelMode;
 }
 
 export const GUI_CONFIG_KEY = "avar.gui.config";
-export const GUI_CONFIG_VERSION = 2;
+export const GUI_CONFIG_VERSION = 3;
 
 export const defaultGuiConfig = (): GuiConfig => ({
   theme: "system",
@@ -40,4 +43,5 @@ export const defaultGuiConfig = (): GuiConfig => ({
       useRelativeApi: false,
     },
   ],
+  detailPanelMode: "pinned",
 });

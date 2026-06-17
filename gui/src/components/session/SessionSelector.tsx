@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { FontAwesomeIcon } from "@/icons";
+import { faChevronDown, faPen, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { createDaemonClient } from "@/api/daemon";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -161,7 +163,7 @@ export function SessionSelector() {
           <span className="avar-session-selector__status">{connectionLabel}</span>
         </span>
         <span className={`avar-session-selector__chevron ${menuOpen ? "avar-session-selector__chevron--open" : ""}`}>
-          ▾
+          <FontAwesomeIcon icon={faChevronDown} />
         </span>
       </button>
 
@@ -187,11 +189,11 @@ export function SessionSelector() {
                     </button>
                     <div className="avar-list__item-actions">
                       <Button size="sm" variant="ghost" onClick={() => openEdit(session.id)}>
-                        ✎
+                        <FontAwesomeIcon icon={faPen} />
                       </Button>
                       {config.sessions.length > 1 ? (
                         <Button size="sm" variant="ghost" onClick={() => removeSession(session.id)}>
-                          ×
+                          <FontAwesomeIcon icon={faXmark} />
                         </Button>
                       ) : null}
                     </div>

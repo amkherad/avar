@@ -205,6 +205,11 @@ export class DaemonClient {
     }
   }
 
+  async getLogs(maxLines = 100): Promise<string> {
+    const result = await this.rpc<{ logs?: string }>("logs.get", { maxLines });
+    return result.logs ?? "";
+  }
+
   async addDownload(url: string, queueName?: string): Promise<void> {
     const params: Record<string, unknown> = { url, attached: false };
     if (queueName) {
@@ -213,6 +218,41 @@ export class DaemonClient {
     const result = await this.rpc<{ exitCode: number }>("download.add", params);
     if (result.exitCode !== 0) {
       throw new DaemonApiError("Failed to add download", result.exitCode);
+    }
+  }
+
+  async pauseDownload(id: string): Promise<void> {
+    const result = await this.cliExec(["avar", "dl", "pause", id]);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to pause download", result.exitCode);
+    }
+  }
+
+  async resumeDownload(id: string): Promise<void> {
+    const result = await this.cliExec(["avar", "dl", "resume", id]);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to resume download", result.exitCode);
+    }
+  }
+
+  async startDownload(id: string): Promise<void> {
+    const result = await this.cliExec(["avar", "dl", "start", id]);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to start download", result.exitCode);
+    }
+  }
+
+  async stopDownload(id: string): Promise<void> {
+    const result = await this.cliExec(["avar", "dl", "stop", id]);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to stop download", result.exitCode);
+    }
+  }
+
+  async removeDownload(id: string): Promise<void> {
+    const result = await this.cliExec(["avar", "dl", "rm", id, "--force"]);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to remove download", result.exitCode);
     }
   }
 

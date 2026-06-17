@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { QueueInfo } from "@/api/types";
+import { FontAwesomeIcon } from "@/icons";
+import { faPlay, faStop, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 
@@ -70,6 +72,7 @@ export function QueueList({
                     loading={busy}
                     onClick={() => onStop(queue.id)}
                   >
+                    <FontAwesomeIcon icon={faStop} />
                     {t("queue.stop")}
                   </Button>
                 ) : (
@@ -79,6 +82,7 @@ export function QueueList({
                     loading={busy}
                     onClick={() => onStart(queue.id)}
                   >
+                    <FontAwesomeIcon icon={faPlay} />
                     {t("queue.start")}
                   </Button>
                 )}
@@ -88,6 +92,7 @@ export function QueueList({
                   loading={busy}
                   onClick={() => onDelete(queue.id)}
                 >
+                  <FontAwesomeIcon icon={faTrash} />
                   {t("queue.delete")}
                 </Button>
               </div>

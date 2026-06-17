@@ -2,9 +2,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { QueueList } from "@/components/queue/QueueList";
 import { CreateQueueModal } from "@/components/queue/CreateQueueModal";
+import { FontAwesomeIcon } from "@/icons";
+import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { createDefaultQueueInfo, isDefaultQueue, withDefaultQueue } from "@/queue/defaultQueue";
+import { showConfirmDialog } from "@/lib/popup";
+import { appLogger } from "@/lib/appLogger";
 import { useConnectionStore } from "@/stores/connectionStore";
 import {
   selectDownloadCounts,
@@ -40,6 +44,7 @@ export function QueuePanel() {
     setError(null);
     try {
       await action();
+      appLogger.gui.info("Queue action completed", id);
       await useDataStore.getState().refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
@@ -53,6 +58,7 @@ export function QueuePanel() {
       <div className="avar-card__header" style={{ padding: 0, border: "none", marginBottom: "0.75rem" }}>
         <h3 className="avar-card__title">{t("queue.title")}</h3>
         <Button size="sm" onClick={() => setModalOpen(true)}>
+          <FontAwesomeIcon icon={faPlus} />
           {t("queue.add")}
         </Button>
       </div>
@@ -67,8 +73,15 @@ export function QueuePanel() {
         onSelect={setSelectedQueueId}
         onStart={(id) => void runQueueAction(id, () => client!.startQueue(id))}
         onStop={(id) => void runQueueAction(id, () => client!.stopQueue(id))}
-        onDelete={(id) => {
-          if (!window.confirm(t("queue.deleteConfirm"))) {
+        onDelete={async (id) => {
+          const confirmed = await showConfirmDialog({
+            title: t("queue.delete"),
+            message: t("queue.deleteConfirm"),
+            confirmLabel: t("queue.delete"),
+            cancelLabel: t("common.cancel"),
+          });
+          if (!confirmed) {
+            appLogger.gui.debug("Queue delete cancelled", id);
             return;
           }
           void runQueueAction(id, () => client!.removeQueue(id, false));

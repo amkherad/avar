@@ -1,6 +1,7 @@
 import { parseSnapshotPayload } from "@/api/snapshot";
 import type { SnapshotPayload } from "@/api/types";
 import type { DaemonClient } from "@/api/daemon";
+import { appLogger } from "@/lib/appLogger";
 import { useConfigStore } from "@/stores/configStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore } from "@/stores/dataStore";
@@ -11,15 +12,18 @@ let activeStop: SyncStopFn | null = null;
 
 function stopActiveSync(): void {
   if (activeStop) {
+    appLogger.gui.debug("Stopping data sync");
     activeStop();
     activeStop = null;
   }
 }
 
 function startPollSync(intervalMs: number): SyncStopFn {
+  appLogger.gui.info(`Poll sync started (${intervalMs}ms)`);
   void useDataStore.getState().refresh();
   const timerId = window.setInterval(() => {
     if (useConnectionStore.getState().connection === "connected") {
+      appLogger.gui.debug("Poll sync tick");
       void useDataStore.getState().refresh();
     }
   }, intervalMs);
@@ -28,20 +32,21 @@ function startPollSync(intervalMs: number): SyncStopFn {
 
 function startSseSync(client: DaemonClient): SyncStopFn {
   const url = client.getEventsUrl();
+  appLogger.gui.info("SSE sync connecting", url);
   const source = new EventSource(url, { withCredentials: false });
 
-  // EventSource cannot set Authorization; append token as query param if needed.
-  // For token auth, fall back to poll when token is configured.
   const { config } = useConfigStore.getState();
   const session =
     config.sessions.find((s) => s.id === config.activeSessionId) ??
     config.sessions[0];
   if (session?.authToken) {
+    appLogger.gui.warn("SSE unavailable with auth token; falling back to poll");
     source.close();
     return startPollSync(config.refreshIntervalMs);
   }
 
   const apply = (payload: SnapshotPayload) => {
+    appLogger.gui.debug("SSE snapshot received");
     useDataStore.getState().applySnapshot(payload);
   };
 
@@ -54,14 +59,20 @@ function startSseSync(client: DaemonClient): SyncStopFn {
         apply(parsed);
       }
     } catch {
-      /* ignore malformed events */
+      appLogger.gui.warn("Malformed SSE snapshot event");
     }
   });
 
+  source.onopen = () => {
+    appLogger.gui.info("SSE connection opened");
+  };
+
   source.onerror = () => {
-    // EventSource auto-reconnects; only treat a fully closed source as dead.
     if (source.readyState === EventSource.CLOSED) {
+      appLogger.gui.error("SSE connection closed");
       useConnectionStore.setState({ connection: "disconnected" });
+    } else {
+      appLogger.gui.debug("SSE connection error (reconnecting)");
     }
   };
 
@@ -77,6 +88,7 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
     config.sessions[0];
 
   if (session?.authToken) {
+    appLogger.gui.warn("WebSocket unavailable with auth token; falling back to poll");
     return startPollSync(config.refreshIntervalMs);
   }
 
@@ -85,9 +97,12 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
   let closed = false;
 
   const connect = () => {
-    ws = new WebSocket(client.getWebSocketUrl());
+    const wsUrl = client.getWebSocketUrl();
+    appLogger.gui.info("WebSocket sync connecting", wsUrl);
+    ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
+      appLogger.gui.info("WebSocket connection opened");
       if (useConnectionStore.getState().connection !== "connected") {
         useConnectionStore.setState({ connection: "connected" });
       }
@@ -98,17 +113,23 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
       try {
         const parsed = parseSnapshotPayload(JSON.parse(String(event.data)));
         if (parsed?.type === "snapshot") {
+          appLogger.gui.debug("WebSocket snapshot received");
           useDataStore.getState().applySnapshot(parsed);
         }
       } catch {
-        /* ignore */
+        appLogger.gui.debug("Ignored WebSocket message");
       }
     };
 
     ws.onclose = () => {
+      appLogger.gui.debug("WebSocket closed");
       if (!closed) {
         reconnectTimer = window.setTimeout(connect, 2000);
       }
+    };
+
+    ws.onerror = () => {
+      appLogger.gui.warn("WebSocket error");
     };
   };
 
@@ -116,6 +137,7 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
 
   const keepalive = window.setInterval(() => {
     if (ws?.readyState === WebSocket.OPEN) {
+      appLogger.gui.debug("WebSocket keepalive ping");
       ws.send("ping");
     }
   }, 15000);
@@ -136,8 +158,11 @@ export function restartDataSync(): void {
   const { config } = useConfigStore.getState();
   const { client, connection } = useConnectionStore.getState();
   if (!client || connection !== "connected") {
+    appLogger.gui.debug("Data sync not started (not connected)");
     return;
   }
+
+  appLogger.gui.info(`Starting data sync (${config.syncChannel})`);
 
   switch (config.syncChannel) {
     case "sse":
@@ -157,11 +182,15 @@ export function stopDataSync(): void {
 }
 
 export function initSyncCoordinator(): () => void {
+  appLogger.gui.debug("Initializing sync coordinator");
+
   const unsubConnection = useConnectionStore.subscribe((state, prev) => {
     if (state.connection === "connected" && prev.connection !== "connected") {
+      appLogger.gui.info("Connection established — starting sync");
       restartDataSync();
     }
     if (state.connection !== "connected" && prev.connection === "connected") {
+      appLogger.gui.warn("Connection lost — stopping sync");
       stopDataSync();
     }
   });
@@ -174,6 +203,7 @@ export function initSyncCoordinator(): () => void {
       useConnectionStore.getState().connection === "connected" &&
       (channelChanged || intervalChanged)
     ) {
+      appLogger.gui.info("Sync config changed — restarting sync");
       restartDataSync();
     }
   });

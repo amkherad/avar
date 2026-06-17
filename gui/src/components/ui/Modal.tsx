@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { FontAwesomeIcon } from "@/icons";
+import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "./Button";
 
 export interface ModalProps {
@@ -26,7 +28,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
         <header className="avar-modal__header">
           <h2 id="avar-modal-title">{title}</h2>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close">
-            ×
+            <FontAwesomeIcon icon={faXmark} />
           </Button>
         </header>
         <div className="avar-modal__body">{children}</div>

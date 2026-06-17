@@ -6,7 +6,9 @@
   "nav": {
     "dashboard": "داشبورد",
     "settings": "تنظیمات",
-    "settingsAria": "باز کردن تنظیمات"
+    "settingsAria": "باز کردن تنظیمات",
+    "themeLight": "تغییر به پوسته روشن",
+    "themeDark": "تغییر به پوسته تیره"
   },
   "session": {
     "title": "نشست‌ها",
@@ -48,7 +50,51 @@
     "status": "وضعیت",
     "progress": "پیشرفت",
     "filename": "فایل",
-    "bytes": "{{done}} / {{total}}"
+    "bytes": "{{done}} / {{total}}",
+    "id": "شناسه",
+    "queue": "صف",
+    "detailsTitle": "جزئیات دانلود",
+    "selectHint": "یک دانلود انتخاب کنید تا جزئیات نمایش داده شود",
+    "openWindow": "باز کردن در پنجره",
+    "togglePanelMode": "تغییر چیدمان پنل جزئیات",
+    "notFound": "دانلود یافت نشد",
+    "added": "دانلود افزوده شد: {{url}}",
+    "addFailed": "افزودن دانلود ناموفق بود",
+    "search": "جستجوی دانلودها",
+    "searchPlaceholder": "جستجو در تمام فیلدهای دانلود…",
+    "searchEmpty": "دانلودی با این جستجو یافت نشد",
+    "viewMode": "حالت نمایش",
+    "viewGrid": "نمای کارت",
+    "viewCompact": "نمای جدول",
+    "pause": "مکث",
+    "resume": "ادامه",
+    "start": "شروع",
+    "stop": "توقف",
+    "delete": "حذف",
+    "deleteConfirmTitle": "حذف دانلود",
+    "deleteConfirm": "«{{name}}» از صف حذف شود؟",
+    "detailPanel": "جزئیات",
+    "toggleDetailPanel": "نمایش/مخفی کردن پنل جزئیات"
+  },
+  "console": {
+    "title": "کنسول",
+    "toggle": "کنسول",
+    "close": "بستن کنسول",
+    "clear": "پاک کردن",
+    "empty": "هنوز گزارشی ثبت نشده",
+    "autoScroll": "اسکرول خودکار",
+    "showGui": "گزارش‌های رابط",
+    "showDaemon": "گزارش‌های دیمن",
+    "guiSeverity": "حداقل سطح رابط",
+    "daemonSeverity": "حداقل سطح دیمن",
+    "daemonFetchFailed": "دریافت گزارش دیمن ناموفق بود",
+    "resize": "تغییر اندازه کنسول",
+    "level": {
+      "debug": "اشکال‌زدایی",
+      "info": "اطلاع",
+      "warn": "هشدار",
+      "error": "خطا"
+    }
   },
   "health": {
     "uptime": "مدت فعالیت",
@@ -76,6 +122,11 @@
     "retry": "تلاش مجدد",
     "loading": "در حال بارگذاری…",
     "error": "خطایی رخ داد",
-    "staleData": "نمایش آخرین داده‌های دریافت‌شده — اتصال به دیمن برقرار نیست"
+    "staleData": "نمایش آخرین داده‌های دریافت‌شده — اتصال به دیمن برقرار نیست",
+    "close": "بستن"
+  },
+  "layout": {
+    "resizeSidebar": "تغییر اندازه نوار کناری",
+    "resizeDetailPanel": "تغییر اندازه پنل جزئیات"
   }
 }
