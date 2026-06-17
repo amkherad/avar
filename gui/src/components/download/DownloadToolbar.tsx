@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faPlus, faTableCells, faTableList } from "@fortawesome/free-solid-svg-icons";
+import { faCheckSquare, faPlus, faTableCells, faTableList } from "@fortawesome/free-solid-svg-icons";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { ShortcutButton } from "@/components/ui/ShortcutButton";
@@ -16,6 +16,8 @@ export interface DownloadToolbarProps {
   viewMode: DownloadViewMode;
   onViewModeChange: (mode: DownloadViewMode) => void;
   selectedDownloads: DownloadInfo[];
+  showCheckboxes: boolean;
+  onToggleCheckboxes: () => void;
   onAddDownload: () => void;
 }
 
@@ -25,6 +27,8 @@ export function DownloadToolbar({
   viewMode,
   onViewModeChange,
   selectedDownloads,
+  showCheckboxes,
+  onToggleCheckboxes,
   onAddDownload,
 }: DownloadToolbarProps) {
   const { t } = useTranslation();
@@ -57,6 +61,15 @@ export function DownloadToolbar({
         <div className="avar-download-toolbar__group" role="group" aria-label={t("download.viewMode")}>
           <Button
             size="sm"
+            variant={showCheckboxes ? "secondary" : "ghost"}
+            aria-pressed={showCheckboxes}
+            title={t("download.toggleCheckboxes")}
+            onClick={onToggleCheckboxes}
+          >
+            <FontAwesomeIcon icon={faCheckSquare} />
+          </Button>
+          <Button
+            size="sm"
             variant={viewMode === "grid" ? "secondary" : "ghost"}
             aria-pressed={viewMode === "grid"}
             title={t("download.viewGrid")}
@@ -78,11 +91,11 @@ export function DownloadToolbar({
 
       <Input
         ref={searchRef}
-        className="avar-download-toolbar__search"
-        label={t("download.search")}
+        className="avar-download-toolbar__search avar-download-toolbar__search--compact"
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
         placeholder={t("download.searchPlaceholder")}
+        aria-label={t("download.searchPlaceholder")}
       />
     </div>
   );

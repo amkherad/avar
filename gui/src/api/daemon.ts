@@ -1,3 +1,4 @@
+import { proxySettingsToRpcParams, type ProxySettings } from "@/lib/proxySettings";
 import { parseDownloadItem, parseQueueRecord, parseSnapshotPayload } from "./snapshot";
 import type {
   CliExecResult,
@@ -8,7 +9,18 @@ import type {
   QueueInfo,
   QueueRpcResult,
   SnapshotPayload,
+  SystemStatsInfo,
 } from "./types";
+
+export interface AddDownloadParams {
+  url: string;
+  queue?: string;
+  name?: string;
+  attached?: boolean;
+  outputPath?: string;
+  group?: string;
+  proxy?: ProxySettings;
+}
 
 let requestId = 1;
 
@@ -36,6 +48,7 @@ export interface DaemonClientOptions {
 export class DaemonClient {
   private readonly rpcUrl: string;
   private readonly healthUrl: string;
+  private readonly statsUrl: string;
   private readonly pingUrl: string;
   private readonly eventsUrl: string;
   private readonly wsUrl: string;
@@ -48,12 +61,14 @@ export class DaemonClient {
     if (useRelative) {
       this.rpcUrl = "/api/rpc";
       this.healthUrl = "/api/health";
+      this.statsUrl = "/api/stats";
       this.pingUrl = "/api/ping";
       this.eventsUrl = "/api/events";
       this.wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/ws`;
     } else {
       this.rpcUrl = `${trimmed}/api/rpc`;
       this.healthUrl = `${trimmed}/api/health`;
+      this.statsUrl = `${trimmed}/api/stats`;
       this.pingUrl = `${trimmed}/api/ping`;
       this.eventsUrl = `${trimmed}/api/events`;
       const wsBase = trimmed.replace(/^http/i, "ws");
@@ -210,11 +225,20 @@ export class DaemonClient {
     return result.logs ?? "";
   }
 
-  async addDownload(url: string, queueName?: string): Promise<void> {
-    const params: Record<string, unknown> = { url, attached: false };
-    if (queueName) {
-      params.queue = queueName;
-    }
+  async addDownload(options: AddDownloadParams | string, queueName?: string): Promise<void> {
+    const params: Record<string, unknown> =
+      typeof options === "string"
+        ? { url: options, attached: false, ...(queueName ? { queue: queueName } : {}) }
+        : {
+            url: options.url,
+            attached: options.attached ?? false,
+            ...(options.queue ? { queue: options.queue } : {}),
+            ...(options.name ? { name: options.name } : {}),
+            ...(options.outputPath ? { outputPath: options.outputPath } : {}),
+            ...(options.group ? { group: options.group } : {}),
+            ...(options.proxy ? { proxy: proxySettingsToRpcParams(options.proxy) } : {}),
+          };
+
     const result = await this.rpc<{ exitCode: number }>("download.add", params);
     if (result.exitCode !== 0) {
       throw new DaemonApiError("Failed to add download", result.exitCode);
@@ -249,11 +273,26 @@ export class DaemonClient {
     }
   }
 
-  async removeDownload(id: string): Promise<void> {
-    const result = await this.cliExec(["avar", "dl", "rm", id, "--force"]);
+  async removeDownload(id: string, purgeFiles = false): Promise<void> {
+    const argv = ["avar", "dl", "rm", id, "--force"];
+    if (purgeFiles) {
+      argv.push("--purge-files");
+    }
+    const result = await this.cliExec(argv);
     if (result.exitCode !== 0) {
       throw new DaemonApiError("Failed to remove download", result.exitCode);
     }
+  }
+
+  async systemStats(signal?: AbortSignal): Promise<SystemStatsInfo> {
+    const res = await fetch(this.statsUrl, {
+      headers: this.headers(),
+      signal,
+    });
+    if (!res.ok) {
+      throw new DaemonApiError(`Stats request failed (${res.status})`, res.status);
+    }
+    return (await res.json()) as SystemStatsInfo;
   }
 
   parseSnapshot(raw: unknown): SnapshotPayload | null {

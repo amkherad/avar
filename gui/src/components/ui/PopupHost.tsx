@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
@@ -9,6 +10,11 @@ export function PopupHost() {
   const { t } = useTranslation();
   const windows = usePopupStore((s) => s.windows);
   const confirm = usePopupStore((s) => s.confirm);
+  const [checkboxChecked, setCheckboxChecked] = useState(false);
+
+  useEffect(() => {
+    setCheckboxChecked(confirm?.checkboxDefault ?? false);
+  }, [confirm?.id, confirm?.checkboxDefault]);
 
   return (
     <>
@@ -52,12 +58,25 @@ export function PopupHost() {
             </header>
             <div className="avar-modal__body">
               <p>{confirm.message}</p>
+              {confirm.checkboxLabel ? (
+                <label className="avar-checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={checkboxChecked}
+                    onChange={(e) => setCheckboxChecked(e.target.checked)}
+                  />
+                  {confirm.checkboxLabel}
+                </label>
+              ) : null}
             </div>
             <footer className="avar-modal__footer">
               <Button variant="ghost" onClick={() => resolveConfirm(false)}>
                 {confirm.cancelLabel}
               </Button>
-              <Button variant="danger" onClick={() => resolveConfirm(true)}>
+              <Button
+                variant="danger"
+                onClick={() => resolveConfirm(true, checkboxChecked)}
+              >
                 {confirm.confirmLabel}
               </Button>
             </footer>

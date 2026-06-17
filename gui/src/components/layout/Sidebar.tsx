@@ -37,12 +37,13 @@ export function Sidebar({
           />
         );
       case "queues":
-        return <QueuePanel mode="select" />;
+        return null;
       default:
         return (
           <QueuePanel
             mode="select"
             onManageQueues={onNavigate ? () => onNavigate("queues") : undefined}
+            onModifyQueue={onNavigate ? () => onNavigate("queues") : undefined}
           />
         );
     }

@@ -87,12 +87,12 @@ export function useDownloadActions() {
   );
 
   const remove = useCallback(
-    (ids: string[]) =>
+    (ids: string[], purgeFiles = false) =>
       withBusy(async () => {
         if (!client) {
           return;
         }
-        await deleteDownloads(client, ids);
+        await deleteDownloads(client, ids, purgeFiles);
       }),
     [client, withBusy],
   );
@@ -106,16 +106,18 @@ export function useDownloadActions() {
         items.length === 1
           ? t("download.deleteConfirm", { name: items[0].filename })
           : t("download.deleteConfirmBatch", { count: items.length });
-      const confirmed = await showConfirmDialog({
+      const result = await showConfirmDialog({
         title: t("download.deleteConfirmTitle"),
         message,
         confirmLabel: t("download.delete"),
         cancelLabel: t("common.cancel"),
+        checkboxLabel: t("download.deleteFiles"),
+        checkboxDefault: false,
       });
-      if (!confirmed) {
+      if (!result.confirmed) {
         return;
       }
-      await remove(items.map((item) => item.id));
+      await remove(items.map((item) => item.id), result.checkboxChecked);
     },
     [remove, t],
   );

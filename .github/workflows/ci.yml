@@ -6,20 +6,106 @@ on:
   pull_request:
 
 jobs:
-  build-and-test:
+  test-and-build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
 
-      - name: Build
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -G Ninja
+
+      - name: Build avar
         run: cmake --build build --parallel
 
       - name: Run tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      - name: Build GUI
+        working-directory: gui
         run: |
-          ctest --test-dir build --output-on-failure
-          ./build/tests/test_daemon
+          npm ci
+          npm run build
+
+      - name: Build avar-gui (embedded frontend)
+        run: |
+          cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
+          cmake --build build-gui --target avar-gui --parallel
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: avar-linux-${{ github.sha }}
+          path: |
+            build/avar
+            build-gui/avar-gui
+            gui/dist
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build
+
+      - name: Build avar (Release)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build --parallel
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      - name: Build GUI
+        working-directory: gui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build avar-gui
+        run: |
+          cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
+          cmake --build build-gui --target avar-gui --parallel
+
+      - name: Package release assets
+        run: |
+          mkdir -p dist
+          cp build/avar dist/avar
+          cp build-gui/avar-gui dist/avar-gui
+          tar -czf avar-gui-dist.tar.gz -C gui dist
+          chmod +x dist/avar dist/avar-gui
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/avar
+            dist/avar-gui
+            avar-gui-dist.tar.gz
+          generate_release_notes: true

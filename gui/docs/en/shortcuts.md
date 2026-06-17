@@ -1,8 +1,8 @@
-# Keyboard shortcuts
+# ⌨️ Keyboard shortcuts
 
 Shortcuts work globally except when focus is in a text field.
 
-## Navigation
+## 🧭 Navigation
 
 | Action | Default |
 |--------|---------|
@@ -10,7 +10,7 @@ Shortcuts work globally except when focus is in a text field.
 | Settings | Ctrl+, |
 | Help | F1 |
 
-## Downloads
+## ⬇️ Downloads
 
 | Action | Default |
 |--------|---------|
@@ -21,16 +21,16 @@ Shortcuts work globally except when focus is in a text field.
 | Stop selection | Ctrl+Shift+X |
 | Delete selection | Delete |
 
-## View
+## 👁️ View
 
 | Action | Default |
 |--------|---------|
 | Toggle console | Ctrl+` |
 | Toggle detail panel | Ctrl+D |
 
-## Remapping
+## ✏️ Remapping
 
-Go to **Settings → Shortcuts**. Click the key badge next to an action and press the desired combination.
+Go to **Settings → Shortcuts**. All shortcuts appear in one table with aligned columns. Click the key badge next to an action and press the desired combination.
 
 Modifiers: **Ctrl** (or **Cmd** on macOS), **Shift**, **Alt**, plus a key.
 

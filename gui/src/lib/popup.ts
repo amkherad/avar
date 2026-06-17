@@ -14,6 +14,13 @@ export interface ConfirmDialogOptions {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  checkboxLabel?: string;
+  checkboxDefault?: boolean;
+}
+
+export interface ConfirmDialogResult {
+  confirmed: boolean;
+  checkboxChecked: boolean;
 }
 
 function nextPopupId(): string {
@@ -107,7 +114,7 @@ export function openDownloadPopup(
  * - Electron: in-app confirm (PopupHost) — OS confirm is not used for consistency
  * - Web: in-app confirm dialog (PopupHost)
  */
-export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolean> {
+export function showConfirmDialog(options: ConfirmDialogOptions): Promise<ConfirmDialogResult> {
   return new Promise((resolve) => {
     const id = nextPopupId();
     usePopupStore.getState().setConfirm({
@@ -116,6 +123,8 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<boolea
       message: options.message,
       confirmLabel: options.confirmLabel ?? "OK",
       cancelLabel: options.cancelLabel ?? "Cancel",
+      checkboxLabel: options.checkboxLabel,
+      checkboxDefault: options.checkboxDefault ?? false,
       resolve,
     });
   });
@@ -130,10 +139,10 @@ export function closePopupWindow(id: string): void {
   }
 }
 
-export function resolveConfirm(confirmed: boolean): void {
+export function resolveConfirm(confirmed: boolean, checkboxChecked = false): void {
   const { confirm, setConfirm } = usePopupStore.getState();
   if (confirm) {
     setConfirm(null);
-    confirm.resolve(confirmed);
+    confirm.resolve({ confirmed, checkboxChecked });
   }
 }

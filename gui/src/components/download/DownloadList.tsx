@@ -2,6 +2,8 @@ import { formatBytePair, progressPercent } from "./format";
 import { Badge } from "@/components/ui/Badge";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import type { DownloadInfo } from "@/api/types";
+import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import { useTranslation } from "react-i18next";
 
 export interface DownloadProgressProps {
   download: DownloadInfo;
@@ -11,6 +13,7 @@ export interface DownloadRowProps extends DownloadProgressProps {
   selected?: boolean;
   onSelect?: (event?: React.MouseEvent) => void;
   onOpen?: () => void;
+  onContextMenu?: (event: React.MouseEvent) => void;
 }
 
 function statusTone(status: string): "default" | "success" | "warning" | "danger" | "info" {
@@ -47,23 +50,24 @@ export function DownloadRow({
   selected = false,
   onSelect,
   onOpen,
+  onContextMenu,
 }: DownloadRowProps) {
+  const { t } = useTranslation();
+
   return (
     <div
       className={`avar-download-row ${selected ? "avar-download-row--selected" : ""}`}
       role="button"
       tabIndex={0}
-      onClick={(event) => {
-        const wasSelected = selected;
-        onSelect?.(event);
-        if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !wasSelected) {
-          onOpen?.();
-        }
+      onClick={(event) => onSelect?.(event)}
+      onDoubleClick={() => onOpen?.()}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu?.(event);
       }}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
           onSelect?.();
-          onOpen?.();
         }
       }}
     >
@@ -74,7 +78,9 @@ export function DownloadRow({
         ) : null}
         <DownloadProgress download={download} />
       </div>
-      <Badge tone={statusTone(download.status)}>{download.status}</Badge>
+      <Badge tone={statusTone(download.status)}>
+        {formatDownloadStatus(download.status, t)}
+      </Badge>
     </div>
   );
 }

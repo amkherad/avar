@@ -34,4 +34,10 @@ size_t download_active_list(DownloadActiveInfo *items, size_t max_items);
 /** Waits until no active downloads or timeout. Returns true when idle. */
 bool download_wait_idle(unsigned timeout_ms);
 
+/**
+ * Removes a download item from dm.items by id or filename.
+ * When purge_files is true, deletes on-disk partial and completed files.
+ */
+int download_remove(const char *target, bool by_id, bool purge_files, bool force);
+
 #endif

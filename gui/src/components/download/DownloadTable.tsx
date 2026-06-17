@@ -6,14 +6,26 @@ import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import type { DownloadInfo } from "@/api/types";
 import { useLayoutStore } from "@/stores/layoutStore";
 import { formatBytePair, progressPercent } from "./format";
+import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+
+export const DOWNLOAD_PAGE_SIZES = [20, 50, 100, 500, 1000] as const;
 
 export interface DownloadTableProps {
   downloads: DownloadInfo[];
   selectedIds: string[];
   loading?: boolean;
   emptyMessage?: string;
+  showCheckboxes?: boolean;
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
   onSelect: (id: string, event?: React.MouseEvent) => void;
+  onToggleSelect: (id: string) => void;
+  onSelectAll: (checked: boolean) => void;
   onOpen: (id: string) => void;
+  onContextMenu?: (id: string, event: React.MouseEvent) => void;
 }
 
 function statusTone(status: string): "default" | "success" | "warning" | "danger" | "info" {
@@ -36,14 +48,27 @@ export function DownloadTable({
   selectedIds,
   loading = false,
   emptyMessage,
+  showCheckboxes = false,
+  page,
+  pageSize,
+  totalItems,
+  onPageChange,
+  onPageSizeChange,
   onSelect,
+  onToggleSelect,
+  onSelectAll,
   onOpen,
+  onContextMenu,
 }: DownloadTableProps) {
   const { t } = useTranslation();
   const columns = useLayoutStore((s) => s.downloadTableColumns);
   const setColumn = useLayoutStore((s) => s.setDownloadTableColumn);
 
-  const gridTemplate = `${columns.filename}px ${columns.status}px ${columns.progress}px ${columns.url}px 1fr`;
+  const checkboxCol = showCheckboxes ? "2.25rem " : "";
+  const gridTemplate = `${checkboxCol}${columns.filename}px ${columns.status}px ${columns.progress}px ${columns.url}px 1fr`;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const showPaging = totalPages > 1;
+  const allSelected = downloads.length > 0 && downloads.every((item) => selectedIds.includes(item.id));
 
   return (
     <div className="avar-download-table">
@@ -52,6 +77,16 @@ export function DownloadTable({
         style={{ gridTemplateColumns: gridTemplate }}
         role="row"
       >
+        {showCheckboxes ? (
+          <div className="avar-download-table__th avar-download-table__th--checkbox" role="columnheader">
+            <input
+              type="checkbox"
+              aria-label={t("download.selectAll")}
+              checked={allSelected}
+              onChange={(e) => onSelectAll(e.target.checked)}
+            />
+          </div>
+        ) : null}
         <div className="avar-download-table__th" role="columnheader">
           {t("download.filename")}
           <ResizeHandle
@@ -118,25 +153,39 @@ export function DownloadTable({
                 style={{ gridTemplateColumns: gridTemplate }}
                 role="row"
                 tabIndex={0}
-                onClick={(event) => {
-                  const wasSelected = selected;
-                  onSelect(item.id, event);
-                  if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !wasSelected) {
-                    onOpen(item.id);
-                  }
+                onClick={(event) => onSelect(item.id, event)}
+                onDoubleClick={() => onOpen(item.id)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  onContextMenu?.(item.id, event);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     onSelect(item.id);
-                    onOpen(item.id);
                   }
                 }}
               >
+                {showCheckboxes ? (
+                  <div
+                    className="avar-download-table__cell avar-download-table__cell--checkbox"
+                    role="cell"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      aria-label={item.filename}
+                      checked={selected}
+                      onChange={() => onToggleSelect(item.id)}
+                    />
+                  </div>
+                ) : null}
                 <div className="avar-download-table__cell" role="cell">
                   <TruncateWithTooltip text={item.filename} className="avar-list__title" />
                 </div>
                 <div className="avar-download-table__cell" role="cell">
-                  <Badge tone={statusTone(item.status)}>{item.status}</Badge>
+                  <Badge tone={statusTone(item.status)}>
+                    {formatDownloadStatus(item.status, t)}
+                  </Badge>
                 </div>
                 <div className="avar-download-table__cell" role="cell">
                   <TruncateWithTooltip text={progressText} className="avar-list__meta" />
@@ -150,6 +199,45 @@ export function DownloadTable({
           })
         )}
       </div>
+
+      {showPaging ? (
+        <div className="avar-download-table__pager">
+          <label className="avar-download-table__page-size">
+            <span>{t("download.pageSize")}</span>
+            <select
+              value={pageSize}
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+            >
+              {DOWNLOAD_PAGE_SIZES.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="avar-download-table__page-nav">
+            <button
+              type="button"
+              className="avar-btn avar-btn--sm avar-btn--ghost"
+              disabled={page <= 1}
+              onClick={() => onPageChange(page - 1)}
+            >
+              {t("download.prevPage")}
+            </button>
+            <span className="avar-download-table__page-label">
+              {t("download.pageLabel", { page, total: totalPages })}
+            </span>
+            <button
+              type="button"
+              className="avar-btn avar-btn--sm avar-btn--ghost"
+              disabled={page >= totalPages}
+              onClick={() => onPageChange(page + 1)}
+            >
+              {t("download.nextPage")}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

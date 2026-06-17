@@ -2,13 +2,15 @@ import { useTranslation } from "react-i18next";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { useConfigStore } from "@/stores/configStore";
-import type { LocaleId, SyncChannelId, ThemeId } from "@/config/defaults";
+import type { FooterMonitorSettings, LocaleId, SyncChannelId, ThemeId } from "@/config/defaults";
 import i18n, { isRtlLocale } from "@/i18n";
+import { getBuildInfo } from "@/lib/buildInfo";
 
 export function GeneralSettings() {
   const { t } = useTranslation();
   const config = useConfigStore((s) => s.config);
   const updateConfig = useConfigStore((s) => s.updateConfig);
+  const build = getBuildInfo();
 
   function setLocale(locale: LocaleId) {
     void i18n.changeLanguage(locale);
@@ -19,6 +21,12 @@ export function GeneralSettings() {
 
   function setSyncChannel(syncChannel: SyncChannelId) {
     updateConfig({ syncChannel });
+  }
+
+  function setFooterMonitor(key: keyof FooterMonitorSettings, enabled: boolean) {
+    updateConfig({
+      footerMonitors: { ...config.footerMonitors, [key]: enabled },
+    });
   }
 
   return (
@@ -81,6 +89,45 @@ export function GeneralSettings() {
           }
         }}
       />
+
+      <section className="avar-settings-group">
+        <h3 className="avar-settings-group__heading">{t("settings.footerMonitors")}</h3>
+        <p className="avar-settings-hint">{t("settings.footerMonitorsHint")}</p>
+        <div className="avar-settings-checkboxes">
+          {(["disk", "memory", "cpu", "network"] as const).map((key) => (
+            <label key={key} className="avar-checkbox-row">
+              <input
+                type="checkbox"
+                checked={config.footerMonitors[key]}
+                onChange={(e) => setFooterMonitor(key, e.target.checked)}
+              />
+              {t(`settings.footerMonitor.${key}`)}
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className="avar-settings-build">
+        <h3 className="avar-settings-build__heading">{t("settings.buildInfo")}</h3>
+        <dl className="avar-settings-build__list">
+          <div>
+            <dt>{t("settings.buildVersion")}</dt>
+            <dd>{build.version}</dd>
+          </div>
+          {build.date ? (
+            <div>
+              <dt>{t("settings.buildDate")}</dt>
+              <dd>{build.date}</dd>
+            </div>
+          ) : null}
+          {build.commit ? (
+            <div>
+              <dt>{t("settings.buildCommit")}</dt>
+              <dd className="avar-settings-build__mono">{build.commit}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </section>
     </form>
   );
 }

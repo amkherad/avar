@@ -17,7 +17,7 @@ export function SettingsSidebarNav({
   return (
     <>
       <h2 className="avar-sidebar-nav__title">{t("settings.title")}</h2>
-      <nav className="avar-sidebar-nav">
+      <nav className="avar-sidebar-nav avar-sidebar-nav--striped">
         {CATEGORIES.map((id) => (
           <button
             key={id}

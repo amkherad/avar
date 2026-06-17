@@ -1,9 +1,13 @@
 import { create } from "zustand";
 import { createDaemonClient, type DaemonClient } from "@/api/daemon";
+import {
+  createElectronSession,
+  ELECTRON_SESSION_ID,
+  type GuiSession,
+} from "@/config/defaults";
 import { useConfigStore } from "@/stores/configStore";
 import { useDataStore } from "@/stores/dataStore";
 import { appLogger } from "@/lib/appLogger";
-import type { GuiSession } from "@/config/defaults";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
@@ -20,13 +24,24 @@ interface ConnectionStoreState {
   stopPingMonitor: () => void;
 }
 
+async function resolveElectronProxyUrl(): Promise<string | null> {
+  if (!window.avar?.isElectron || !window.avar.getProxyBaseUrl) {
+    return null;
+  }
+  try {
+    return await window.avar.getProxyBaseUrl();
+  } catch {
+    return null;
+  }
+}
+
 function resolveActiveSession(): GuiSession | null {
-  const { config } = useConfigStore.getState();
-  return (
+  const { config, getSessionWithSecrets } = useConfigStore.getState();
+  const session =
     config.sessions.find((s) => s.id === config.activeSessionId) ??
     config.sessions[0] ??
-    null
-  );
+    null;
+  return session ? getSessionWithSecrets(session) : null;
 }
 
 function buildClient(session: GuiSession | null): DaemonClient | null {
@@ -49,6 +64,41 @@ async function pingWithTimeout(client: DaemonClient): Promise<boolean> {
     return false;
   } finally {
     window.clearTimeout(timer);
+  }
+}
+
+export async function ensureElectronSession(): Promise<void> {
+  if (!window.avar?.isElectron) {
+    return;
+  }
+
+  const proxyUrl = await resolveElectronProxyUrl();
+  if (!proxyUrl) {
+    return;
+  }
+
+  const { config, setConfig } = useConfigStore.getState();
+  const existing = config.sessions.find((s) => s.id === ELECTRON_SESSION_ID);
+  const electronSession = createElectronSession(proxyUrl);
+
+  if (!existing) {
+    setConfig({
+      ...config,
+      sessions: [electronSession, ...config.sessions],
+      activeSessionId: ELECTRON_SESSION_ID,
+    });
+    return;
+  }
+
+  if (existing.baseUrl !== proxyUrl) {
+    setConfig({
+      ...config,
+      sessions: config.sessions.map((session) =>
+        session.id === ELECTRON_SESSION_ID
+          ? { ...session, baseUrl: proxyUrl }
+          : session,
+      ),
+    });
   }
 }
 

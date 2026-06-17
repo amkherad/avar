@@ -115,6 +115,7 @@ set(AVAR_DOWNLOAD_TEST_SOURCES
         "${SRC_DIR}/download_config.c"
         "${SRC_DIR}/thread_pool.c"
         "${SRC_DIR}/download.c"
+        "${SRC_DIR}/system_stats.c"
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
@@ -140,6 +141,7 @@ set(AVAR_DAEMON_TEST_SOURCES
         "${SRC_DIR}/download_config.c"
         "${SRC_DIR}/thread_pool.c"
         "${SRC_DIR}/download.c"
+        "${SRC_DIR}/system_stats.c"
         "${SRC_DIR}/transport.c"
         "${SRC_DIR}/torrent.c"
         "${SRC_DIR}/daemon/daemon.c"

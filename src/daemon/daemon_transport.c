@@ -1,5 +1,6 @@
 #include <daemon/daemon_rpc.h>
 #include <daemon/daemon_transport.h>
+#include <gui_embed.h>
 #include <logger.h>
 
 #include <mongoose.h>
@@ -629,6 +630,16 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
         http_reply_json(c, 401, "{\"error\":\"unauthorized\"}\n", cors, hm);
         return;
     }
+
+#if defined(AVAR_EMBED_GUI)
+    if (!http_uri_is_api(hm) && gui_embed_available()) {
+        char uri[512];
+        snprintf(uri, sizeof uri, "%.*s", (int)hm->uri.len, hm->uri.buf);
+        if (gui_embed_serve(c, uri)) {
+            return;
+        }
+    }
+#endif
 
     if (mg_match(hm->uri, mg_str("/api/events"), NULL)) {
         char headers[512];

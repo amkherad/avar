@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { ConfirmDialogResult } from "@/lib/popup";
 
 export interface PopupWindowState {
   id: string;
@@ -15,7 +16,9 @@ export interface ConfirmDialogState {
   message: string;
   confirmLabel: string;
   cancelLabel: string;
-  resolve: (confirmed: boolean) => void;
+  checkboxLabel?: string;
+  checkboxDefault?: boolean;
+  resolve: (result: ConfirmDialogResult) => void;
 }
 
 interface PopupStoreState {

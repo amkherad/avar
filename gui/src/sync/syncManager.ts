@@ -3,7 +3,7 @@ import type { SnapshotPayload } from "@/api/types";
 import type { DaemonClient } from "@/api/daemon";
 import { appLogger } from "@/lib/appLogger";
 import { useConfigStore } from "@/stores/configStore";
-import { useConnectionStore } from "@/stores/connectionStore";
+import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore } from "@/stores/dataStore";
 
 type SyncStopFn = () => void;
@@ -208,12 +208,14 @@ export function initSyncCoordinator(): () => void {
     }
   });
 
-  useConnectionStore.getState().reconnectClient();
-  useConnectionStore.getState().startPingMonitor();
+  void ensureElectronSession().then(() => {
+    useConnectionStore.getState().reconnectClient();
+    useConnectionStore.getState().startPingMonitor();
 
-  if (useConnectionStore.getState().connection === "connected") {
-    restartDataSync();
-  }
+    if (useConnectionStore.getState().connection === "connected") {
+      restartDataSync();
+    }
+  });
 
   return () => {
     unsubConnection();

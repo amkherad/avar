@@ -14,14 +14,27 @@ export function ShortcutsSettings() {
   const shortcuts = useConfigStore((s) => s.config.shortcuts);
   const updateConfig = useConfigStore((s) => s.updateConfig);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, typeof SHORTCUT_DEFINITIONS>();
+  const rows = useMemo(() => {
+    const list: Array<
+      | { type: "category"; key: string }
+      | { type: "shortcut"; id: ShortcutActionId; labelKey: string }
+    > = [];
+
+    const categories = new Map<string, typeof SHORTCUT_DEFINITIONS>();
     for (const def of SHORTCUT_DEFINITIONS) {
-      const list = map.get(def.categoryKey) ?? [];
-      list.push(def);
-      map.set(def.categoryKey, list);
+      const group = categories.get(def.categoryKey) ?? [];
+      group.push(def);
+      categories.set(def.categoryKey, group);
     }
-    return map;
+
+    for (const [categoryKey, defs] of categories) {
+      list.push({ type: "category", key: categoryKey });
+      for (const def of defs) {
+        list.push({ type: "shortcut", id: def.id, labelKey: def.labelKey });
+      }
+    }
+
+    return list;
   }, []);
 
   function handleRecord(id: ShortcutActionId) {
@@ -74,26 +87,41 @@ export function ShortcutsSettings() {
     <div className="avar-shortcuts-settings">
       <p className="avar-settings-hint">{t("shortcuts.hint")}</p>
 
-      {[...grouped.entries()].map(([categoryKey, defs]) => (
-        <section key={categoryKey} className="avar-shortcuts-settings__group">
-          <h3 className="avar-shortcuts-settings__heading">{t(categoryKey)}</h3>
-          <ul className="avar-shortcuts-settings__list">
-            {defs.map((def) => (
-              <li key={def.id} className="avar-shortcuts-settings__item">
-                <span className="avar-shortcuts-settings__label">{t(def.labelKey)}</span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="avar-shortcuts-settings__combo"
-                  onClick={() => handleRecord(def.id)}
-                >
-                  {formatCombo(shortcuts[def.id])}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+      <div className="avar-data-table-wrap">
+        <table className="avar-data-table avar-shortcuts-settings__table">
+          <thead>
+            <tr>
+              <th scope="col">{t("shortcuts.columnAction")}</th>
+              <th scope="col">{t("shortcuts.columnKeys")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) =>
+              row.type === "category" ? (
+                <tr key={`cat-${row.key}`} className="avar-shortcuts-settings__category-row">
+                  <th colSpan={2} scope="rowgroup">
+                    {t(row.key)}
+                  </th>
+                </tr>
+              ) : (
+                <tr key={row.id}>
+                  <td>{t(row.labelKey)}</td>
+                  <td>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="avar-shortcuts-settings__combo"
+                      onClick={() => handleRecord(row.id)}
+                    >
+                      {formatCombo(shortcuts[row.id])}
+                    </Button>
+                  </td>
+                </tr>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <Button size="sm" variant="ghost" onClick={resetAll}>
         {t("shortcuts.resetAll")}

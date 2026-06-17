@@ -102,9 +102,10 @@ export async function stopDownloads(
 export async function deleteDownloads(
   client: DaemonClient,
   ids: string[],
+  purgeFiles = false,
 ): Promise<DownloadActionResult> {
   const result = await runForIds(client, ids, "delete", (id) =>
-    client.removeDownload(id),
+    client.removeDownload(id, purgeFiles),
   );
   if (result.succeeded.length > 0) {
     const state = useDataStore.getState();

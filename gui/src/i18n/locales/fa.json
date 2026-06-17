@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "آور",
-    "subtitle": "مدیر دانلود"
+    "subtitle": "نرم‌افزار مدیریت دانلود"
   },
   "nav": {
     "dashboard": "داشبورد",
@@ -23,6 +23,8 @@
     "baseUrl": "آدرس سرور",
     "authToken": "توکن احراز هویت (اختیاری)",
     "useProxy": "استفاده از پروکسی توسعه (/api)",
+    "electronTunnel": "تونل از طریق Electron",
+    "removeConfirm": "نشست «{{name}}» حذف شود؟",
     "connected": "متصل",
     "disconnected": "قطع",
     "connecting": "در حال اتصال…",
@@ -41,6 +43,7 @@
     "delete": "حذف",
     "deleteConfirm": "این صف حذف شود؟ دانلودها از صف جدا می‌شوند.",
     "manage": "مدیریت",
+    "modify": "ویرایش صف",
     "manageTitle": "مدیریت صف‌ها",
     "manageHint": "ایجاد، شروع، توقف یا حذف صف‌های دانلود.",
     "defaultName": "پیش‌فرض",
@@ -53,6 +56,31 @@
     "add": "افزودن دانلود",
     "url": "نشانی",
     "submit": "شروع دانلود",
+    "queueSubmit": "افزودن به صف",
+    "targetQueue": "صف مقصد",
+    "filenameHint": "برای استفاده از نام موجود در نشانی، خالی بگذارید",
+    "outputPath": "محل ذخیره",
+    "outputPathHint": "برای استفاده از پوشه پیش‌فرض دانلود، خالی بگذارید",
+    "group": "گروه دانلود",
+    "groups": {
+      "default": "پیش‌فرض",
+      "video": "ویدیو",
+      "audio": "صوت",
+      "document": "سند",
+      "archive": "بایگانی",
+      "image": "تصویر",
+      "software": "نرم‌افزار",
+      "other": "سایر"
+    },
+    "queued": "دانلود به صف افزوده شد: {{url}}",
+    "statusValues": {
+      "queued": "در صف",
+      "downloading": "در حال دانلود",
+      "paused": "مکث",
+      "completed": "تکمیل‌شده",
+      "error": "خطا",
+      "cancelled": "لغوشده"
+    },
     "status": "وضعیت",
     "progress": "پیشرفت",
     "filename": "فایل",
@@ -80,7 +108,16 @@
     "deleteConfirmTitle": "حذف دانلود",
     "deleteConfirm": "«{{name}}» از صف حذف شود؟",
     "deleteConfirmBatch": "{{count}} دانلود از صف حذف شوند؟",
+    "deleteFiles": "فایل‌های دانلودشده از دیسک نیز حذف شوند",
     "selectedCount": "{{count}} انتخاب‌شده",
+    "copyCurl": "کپی curl",
+    "curlCopied": "کپی شد!",
+    "toggleCheckboxes": "نمایش چک‌باکس انتخاب",
+    "selectAll": "انتخاب همه دانلودها",
+    "pageSize": "ردیف",
+    "pageLabel": "صفحه {{page}} از {{total}}",
+    "prevPage": "قبلی",
+    "nextPage": "بعدی",
     "detailPanel": "جزئیات",
     "toggleDetailPanel": "نمایش/مخفی کردن پنل جزئیات"
   },
@@ -108,6 +145,11 @@
     "uptime": "مدت فعالیت",
     "active": "فعال",
     "queues": "صف‌ها",
+    "disk": "دیسک",
+    "memory": "حافظه",
+    "cpu": "پردازنده",
+    "network": "شبکه",
+    "used": "مصرف‌شده",
     "unavailable": "وضعیت سرور در دسترس نیست"
   },
   "settings": {
@@ -123,6 +165,18 @@
     "syncWebSocket": "وب‌سوکت",
     "refresh": "فاصله به‌روزرسانی (ثانیه)",
     "pingInterval": "فاصله بررسی اتصال (ثانیه)",
+    "buildInfo": "اطلاعات ساخت",
+    "buildVersion": "نسخه",
+    "buildDate": "تاریخ ساخت",
+    "buildCommit": "کامیت",
+    "footerMonitors": "نمایشگرهای پاورقی",
+    "footerMonitorsHint": "انتخاب کنید کدام معیارهای سیستم در پاورقی نمایش داده شوند.",
+    "footerMonitor": {
+      "disk": "فضای دیسک",
+      "memory": "مصرف حافظه",
+      "cpu": "مصرف پردازنده",
+      "network": "توان شبکه"
+    },
     "categories": {
       "general": "عمومی",
       "shortcuts": "میانبرها"
@@ -131,6 +185,8 @@
   "shortcuts": {
     "hint": "روی دکمه میانبر کلیک کنید، سپس ترکیب جدید را فشار دهید. Escape برای لغو.",
     "resetAll": "بازنشانی همه به پیش‌فرض",
+    "columnAction": "عمل",
+    "columnKeys": "کلیدها",
     "category": {
       "downloads": "دانلودها",
       "navigation": "پیمایش",
@@ -173,6 +229,27 @@
     "tryAgain": "تلاش مجدد",
     "staleData": "نمایش آخرین داده‌های دریافت‌شده — اتصال به دیمن برقرار نیست",
     "close": "بستن"
+  },
+  "proxy": {
+    "title": "پروکسی",
+    "enabled": "استفاده از پروکسی برای این دانلود",
+    "type": "نوع پروکسی",
+    "host": "میزبان",
+    "port": "درگاه",
+    "username": "نام کاربری (اختیاری)",
+    "password": "رمز عبور (اختیاری)",
+    "types": {
+      "http": "HTTP",
+      "https": "HTTPS",
+      "socks5": "SOCKS5"
+    }
+  },
+  "notifications": {
+    "downloadStatus": "{{name}} — {{status}}",
+    "queueStarted": "صف شروع شد: {{name}}",
+    "queueStopped": "صف متوقف شد: {{name}}",
+    "connectionLost": "اتصال به دیمن قطع شد",
+    "connectionRestored": "اتصال به دیمن برقرار شد"
   },
   "layout": {
     "resizeSidebar": "تغییر اندازه نوار کناری",

@@ -2511,3 +2511,95 @@ int download_start_background(const char *url, const char *queue, const char *na
 
     return EXIT_SUCCESS;
 }
+
+static int find_download_item_index(const char *target, const bool by_id) {
+    if (target == NULL) {
+        return -1;
+    }
+
+    const char *field = by_id ? AVAR_FIELD_ID : AVAR_FIELD_FILENAME;
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < count; ++i) {
+        char *value = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, field);
+        if (value != NULL && strcmp(value, target) == 0) {
+            free(value);
+            return (int)i;
+        }
+        free(value);
+    }
+
+    return -1;
+}
+
+static void purge_download_files(const char *item_id) {
+    if (item_id == NULL) {
+        return;
+    }
+
+    char *temp_dir = default_temp_path();
+    if (temp_dir == NULL) {
+        return;
+    }
+
+    char *job_dir = build_job_dir(temp_dir, item_id);
+    char *state_path = job_dir != NULL ? build_state_path(job_dir) : NULL;
+    if (state_path != NULL) {
+        DownloadState *state = download_state_load(state_path);
+        if (state != NULL) {
+            if (state->dest_path != NULL) {
+                remove(state->dest_path);
+            }
+            if (state->temp_path != NULL) {
+                remove(state->temp_path);
+            }
+            download_state_free(state);
+        }
+    }
+
+    const int index = find_download_item_index(item_id, true);
+    if (index >= 0) {
+        char *filename = get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_FILENAME);
+        if (filename != NULL && job_dir != NULL) {
+            char *temp_path = path_join(job_dir, filename);
+            if (temp_path != NULL) {
+                remove(temp_path);
+                free(temp_path);
+            }
+            free(filename);
+        }
+    }
+
+    remove_job_work_dir(state_path);
+    free(state_path);
+    free(job_dir);
+    free(temp_dir);
+}
+
+int download_remove(const char *target, const bool by_id, const bool purge_files, const bool force) {
+    (void)force;
+
+    const int index = find_download_item_index(target, by_id);
+    if (index < 0) {
+        LOG_ERROR("Download item not found: %s", target);
+        return EXIT_FAILURE;
+    }
+
+    char *item_id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_ID);
+    if (item_id == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    if (purge_files) {
+        purge_download_files(item_id);
+    }
+
+    const int rc = remove_config_array_item(AVAR_CFG_DM_ITEMS, AVAR_FIELD_ID, item_id);
+    free(item_id);
+    if (rc != 0) {
+        LOG_ERROR("Failed to remove download item from config");
+        return EXIT_FAILURE;
+    }
+
+    LOG_INFO("Removed download item %s (%s files)", target, purge_files ? "purged" : "kept");
+    return EXIT_SUCCESS;
+}

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faChevronDown, faPen, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faChevronDown, faPen, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { createDaemonClient } from "@/api/daemon";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { useConfigStore } from "@/stores/configStore";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { showConfirmDialog } from "@/lib/popup";
 
 function newSessionId(): string {
   return `session-${Date.now().toString(36)}`;
@@ -18,6 +19,8 @@ export function SessionSelector() {
   const config = useConfigStore((s) => s.config);
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const setConfig = useConfigStore((s) => s.setConfig);
+  const setSessionAuthToken = useConfigStore((s) => s.setSessionAuthToken);
+  const getSessionWithSecrets = useConfigStore((s) => s.getSessionWithSecrets);
   const connection = useConnectionStore((s) => s.connection);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -78,8 +81,10 @@ export function SessionSelector() {
   }
 
   function openEdit(id: string) {
-    const session = config.sessions.find((s) => s.id === id);
-    if (!session) {
+    const session = getSessionWithSecrets(
+      config.sessions.find((s) => s.id === id) ?? config.sessions[0],
+    );
+    if (!session || session.builtin) {
       return;
     }
     setEditingId(id);
@@ -93,37 +98,56 @@ export function SessionSelector() {
   }
 
   function saveSession() {
+    const sessionId = editingId ?? newSessionId();
     const payload = {
-      id: editingId ?? newSessionId(),
+      id: sessionId,
       label: label.trim() || "Session",
       baseUrl: baseUrl.trim(),
-      authToken: authToken.trim() || undefined,
       useRelativeApi,
     };
 
     const sessions = editingId
-      ? config.sessions.map((s) => (s.id === editingId ? payload : s))
+      ? config.sessions.map((s) => (s.id === editingId ? { ...s, ...payload } : s))
       : [...config.sessions, payload];
 
+    setSessionAuthToken(sessionId, authToken);
     setConfig({
       ...config,
       sessions,
-      activeSessionId: editingId ?? payload.id,
+      activeSessionId: editingId ?? sessionId,
     });
     setModalOpen(false);
   }
 
-  function removeSession(id: string) {
+  async function removeSession(id: string) {
+    const session = config.sessions.find((s) => s.id === id);
+    if (!session || session.builtin) {
+      return;
+    }
+
+    const result = await showConfirmDialog({
+      title: t("session.remove"),
+      message: t("session.removeConfirm", { name: session.label }),
+      confirmLabel: t("session.remove"),
+      cancelLabel: t("common.cancel"),
+    });
+    if (!result.confirmed) {
+      return;
+    }
+
     const sessions = config.sessions.filter((s) => s.id !== id);
     if (sessions.length === 0) {
       return;
     }
+
+    setSessionAuthToken(id, undefined);
     setConfig({
       ...config,
       sessions,
       activeSessionId:
         config.activeSessionId === id ? sessions[0].id : config.activeSessionId,
     });
+    setMenuOpen(false);
   }
 
   function selectSession(id: string) {
@@ -185,16 +209,26 @@ export function SessionSelector() {
                       onClick={() => selectSession(session.id)}
                     >
                       <span className="avar-list__title">{session.label}</span>
-                      <span className="avar-list__meta">{session.baseUrl}</span>
+                      <span className="avar-list__meta">
+                        {session.useElectronProxy ? t("session.electronTunnel") : session.baseUrl}
+                      </span>
                     </button>
                     <div className="avar-list__item-actions">
-                      <Button size="sm" variant="ghost" onClick={() => openEdit(session.id)}>
-                        <FontAwesomeIcon icon={faPen} />
-                      </Button>
-                      {config.sessions.length > 1 ? (
-                        <Button size="sm" variant="ghost" onClick={() => removeSession(session.id)}>
-                          <FontAwesomeIcon icon={faXmark} />
-                        </Button>
+                      {!session.builtin ? (
+                        <>
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(session.id)}>
+                            <FontAwesomeIcon icon={faPen} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label={t("session.remove")}
+                            title={t("session.remove")}
+                            onClick={() => void removeSession(session.id)}
+                          >
+                            <FontAwesomeIcon icon={faTrash} />
+                          </Button>
+                        </>
                       ) : null}
                     </div>
                   </div>

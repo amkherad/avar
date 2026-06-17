@@ -13,7 +13,8 @@ import { useConfigStore } from "@/stores/configStore";
 import { useLayoutStore } from "@/stores/layoutStore";
 import { useConsoleStore } from "@/stores/consoleStore";
 import { initSyncCoordinator } from "@/sync/syncManager";
-import { useConnectionStore } from "@/stores/connectionStore";
+import { initNotificationWatcher } from "@/lib/notificationWatcher";
+import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
 import { parsePopupHash } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
 import { ShortcutProvider } from "@/shortcuts/ShortcutProvider";
@@ -34,7 +35,18 @@ function AppContent() {
     document.documentElement.dir = isRtlLocale(locale) ? "rtl" : "ltr";
   }, [locale]);
 
+  useEffect(() => {
+    if (window.avar?.isElectron) {
+      document.documentElement.classList.add("avar-electron");
+      void ensureElectronSession().then(() => {
+        useConnectionStore.getState().reconnectClient();
+        useConnectionStore.getState().startPingMonitor();
+      });
+    }
+  }, []);
+
   useEffect(() => initSyncCoordinator(), []);
+  useEffect(() => initNotificationWatcher(), []);
 
   useEffect(() => {
     appLogger.gui.info("Avar GUI started");

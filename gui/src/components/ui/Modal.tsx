@@ -9,9 +9,10 @@ export interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  wide?: boolean;
 }
 
-export function Modal({ open, title, onClose, children, footer }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, wide = false }: ModalProps) {
   if (!open) {
     return null;
   }
@@ -19,7 +20,7 @@ export function Modal({ open, title, onClose, children, footer }: ModalProps) {
   return (
     <div className="avar-modal-backdrop" role="presentation" onClick={onClose}>
       <div
-        className="avar-modal"
+        className={`avar-modal ${wide ? "avar-modal--wide" : ""}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="avar-modal-title"

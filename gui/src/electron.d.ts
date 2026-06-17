@@ -5,9 +5,16 @@ export interface AvarPopupOptions {
   height?: number;
 }
 
+export interface AvarNotificationOptions {
+  title: string;
+  body?: string;
+}
+
 export interface AvarElectronApi {
   isElectron: true;
   openPopup: (options: AvarPopupOptions) => Promise<number | null>;
+  showNotification: (options: AvarNotificationOptions) => Promise<boolean>;
+  getProxyBaseUrl: () => Promise<string>;
 }
 
 declare global {

@@ -23,6 +23,8 @@
     "baseUrl": "Server URL",
     "authToken": "Auth token (optional)",
     "useProxy": "Use dev proxy (/api)",
+    "electronTunnel": "Tunneled via Electron",
+    "removeConfirm": "Remove session \"{{name}}\"?",
     "connected": "Connected",
     "disconnected": "Disconnected",
     "connecting": "Connecting…",
@@ -41,6 +43,7 @@
     "delete": "Delete",
     "deleteConfirm": "Remove this queue? Downloads will be detached.",
     "manage": "Manage",
+    "modify": "Modify queue",
     "manageTitle": "Manage queues",
     "manageHint": "Create, start, stop, or remove download queues.",
     "defaultName": "Default",
@@ -53,6 +56,31 @@
     "add": "Add download",
     "url": "URL",
     "submit": "Start download",
+    "queueSubmit": "Queue download",
+    "targetQueue": "Target queue",
+    "filenameHint": "Leave empty to use the name from the URL",
+    "outputPath": "Save location",
+    "outputPathHint": "Leave empty to use the default download folder",
+    "group": "Download group",
+    "groups": {
+      "default": "Default",
+      "video": "Video",
+      "audio": "Audio",
+      "document": "Document",
+      "archive": "Archive",
+      "image": "Image",
+      "software": "Software",
+      "other": "Other"
+    },
+    "queued": "Download queued: {{url}}",
+    "statusValues": {
+      "queued": "Queued",
+      "downloading": "Downloading",
+      "paused": "Paused",
+      "completed": "Completed",
+      "error": "Error",
+      "cancelled": "Cancelled"
+    },
     "status": "Status",
     "progress": "Progress",
     "filename": "File",
@@ -80,7 +108,16 @@
     "deleteConfirmTitle": "Delete download",
     "deleteConfirm": "Remove \"{{name}}\" from the queue?",
     "deleteConfirmBatch": "Remove {{count}} download(s) from the queue?",
+    "deleteFiles": "Also delete downloaded files from disk",
     "selectedCount": "{{count}} selected",
+    "copyCurl": "Copy curl",
+    "curlCopied": "Copied!",
+    "toggleCheckboxes": "Show selection checkboxes",
+    "selectAll": "Select all downloads",
+    "pageSize": "Rows",
+    "pageLabel": "Page {{page}} of {{total}}",
+    "prevPage": "Previous",
+    "nextPage": "Next",
     "detailPanel": "Details",
     "toggleDetailPanel": "Toggle detail panel"
   },
@@ -108,6 +145,11 @@
     "uptime": "Uptime",
     "active": "Active",
     "queues": "Queues",
+    "disk": "Disk",
+    "memory": "Memory",
+    "cpu": "CPU",
+    "network": "Network",
+    "used": "used",
     "unavailable": "Server status unavailable"
   },
   "settings": {
@@ -123,6 +165,18 @@
     "syncWebSocket": "WebSockets",
     "refresh": "Refresh interval (seconds)",
     "pingInterval": "Connection check interval (seconds)",
+    "buildInfo": "Build information",
+    "buildVersion": "Version",
+    "buildDate": "Build date",
+    "buildCommit": "Commit",
+    "footerMonitors": "Footer monitors",
+    "footerMonitorsHint": "Choose which system metrics appear in the footer when connected to the daemon.",
+    "footerMonitor": {
+      "disk": "Disk space",
+      "memory": "Memory usage",
+      "cpu": "CPU usage",
+      "network": "Network throughput"
+    },
     "categories": {
       "general": "General",
       "shortcuts": "Shortcuts"
@@ -131,6 +185,8 @@
   "shortcuts": {
     "hint": "Click a shortcut button, then press the new key combination. Press Escape to cancel.",
     "resetAll": "Reset all to defaults",
+    "columnAction": "Action",
+    "columnKeys": "Keys",
     "category": {
       "downloads": "Downloads",
       "navigation": "Navigation",
@@ -173,6 +229,27 @@
     "tryAgain": "Try again",
     "staleData": "Showing last known data — not connected to the daemon",
     "close": "Close"
+  },
+  "proxy": {
+    "title": "Proxy",
+    "enabled": "Use proxy for this download",
+    "type": "Proxy type",
+    "host": "Host",
+    "port": "Port",
+    "username": "Username (optional)",
+    "password": "Password (optional)",
+    "types": {
+      "http": "HTTP",
+      "https": "HTTPS",
+      "socks5": "SOCKS5"
+    }
+  },
+  "notifications": {
+    "downloadStatus": "{{name}} — {{status}}",
+    "queueStarted": "Queue started: {{name}}",
+    "queueStopped": "Queue stopped: {{name}}",
+    "connectionLost": "Disconnected from daemon",
+    "connectionRestored": "Connected to daemon"
   },
   "layout": {
     "resizeSidebar": "Resize sidebar",

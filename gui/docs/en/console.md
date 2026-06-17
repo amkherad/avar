@@ -1,31 +1,23 @@
-# Console
+# 🖥️ Console
 
-The console is a log viewer at the bottom of the main dashboard.
+The console is a bottom drawer for log output from the GUI and the connected daemon.
 
-## Opening the console
+## 🔓 Opening the console
 
-- Click **Console** in the footer.
-- Press **Ctrl+`** (backtick).
+Click **Console** in the footer or press **Ctrl+`**.
 
-When new **error**-level entries arrive while the console is closed, the **Console** button turns red. Opening the console clears the indicator.
+## 📊 Log sources
 
-Drag the top edge of the console to resize it.
+| Source | Description |
+|--------|-------------|
+| **GUI logs** | Messages from the web/desktop interface |
+| **Daemon logs** | Log entries fetched from the daemon API |
 
-## Log sources
+Filter by minimum severity for each source.
 
-- **GUI logs** — messages from the front-end (actions, errors, debug).
-- **Daemon logs** — recent lines fetched from the daemon via RPC.
+## ⚙️ Options
 
-Filter each source independently and set a minimum severity level.
+- **Auto-scroll** — follow new entries automatically
+- **Clear** — remove visible log lines
 
-Failed daemon connections are logged as **errors** in the GUI log stream.
-
-## Controls
-
-| Control | Description |
-|---------|-------------|
-| **Clear** | Remove all entries from the view |
-| **Auto-scroll** | Follow new entries as they arrive |
-| **Close** | Hide the console panel |
-
-Logs are retained while the console is closed so you can review them after opening it. Daemon logs are polled periodically while the console is open and daemon logging is enabled.
+Resize the console using the handle above the drawer.

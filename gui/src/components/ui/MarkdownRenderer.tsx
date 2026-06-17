@@ -99,12 +99,10 @@ export function MarkdownRenderer({
   className = "avar-markdown",
 }: MarkdownRendererProps) {
   return (
-    <Markdown
-      className={className}
-      remarkPlugins={[remarkGfm, ...remarkPlugins]}
-      components={defaultComponents}
-    >
-      {content}
-    </Markdown>
+    <div className={className}>
+      <Markdown remarkPlugins={[remarkGfm, ...remarkPlugins]} components={defaultComponents}>
+        {content}
+      </Markdown>
+    </div>
   );
 }

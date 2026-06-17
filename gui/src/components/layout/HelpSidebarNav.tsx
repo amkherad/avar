@@ -12,7 +12,7 @@ export function HelpSidebarNav({ topicId, onTopicChange }: HelpSidebarNavProps) 
   return (
     <>
       <h2 className="avar-sidebar-nav__title">{t("help.title")}</h2>
-      <nav className="avar-sidebar-nav">
+      <nav className="avar-sidebar-nav avar-sidebar-nav--striped">
         {HELP_TOPICS.map((item) => (
           <button
             key={item.id}

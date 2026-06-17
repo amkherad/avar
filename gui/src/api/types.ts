@@ -74,27 +74,28 @@ export interface DownloadInfo {
 
 
 export interface HealthInfo {
-
   status: string;
-
   queueCount: number;
-
   activeDownloads: number;
-
   uptimeSeconds: number;
-
   downloads: Array<{
-
     id: string;
-
     filename: string;
-
     bytesDownloaded: number;
-
     totalBytes: number;
-
   }>;
+}
 
+export interface SystemStatsInfo {
+  status: string;
+  diskTotalBytes: number;
+  diskFreeBytes: number;
+  memoryTotalBytes: number;
+  memoryUsedBytes: number;
+  memoryUsedPercent: number;
+  cpuUsagePercent: number;
+  networkRxBytesPerSec: number;
+  networkTxBytesPerSec: number;
 }
 
 

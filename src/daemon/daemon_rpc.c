@@ -7,6 +7,7 @@
 #include <daemon/daemon_session.h>
 #include <daemon/daemon_transport.h>
 #include <download.h>
+#include <system_stats.h>
 #include <logger.h>
 #include <mongoose.h>
 #include <queue.h>
@@ -317,6 +318,54 @@ static cJSON *handle_health(void) {
     cJSON_AddNumberToObject(result, "activeDownloads", (double)download_active_count());
     cJSON_AddNumberToObject(result, "uptimeSeconds",
                             (double)(_daemon_started_at > 0 ? time(NULL) - _daemon_started_at : 0));
+    return result;
+}
+
+static uint64_t sum_download_bytes(void) {
+    uint64_t total = 0U;
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < count; ++i) {
+        char *done_str = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_BYTES_DOWNLOADED);
+        if (done_str != NULL) {
+            total += strtoull(done_str, NULL, 10);
+            free(done_str);
+        }
+    }
+    return total;
+}
+
+static cJSON *handle_system_stats(void) {
+    SystemStats stats;
+    if (system_stats_collect(&stats) != 0) {
+        return NULL;
+    }
+
+    static uint64_t last_rx_bytes = 0U;
+    static time_t last_sample_at = 0;
+    const uint64_t rx_total = sum_download_bytes();
+    const time_t now = time(NULL);
+    uint64_t rx_per_sec = 0U;
+    if (last_sample_at > 0 && now > last_sample_at && rx_total >= last_rx_bytes) {
+        rx_per_sec = (rx_total - last_rx_bytes) / (uint64_t)(now - last_sample_at);
+    }
+    last_rx_bytes = rx_total;
+    last_sample_at = now;
+    stats.network_rx_bytes_per_sec = rx_per_sec;
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        return NULL;
+    }
+
+    cJSON_AddStringToObject(result, "status", "ok");
+    cJSON_AddNumberToObject(result, "diskTotalBytes", (double)stats.disk_total_bytes);
+    cJSON_AddNumberToObject(result, "diskFreeBytes", (double)stats.disk_free_bytes);
+    cJSON_AddNumberToObject(result, "memoryTotalBytes", (double)stats.memory_total_bytes);
+    cJSON_AddNumberToObject(result, "memoryUsedBytes", (double)stats.memory_used_bytes);
+    cJSON_AddNumberToObject(result, "memoryUsedPercent", stats.memory_used_percent);
+    cJSON_AddNumberToObject(result, "cpuUsagePercent", stats.cpu_usage_percent);
+    cJSON_AddNumberToObject(result, "networkRxBytesPerSec", (double)stats.network_rx_bytes_per_sec);
+    cJSON_AddNumberToObject(result, "networkTxBytesPerSec", (double)stats.network_tx_bytes_per_sec);
     return result;
 }
 
@@ -877,6 +926,9 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     if (strcmp(method, "health") == 0) {
         return handle_health();
     }
+    if (strcmp(method, "system.stats") == 0) {
+        return handle_system_stats();
+    }
     if (strcmp(method, "download.add") == 0) {
         return handle_download_add(params != NULL ? params : cJSON_CreateObject());
     }
@@ -985,6 +1037,18 @@ bool daemon_rpc_handle_http(const char *uri, const char *body, const size_t body
         cJSON *health = handle_health();
         char *printed = cJSON_PrintUnformatted(health);
         cJSON_Delete(health);
+        if (printed == NULL) {
+            return false;
+        }
+        *body_out = printed;
+        *status_out = 200;
+        return true;
+    }
+
+    if (strcmp(uri, "/api/stats") == 0) {
+        cJSON *stats = handle_system_stats();
+        char *printed = stats != NULL ? cJSON_PrintUnformatted(stats) : NULL;
+        cJSON_Delete(stats);
         if (printed == NULL) {
             return false;
         }

@@ -1,7 +1,12 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { FontAwesomeIcon } from "@/icons";
+import { faCopy } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import type { DownloadInfo } from "@/api/types";
+import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
 import { formatBytePair, progressPercent } from "./format";
 
 export interface DownloadDetailViewProps {
@@ -28,12 +33,24 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
 export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadDetailViewProps) {
   const { t } = useTranslation();
   const percent = progressPercent(download.bytesDownloaded, download.totalBytes);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopyCurl() {
+    const command = buildDownloadCurl(download);
+    const ok = await copyTextToClipboard(command);
+    if (ok) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    }
+  }
 
   return (
     <div className={`avar-download-detail ${compact ? "avar-download-detail--compact" : ""}`}>
       <div className="avar-download-detail__header">
         <h3 className="avar-download-detail__filename">{download.filename}</h3>
-        <Badge tone={statusTone(download.status)}>{download.status}</Badge>
+        <Badge tone={statusTone(download.status)}>
+          {formatDownloadStatus(download.status, t)}
+        </Badge>
       </div>
 
       <dl className="avar-download-detail__fields">
@@ -69,13 +86,19 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
         ) : null}
       </dl>
 
-      {onOpenPopup ? (
-        <div className="avar-download-detail__actions">
+      <div className="avar-download-detail__actions">
+        {download.url ? (
+          <Button size="sm" variant="secondary" onClick={() => void handleCopyCurl()}>
+            <FontAwesomeIcon icon={faCopy} />
+            {copied ? t("download.curlCopied") : t("download.copyCurl")}
+          </Button>
+        ) : null}
+        {onOpenPopup ? (
           <Button size="sm" variant="secondary" onClick={onOpenPopup}>
             {t("download.openWindow")}
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }
