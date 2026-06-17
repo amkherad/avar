@@ -1,0 +1,81 @@
+{
+  "app": {
+    "title": "Avar",
+    "subtitle": "Download Manager"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "settings": "Settings",
+    "settingsAria": "Open settings"
+  },
+  "session": {
+    "title": "Sessions",
+    "active": "Active session",
+    "add": "Add session",
+    "edit": "Edit session",
+    "remove": "Remove",
+    "label": "Label",
+    "baseUrl": "Server URL",
+    "authToken": "Auth token (optional)",
+    "useProxy": "Use dev proxy (/api)",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "connecting": "Connecting…",
+    "test": "Test connection"
+  },
+  "queue": {
+    "title": "Queues",
+    "empty": "No queues found",
+    "add": "Add queue",
+    "name": "Name",
+    "description": "Description (optional)",
+    "running": "Running",
+    "stopped": "Stopped",
+    "start": "Start",
+    "stop": "Stop",
+    "delete": "Delete",
+    "deleteConfirm": "Remove this queue? Downloads will be detached.",
+    "defaultName": "Default",
+    "defaultDescription": "Downloads without an assigned queue",
+    "downloads": "{{count}} download(s)"
+  },
+  "download": {
+    "title": "Downloads",
+    "empty": "No downloads in this queue",
+    "add": "Add download",
+    "url": "URL",
+    "submit": "Start download",
+    "status": "Status",
+    "progress": "Progress",
+    "filename": "File",
+    "bytes": "{{done}} / {{total}}"
+  },
+  "health": {
+    "uptime": "Uptime",
+    "active": "Active",
+    "queues": "Queues",
+    "unavailable": "Server status unavailable"
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "language": "Language",
+    "syncChannel": "Data sync channel",
+    "syncPoll": "Periodic polls",
+    "syncSse": "Server-sent events",
+    "syncWebSocket": "WebSockets",
+    "refresh": "Refresh interval (seconds)",
+    "pingInterval": "Connection check interval (seconds)"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "loading": "Loading…",
+    "error": "Something went wrong",
+    "staleData": "Showing last known data — not connected to the daemon"
+  }
+}

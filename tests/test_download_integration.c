@@ -83,9 +83,9 @@ static bool read_range_stats(unsigned *max_concurrent, unsigned *total_range_req
     return true;
 }
 
-static void remove_segmented_artifacts(void) {
-    char *dest = path_join(g_download_dir, "segmented.bin");
-    char *temp = path_join(g_temp_dir, "segmented.bin");
+static void remove_named_artifacts(const char *name) {
+    char *dest = path_join(g_download_dir, name);
+    char *temp = path_join(g_temp_dir, name);
     if (dest != NULL) {
         remove(dest);
         free(dest);
@@ -94,6 +94,10 @@ static void remove_segmented_artifacts(void) {
         remove(temp);
         free(temp);
     }
+}
+
+static void remove_segmented_artifacts(void) {
+    remove_named_artifacts("segmented.bin");
 }
 
 static bool verify_segmented_file_contents(const char *path) {
@@ -324,6 +328,51 @@ AVAR_TEST(download_integration_segmented_disabled_uses_stream) {
     free(dest);
 }
 
+AVAR_TEST(download_integration_segment_retry_recovers_from_drop) {
+    setup_isolated_paths();
+    configure_segmentation("1024", "65536", "4", "true");
+    remove_named_artifacts("flaky_segmented.bin");
+    start_local_server();
+
+    char url[256];
+    build_url("flaky_segmented.bin", url, sizeof url);
+    const int rc = transient_download(url, NULL, NULL, true);
+
+    unsigned total_range_requests = 0U;
+    AVAR_ASSERT(read_range_stats(NULL, &total_range_requests));
+    stop_local_server();
+
+    /* The download must still succeed even though every segment's first attempt
+     * was dropped mid-body; the engine retries each segment independently. */
+    AVAR_ASSERT_EQ(rc, EXIT_SUCCESS);
+
+    char *dest = path_join(g_download_dir, "flaky_segmented.bin");
+    AVAR_ASSERT_NOT_NULL(dest);
+    AVAR_ASSERT(verify_segmented_file_contents(dest));
+    free(dest);
+}
+
+AVAR_TEST(download_integration_range_refused_falls_back_to_stream) {
+    setup_isolated_paths();
+    configure_segmentation("1024", "65536", "4", "true");
+    remove_named_artifacts("liesrange.bin");
+    start_local_server();
+
+    char url[256];
+    build_url("liesrange.bin", url, sizeof url);
+    const int rc = transient_download(url, NULL, NULL, true);
+    stop_local_server();
+
+    /* The server advertises range support but answers 200 to Range requests;
+     * the client must fall back to a plain stream and still complete. */
+    AVAR_ASSERT_EQ(rc, EXIT_SUCCESS);
+
+    char *dest = path_join(g_download_dir, "liesrange.bin");
+    AVAR_ASSERT_NOT_NULL(dest);
+    AVAR_ASSERT(verify_segmented_file_contents(dest));
+    free(dest);
+}
+
 AVAR_TEST(download_integration_background_downloads_use_thread_pool) {
     setup_isolated_paths();
     configure_segmentation("1024", "65536", "4", "true");
@@ -368,4 +417,6 @@ AVAR_TEST_MAIN(
         run_download_integration_small_file_skips_segmentation();
         run_download_integration_segmented_parallel_completes();
         run_download_integration_segmented_disabled_uses_stream();
+        run_download_integration_segment_retry_recovers_from_drop();
+        run_download_integration_range_refused_falls_back_to_stream();
         run_download_integration_background_downloads_use_thread_pool();)

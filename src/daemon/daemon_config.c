@@ -92,6 +92,8 @@ void daemon_config_apply_defaults(DaemonConfig *cfg) {
     cfg->server.detach = true;
     cfg->server.container_mode = false;
     cfg->server.auth_token[0] = '\0';
+    cfg->server.cors.enabled = true;
+    snprintf(cfg->server.cors.allow_origin, sizeof cfg->server.cors.allow_origin, "%s", "*");
     default_pid_file_path(cfg->server.pid_file, sizeof cfg->server.pid_file);
 
     cfg->server.http.enabled = true;
@@ -202,6 +204,10 @@ bool daemon_config_load(DaemonConfig *out) {
                     sizeof out->server.pid_file);
     load_string_key(AVAR_CFG_DAEMON_SERVER_AUTH_TOKEN, out->server.auth_token,
                     sizeof out->server.auth_token);
+
+    load_bool_key(AVAR_CFG_DAEMON_SERVER_CORS_ENABLED, &out->server.cors.enabled);
+    load_string_key(AVAR_CFG_DAEMON_SERVER_CORS_ALLOW_ORIGIN, out->server.cors.allow_origin,
+                    sizeof out->server.cors.allow_origin);
 
     load_bool_key(AVAR_CFG_DAEMON_CHANNELS_HTTP_ENABLED, &out->server.http.enabled);
     load_string_key(AVAR_CFG_DAEMON_CHANNELS_HTTP_BIND, out->server.http.bind_addr,

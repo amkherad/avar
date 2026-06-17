@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -223,7 +224,7 @@ static int daemon_acquire_pid_file(const char *path) {
     snprintf(payload, sizeof payload, "%d\n", (int)pid);
 
     for (int attempt = 0; attempt < 2; ++attempt) {
-        g_pid_file_handle = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_NEW,
+        g_pid_file_handle = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, CREATE_NEW,
                                         FILE_ATTRIBUTE_NORMAL, NULL);
         if (g_pid_file_handle != INVALID_HANDLE_VALUE) {
             DWORD written = 0;
@@ -402,6 +403,74 @@ static bool wait_for_daemon_pid(const char *pid_file, int timeout_ms) {
     return false;
 }
 
+#if defined(_WIN32)
+static bool daemon_append_spawn_arg(char *buf, size_t buflen, size_t *pos, const char *fmt, ...) {
+    if (buf == NULL || pos == NULL || fmt == NULL || *pos >= buflen) {
+        return false;
+    }
+
+    va_list ap;
+    va_start(ap, fmt);
+    const int n = vsnprintf(buf + *pos, buflen - *pos, fmt, ap);
+    va_end(ap);
+
+    if (n < 0 || (size_t)n >= buflen - *pos) {
+        return false;
+    }
+
+    *pos += (size_t)n;
+    return true;
+}
+
+static bool daemon_build_windows_spawn_cmdline(const DaemonConfig *cfg, char *buf, size_t buflen) {
+    if (cfg == NULL || buf == NULL || buflen == 0) {
+        return false;
+    }
+
+    char exe_path[AVAR_CONFIG_PATH_MAX];
+    const DWORD path_len = GetModuleFileNameA(NULL, exe_path, (DWORD)sizeof exe_path);
+    if (path_len == 0 || path_len >= sizeof exe_path) {
+        return false;
+    }
+
+    size_t pos = 0;
+    if (!daemon_append_spawn_arg(buf, buflen, &pos, "\"%s\" daemon start --attached --no-detach",
+                                 exe_path)) {
+        return false;
+    }
+
+    if (cfg->server.http.enabled &&
+        !daemon_append_spawn_arg(buf, buflen, &pos, " --http --port=%u",
+                                 (unsigned)cfg->server.http.port)) {
+        return false;
+    }
+
+    if (cfg->server.pipe.enabled &&
+        !daemon_append_spawn_arg(buf, buflen, &pos, " --pipe --pipeName=\"%s\"",
+                                 cfg->server.pipe.name)) {
+        return false;
+    }
+
+    if (cfg->server.unix_socket.enabled &&
+        !daemon_append_spawn_arg(buf, buflen, &pos, " --unix --unixPath=\"%s\"",
+                                 cfg->server.unix_socket.path)) {
+        return false;
+    }
+
+    if (cfg->server.pid_file[0] != '\0' &&
+        !daemon_append_spawn_arg(buf, buflen, &pos, " --pidFile=\"%s\"", cfg->server.pid_file)) {
+        return false;
+    }
+
+    if (cfg->server.container_mode &&
+        !daemon_append_spawn_arg(buf, buflen, &pos, " --container")) {
+        return false;
+    }
+
+    return true;
+}
+#endif
+
 #if !defined(_WIN32)
 static void detach_stdio(void) {
     const int fd = open("/dev/null", O_RDWR);
@@ -456,17 +525,11 @@ int daemon_spawn_detached(const DaemonConfig *cfg) {
     }
 
 #if defined(_WIN32)
-    char exe_path[AVAR_CONFIG_PATH_MAX];
-    const DWORD path_len = GetModuleFileNameA(NULL, exe_path, (DWORD)sizeof exe_path);
-    if (path_len == 0 || path_len >= sizeof exe_path) {
-        LOG_ERROR("Failed to resolve executable path");
+    char cmdline[AVAR_CONFIG_PATH_MAX * 2];
+    if (!daemon_build_windows_spawn_cmdline(cfg, cmdline, sizeof cmdline)) {
+        LOG_ERROR("Failed to build daemon spawn command line");
         return EXIT_FAILURE;
     }
-
-    char cmdline[AVAR_CONFIG_PATH_MAX * 2];
-    snprintf(cmdline, sizeof cmdline,
-             "\"%s\" daemon start --attached --no-detach --pipeName=\"%s\"", exe_path,
-             cfg->server.pipe.name);
 
     STARTUPINFOA si = {0};
     si.cb = sizeof si;
@@ -482,7 +545,8 @@ int daemon_spawn_detached(const DaemonConfig *cfg) {
     CloseHandle(pi.hProcess);
 
     if (!wait_for_daemon_pid(cfg->server.pid_file, 5000)) {
-        LOG_WARNING("Daemon spawned but pid file is not ready yet");
+        LOG_WARNING("Daemon spawned but pid file is not ready yet "
+                    "(run with --attached to see startup errors)");
     } else {
         int pid = 0;
         daemon_is_running(&pid);
@@ -499,7 +563,9 @@ int daemon_spawn_detached(const DaemonConfig *cfg) {
 
     if (child > 0) {
         if (!wait_for_daemon_pid(cfg->server.pid_file, 5000)) {
-            LOG_WARNING("Daemon spawned (pid %d) but is not ready yet", (int)child);
+            LOG_WARNING("Daemon spawned (pid %d) but pid file is not ready yet "
+                        "(run with --attached to see startup errors)",
+                        (int)child);
         } else {
             LOG_INFO("Daemon started in background (pid %d)", (int)child);
         }

@@ -1,0 +1,24 @@
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .bg { fill: #1e293b; }
+      .accent { fill: #38bdf8; }
+      .accent2 { fill: #22c55e; }
+      .line { stroke: #38bdf8; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+    </style>
+  </defs>
+
+  <!-- Background circle -->
+  <circle class="bg" cx="128" cy="128" r="120"/>
+
+  <!-- Queue layers -->
+  <rect class="accent2" x="72" y="160" width="112" height="12" rx="6"/>
+  <rect class="accent2" x="88" y="180" width="80" height="12" rx="6"/>
+
+  <!-- Download arrow -->
+  <path class="line" d="M128 60 v80"/>
+  <path class="line" d="M96 120 L128 152 L160 120"/>
+
+  <!-- Network ring (torrent / multi-source hint) -->
+  <circle cx="128" cy="128" r="84" stroke="#38bdf8" stroke-width="6" opacity="0.25" fill="none"/>
+</svg>

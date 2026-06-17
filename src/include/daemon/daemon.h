@@ -51,6 +51,11 @@ typedef struct {
 } DaemonUnixChannel;
 
 typedef struct {
+    bool enabled;
+    char allow_origin[256];
+} DaemonCorsConfig;
+
+typedef struct {
     AvarSessionMode mode;
     AvarTransportKind transport;
     char remote_host[256];
@@ -62,6 +67,7 @@ typedef struct {
     bool container_mode;
     char pid_file[AVAR_CONFIG_PATH_MAX];
     char auth_token[128];
+    DaemonCorsConfig cors;
     DaemonHttpChannel http;
     DaemonHttpsChannel https;
     DaemonPipeChannel pipe;

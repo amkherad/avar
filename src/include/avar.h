@@ -138,6 +138,9 @@
 #define DL_CHUNK_SIZE (256U * AVAR_KIB)
 #define DL_CONNECT_TIMEOUT_MS 30000U
 #define DL_IDLE_TIMEOUT_MS 120000U
+/* Allowed segment connection failures before the whole download is abandoned,
+ * expressed as a multiple of the segment count (retries are per-segment). */
+#define DL_SEGMENT_MAX_RETRY_FACTOR 4U
 #define DL_MAX_REDIRECTS 10
 #define DL_WRITE_CHUNK_SIZE AVAR_MIB
 #define DL_PROGRESS_BAR_WIDTH 22
@@ -230,6 +233,8 @@
 #define AVAR_CFG_DAEMON_SERVER_PID_FILE "daemon.server.pidFile"
 #define AVAR_CFG_DAEMON_SERVER_CONTAINER "daemon.server.containerMode"
 #define AVAR_CFG_DAEMON_SERVER_AUTH_TOKEN "daemon.server.authToken"
+#define AVAR_CFG_DAEMON_SERVER_CORS_ENABLED "daemon.server.cors.enabled"
+#define AVAR_CFG_DAEMON_SERVER_CORS_ALLOW_ORIGIN "daemon.server.cors.allowOrigin"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTP "daemon.server.channels.http"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTPS "daemon.server.channels.https"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTPS_ENABLED "daemon.server.channels.https.enabled"

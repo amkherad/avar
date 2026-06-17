@@ -1,6 +1,7 @@
 #include <cJSON.h>
 
 #include <cli.h>
+#include <config.h>
 #include <daemon/daemon.h>
 #include <daemon/daemon_rpc.h>
 #include <daemon/daemon_session.h>
@@ -12,6 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <time.h>
 
@@ -429,6 +431,439 @@ static cJSON *handle_logs_get(cJSON *params) {
     return result;
 }
 
+static int queue_error_exit_code(const QueueError error) {
+    return error == QueueErrorNone ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+static cJSON *queue_object_from_index(const size_t index) {
+    char *json = get_config_array_item_json(AVAR_CFG_DM_QUEUES, index);
+    if (json == NULL) {
+        return NULL;
+    }
+    cJSON *obj = cJSON_Parse(json);
+    free(json);
+    return obj;
+}
+
+static cJSON *handle_queue_list(void) {
+    cJSON *result = cJSON_CreateObject();
+    cJSON *queues = cJSON_CreateArray();
+    if (result == NULL || queues == NULL) {
+        cJSON_Delete(result);
+        cJSON_Delete(queues);
+        return NULL;
+    }
+
+    const size_t count = queue_count();
+    for (size_t i = 0; i < count; ++i) {
+        cJSON *entry = queue_object_from_index(i);
+        if (entry != NULL) {
+            cJSON_AddItemToArray(queues, entry);
+        }
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
+    cJSON_AddItemToObject(result, "queues", queues);
+    return result;
+}
+
+static cJSON *handle_downloads_list(void) {
+    cJSON *result = cJSON_CreateObject();
+    cJSON *downloads = cJSON_CreateArray();
+    if (result == NULL || downloads == NULL) {
+        cJSON_Delete(result);
+        cJSON_Delete(downloads);
+        return NULL;
+    }
+
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < count; ++i) {
+        char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, i);
+        if (json == NULL) {
+            continue;
+        }
+        cJSON *entry = cJSON_Parse(json);
+        free(json);
+        if (entry != NULL) {
+            cJSON_AddItemToArray(downloads, entry);
+        }
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
+    cJSON_AddItemToObject(result, "downloads", downloads);
+    return result;
+}
+
+static QueueOptions parse_queue_options(cJSON *params) {
+    QueueOptions options = {0};
+    if (params == NULL) {
+        return options;
+    }
+
+    const cJSON *description = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_DESCRIPTION);
+    if (cJSON_IsString(description) && description->valuestring != NULL) {
+        options.description = description->valuestring;
+    }
+
+    const cJSON *max_concurrent =
+        cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_MAX_CONCURRENT);
+    if (cJSON_IsNumber(max_concurrent) && max_concurrent->valuedouble > 0) {
+        options.max_concurrent_downloads = (uint32_t)max_concurrent->valuedouble;
+    }
+
+    const cJSON *max_connections =
+        cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_MAX_CONNECTIONS);
+    if (cJSON_IsNumber(max_connections) && max_connections->valuedouble > 0) {
+        options.max_connections = (uint32_t)max_connections->valuedouble;
+    }
+
+    const cJSON *temp_path = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_TEMP_PATH);
+    if (cJSON_IsString(temp_path) && temp_path->valuestring != NULL) {
+        options.temp_path = temp_path->valuestring;
+    }
+
+    const cJSON *download_path =
+        cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_DOWNLOAD_PATH);
+    if (cJSON_IsString(download_path) && download_path->valuestring != NULL) {
+        options.download_path = download_path->valuestring;
+    }
+
+    return options;
+}
+
+static QueuePatch parse_queue_patch(cJSON *params) {
+    QueuePatch patch = {0};
+    if (params == NULL) {
+        return patch;
+    }
+
+    const cJSON *description = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_DESCRIPTION);
+    if (cJSON_IsString(description)) {
+        patch.set_description = true;
+        patch.description = description->valuestring;
+    }
+
+    const cJSON *max_concurrent =
+        cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_MAX_CONCURRENT);
+    if (cJSON_IsNumber(max_concurrent)) {
+        patch.set_max_concurrent_downloads = true;
+        patch.max_concurrent_downloads = (uint32_t)max_concurrent->valuedouble;
+    }
+
+    const cJSON *max_connections =
+        cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_MAX_CONNECTIONS);
+    if (cJSON_IsNumber(max_connections)) {
+        patch.set_max_connections = true;
+        patch.max_connections = (uint32_t)max_connections->valuedouble;
+    }
+
+    const cJSON *temp_path = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_TEMP_PATH);
+    if (cJSON_IsString(temp_path)) {
+        patch.set_temp_path = true;
+        patch.temp_path = temp_path->valuestring;
+    }
+
+    const cJSON *download_path =
+        cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_DOWNLOAD_PATH);
+    if (cJSON_IsString(download_path)) {
+        patch.set_download_path = true;
+        patch.download_path = download_path->valuestring;
+    }
+
+    return patch;
+}
+
+static cJSON *handle_queue_add(cJSON *params) {
+    const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
+    if (!cJSON_IsString(name) || name->valuestring == NULL) {
+        return NULL;
+    }
+
+    const QueueOptions options = parse_queue_options(params);
+    char *id = NULL;
+    const QueueError rc = queue_add(name->valuestring, &options, &id);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        free(id);
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", queue_error_exit_code(rc));
+    if (id != NULL) {
+        cJSON_AddStringToObject(result, "id", id);
+        free(id);
+    }
+    return result;
+}
+
+static cJSON *handle_queue_remove(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
+    const cJSON *purge = cJSON_GetObjectItemCaseSensitive(params, "purgeItems");
+    const bool by_name = cJSON_IsString(name) && name->valuestring != NULL;
+    const char *target = by_name ? name->valuestring
+                                 : (cJSON_IsString(id) && id->valuestring != NULL ? id->valuestring
+                                                                                  : NULL);
+    if (target == NULL) {
+        return NULL;
+    }
+
+    const QueueError rc =
+        queue_remove(target, by_name, cJSON_IsTrue(purge));
+
+    cJSON *result = cJSON_CreateObject();
+    if (result != NULL) {
+        cJSON_AddNumberToObject(result, "exitCode", queue_error_exit_code(rc));
+    }
+    return result;
+}
+
+static cJSON *handle_queue_edit(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    if (!cJSON_IsString(id) || id->valuestring == NULL) {
+        return NULL;
+    }
+
+    const QueuePatch patch = parse_queue_patch(params);
+    const QueueError rc = queue_edit(id->valuestring, &patch);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result != NULL) {
+        cJSON_AddNumberToObject(result, "exitCode", queue_error_exit_code(rc));
+    }
+    return result;
+}
+
+static cJSON *handle_queue_start(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
+    const bool by_name = cJSON_IsString(name) && name->valuestring != NULL;
+    const char *target = by_name ? name->valuestring
+                                 : (cJSON_IsString(id) && id->valuestring != NULL ? id->valuestring
+                                                                                  : NULL);
+    if (target == NULL) {
+        return NULL;
+    }
+
+    char *resolved = queue_resolve_id(target, by_name);
+    if (resolved == NULL) {
+        cJSON *result = cJSON_CreateObject();
+        if (result != NULL) {
+            cJSON_AddNumberToObject(result, "exitCode", EXIT_FAILURE);
+        }
+        return result;
+    }
+
+    const QueueError rc = queue_start(resolved);
+    free(resolved);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result != NULL) {
+        cJSON_AddNumberToObject(result, "exitCode", queue_error_exit_code(rc));
+    }
+    return result;
+}
+
+static cJSON *handle_queue_stop(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
+    const bool by_name = cJSON_IsString(name) && name->valuestring != NULL;
+    const char *target = by_name ? name->valuestring
+                                 : (cJSON_IsString(id) && id->valuestring != NULL ? id->valuestring
+                                                                                  : NULL);
+    if (target == NULL) {
+        return NULL;
+    }
+
+    char *resolved = queue_resolve_id(target, by_name);
+    if (resolved == NULL) {
+        cJSON *result = cJSON_CreateObject();
+        if (result != NULL) {
+            cJSON_AddNumberToObject(result, "exitCode", EXIT_FAILURE);
+        }
+        return result;
+    }
+
+    const QueueError rc = queue_stop(resolved);
+    free(resolved);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result != NULL) {
+        cJSON_AddNumberToObject(result, "exitCode", queue_error_exit_code(rc));
+    }
+    return result;
+}
+
+#define AVAR_STREAM_KIND_NONE 0
+#define AVAR_STREAM_KIND_SSE 1
+#define AVAR_STREAM_KIND_WS 2
+
+typedef struct StreamClient {
+    struct mg_connection *connection;
+    bool websocket;
+    struct StreamClient *next;
+} StreamClient;
+
+static StreamClient *_stream_clients = NULL;
+static time_t _stream_last_tick = 0;
+
+static void stream_client_register(struct mg_connection *connection, const bool websocket) {
+    if (connection == NULL) {
+        return;
+    }
+
+    connection->data[0] = (char)(websocket ? AVAR_STREAM_KIND_WS : AVAR_STREAM_KIND_SSE);
+
+    StreamClient *node = calloc(1U, sizeof(StreamClient));
+    if (node == NULL) {
+        return;
+    }
+    node->connection = connection;
+    node->websocket = websocket;
+    node->next = _stream_clients;
+    _stream_clients = node;
+}
+
+static void stream_client_unregister(struct mg_connection *connection) {
+    if (connection == NULL) {
+        return;
+    }
+
+    connection->data[0] = (char)AVAR_STREAM_KIND_NONE;
+
+    StreamClient **cursor = &_stream_clients;
+    while (*cursor != NULL) {
+        if ((*cursor)->connection == connection) {
+            StreamClient *removed = *cursor;
+            *cursor = removed->next;
+            free(removed);
+            return;
+        }
+        cursor = &(*cursor)->next;
+    }
+}
+
+bool daemon_rpc_build_snapshot(char **json_out) {
+    if (json_out == NULL) {
+        return false;
+    }
+    *json_out = NULL;
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON *health = handle_health();
+    cJSON *queues = cJSON_CreateArray();
+    cJSON *downloads = cJSON_CreateArray();
+    if (root == NULL || health == NULL || queues == NULL || downloads == NULL) {
+        cJSON_Delete(root);
+        cJSON_Delete(health);
+        cJSON_Delete(queues);
+        cJSON_Delete(downloads);
+        return false;
+    }
+
+    const size_t queue_total = queue_count();
+    for (size_t i = 0; i < queue_total; ++i) {
+        cJSON *entry = queue_object_from_index(i);
+        if (entry != NULL) {
+            cJSON_AddItemToArray(queues, entry);
+        }
+    }
+
+    const size_t download_total = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < download_total; ++i) {
+        char *item_json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, i);
+        if (item_json == NULL) {
+            continue;
+        }
+        cJSON *entry = cJSON_Parse(item_json);
+        free(item_json);
+        if (entry != NULL) {
+            cJSON_AddItemToArray(downloads, entry);
+        }
+    }
+
+    cJSON_AddStringToObject(root, "type", "snapshot");
+    cJSON_AddItemToObject(root, "health", health);
+    cJSON_AddItemToObject(root, "queues", queues);
+    cJSON_AddItemToObject(root, "downloads", downloads);
+
+    char *printed = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (printed == NULL) {
+        return false;
+    }
+
+    *json_out = printed;
+    return true;
+}
+
+void daemon_rpc_stream_send(struct mg_connection *connection, const bool websocket) {
+    if (connection == NULL) {
+        return;
+    }
+
+    char *snapshot = NULL;
+    if (!daemon_rpc_build_snapshot(&snapshot) || snapshot == NULL) {
+        return;
+    }
+
+    if (websocket) {
+        mg_ws_send(connection, snapshot, strlen(snapshot), WEBSOCKET_OP_TEXT);
+    } else {
+        mg_printf(connection, "event: snapshot\ndata: %s\n\n", snapshot);
+    }
+
+    free(snapshot);
+}
+
+void daemon_rpc_streams_tick(struct mg_mgr *mgr) {
+    (void)mgr;
+
+    const time_t now = time(NULL);
+    if (_stream_clients == NULL) {
+        return;
+    }
+    if (_stream_last_tick != 0 && now - _stream_last_tick < 1) {
+        return;
+    }
+    _stream_last_tick = now;
+
+    char *snapshot = NULL;
+    if (!daemon_rpc_build_snapshot(&snapshot) || snapshot == NULL) {
+        return;
+    }
+
+    StreamClient *cursor = _stream_clients;
+    while (cursor != NULL) {
+        StreamClient *next = cursor->next;
+        if (cursor->connection == NULL || cursor->connection->is_closing) {
+            stream_client_unregister(cursor->connection);
+        } else if (cursor->websocket) {
+            mg_ws_send(cursor->connection, snapshot, strlen(snapshot), WEBSOCKET_OP_TEXT);
+        } else {
+            mg_printf(cursor->connection, "event: snapshot\ndata: %s\n\n", snapshot);
+        }
+        cursor = next;
+    }
+
+    free(snapshot);
+}
+
+void daemon_rpc_stream_attach_sse(struct mg_connection *connection) {
+    stream_client_register(connection, false);
+    daemon_rpc_stream_send(connection, false);
+}
+
+void daemon_rpc_stream_attach_ws(struct mg_connection *connection) {
+    stream_client_register(connection, true);
+    daemon_rpc_stream_send(connection, true);
+}
+
+void daemon_rpc_stream_detach(struct mg_connection *connection) {
+    stream_client_unregister(connection);
+}
+
 static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     (void)id;
 
@@ -450,6 +885,27 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     }
     if (strcmp(method, "logs.get") == 0) {
         return handle_logs_get(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "queue.list") == 0) {
+        return handle_queue_list();
+    }
+    if (strcmp(method, "queue.add") == 0) {
+        return handle_queue_add(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "queue.remove") == 0) {
+        return handle_queue_remove(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "queue.edit") == 0) {
+        return handle_queue_edit(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "queue.start") == 0) {
+        return handle_queue_start(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "queue.stop") == 0) {
+        return handle_queue_stop(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "downloads.list") == 0) {
+        return handle_downloads_list();
     }
     if (strcmp(method, "daemon.reload") == 0) {
         DaemonConfig cfg;

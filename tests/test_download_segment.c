@@ -149,6 +149,67 @@ AVAR_TEST(segment_select_balanced_skips_in_flight_chunks) {
     download_state_free(state);
 }
 
+/* Already-completed segments must never be re-selected. */
+AVAR_TEST(segment_select_skips_completed_segments) {
+    DownloadState *state = download_state_create("https://example.com/a", "a.bin", "/t/a", "/d/a",
+                                                 4U * 256U * 1024U, 256U * 1024U);
+    AVAR_ASSERT_NOT_NULL(state);
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 0U, 256U * 1024U - 1U), 0);
+
+    DownloadSegmentConfig cfg = {
+            .enabled = true,
+            .strategy = SegmentStrategyBalanced,
+            .concurrency = 4U,
+            .chunk_size = 256U * 1024U,
+            .min_file_size = 1024U,
+    };
+
+    ByteRange ranges[4] = {{0}};
+    const size_t selected = segment_select_chunks(&cfg, state, 4, NULL, NULL, ranges);
+    AVAR_ASSERT_EQ(selected, 3U);
+    for (size_t i = 0; i < selected; i++) {
+        AVAR_ASSERT(ranges[i].start != 0U);
+    }
+
+    download_state_free(state);
+}
+
+/* When concurrency exceeds the number of segments, only the real segments are
+ * returned and there are no duplicates. */
+AVAR_TEST(segment_select_balanced_concurrency_exceeds_segments) {
+    DownloadState *state = download_state_create("https://example.com/a", "a.bin", "/t/a", "/d/a",
+                                                 2U * 256U * 1024U, 256U * 1024U);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    ByteRange ranges[8] = {{0}};
+    const size_t selected = segment_select_balanced(state, 8U, 8U, NULL, NULL, ranges);
+    AVAR_ASSERT_EQ(selected, 2U);
+    AVAR_ASSERT(ranges[0].start != ranges[1].start);
+
+    download_state_free(state);
+}
+
+/* The selector must honour max_count even when more segments are pending. */
+AVAR_TEST(segment_select_respects_max_count) {
+    DownloadState *state = download_state_create("https://example.com/a", "a.bin", "/t/a", "/d/a",
+                                                 8U * 256U * 1024U, 256U * 1024U);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    DownloadSegmentConfig cfg = {
+            .enabled = true,
+            .strategy = SegmentStrategyBalanced,
+            .concurrency = 8U,
+            .chunk_size = 256U * 1024U,
+            .min_file_size = 1024U,
+    };
+
+    ByteRange ranges[2] = {{0}};
+    const size_t selected = segment_select_chunks(&cfg, state, 2, NULL, NULL, ranges);
+    AVAR_ASSERT_EQ(selected, 2U);
+
+    download_state_free(state);
+}
+
 AVAR_TEST_MAIN(
         run_segment_select_left_heavy_orders_from_start();
         run_segment_select_balanced_spreads_across_file();
@@ -157,4 +218,7 @@ AVAR_TEST_MAIN(
         run_segment_chunk_range_single_byte_file();
         run_segment_should_enable_requires_enabled_flag();
         run_segment_chunk_range_last_chunk_is_short();
-        run_segment_select_balanced_skips_in_flight_chunks();)
+        run_segment_select_balanced_skips_in_flight_chunks();
+        run_segment_select_skips_completed_segments();
+        run_segment_select_balanced_concurrency_exceeds_segments();
+        run_segment_select_respects_max_count();)

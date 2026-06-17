@@ -1,0 +1,81 @@
+{
+  "app": {
+    "title": "آوار",
+    "subtitle": "مدیر دانلود"
+  },
+  "nav": {
+    "dashboard": "داشبورد",
+    "settings": "تنظیمات",
+    "settingsAria": "باز کردن تنظیمات"
+  },
+  "session": {
+    "title": "نشست‌ها",
+    "active": "نشست فعال",
+    "add": "افزودن نشست",
+    "edit": "ویرایش نشست",
+    "remove": "حذف",
+    "label": "برچسب",
+    "baseUrl": "آدرس سرور",
+    "authToken": "توکن احراز هویت (اختیاری)",
+    "useProxy": "استفاده از پروکسی توسعه (/api)",
+    "connected": "متصل",
+    "disconnected": "قطع",
+    "connecting": "در حال اتصال…",
+    "test": "آزمایش اتصال"
+  },
+  "queue": {
+    "title": "صف‌ها",
+    "empty": "صفی یافت نشد",
+    "add": "افزودن صف",
+    "name": "نام",
+    "description": "توضیح (اختیاری)",
+    "running": "در حال اجرا",
+    "stopped": "متوقف",
+    "start": "شروع",
+    "stop": "توقف",
+    "delete": "حذف",
+    "deleteConfirm": "این صف حذف شود؟ دانلودها از صف جدا می‌شوند.",
+    "defaultName": "پیش‌فرض",
+    "defaultDescription": "دانلودهای بدون صف اختصاصی",
+    "downloads": "{{count}} دانلود"
+  },
+  "download": {
+    "title": "دانلودها",
+    "empty": "دانلودی در این صف نیست",
+    "add": "افزودن دانلود",
+    "url": "نشانی",
+    "submit": "شروع دانلود",
+    "status": "وضعیت",
+    "progress": "پیشرفت",
+    "filename": "فایل",
+    "bytes": "{{done}} / {{total}}"
+  },
+  "health": {
+    "uptime": "مدت فعالیت",
+    "active": "فعال",
+    "queues": "صف‌ها",
+    "unavailable": "وضعیت سرور در دسترس نیست"
+  },
+  "settings": {
+    "title": "تنظیمات",
+    "theme": "پوسته",
+    "themeLight": "روشن",
+    "themeDark": "تیره",
+    "themeSystem": "سیستم",
+    "language": "زبان",
+    "syncChannel": "کانال همگام‌سازی داده",
+    "syncPoll": "نظرسنجی دوره‌ای",
+    "syncSse": "رویدادهای ارسالی سرور",
+    "syncWebSocket": "وب‌سوکت",
+    "refresh": "فاصله به‌روزرسانی (ثانیه)",
+    "pingInterval": "فاصله بررسی اتصال (ثانیه)"
+  },
+  "common": {
+    "save": "ذخیره",
+    "cancel": "لغو",
+    "retry": "تلاش مجدد",
+    "loading": "در حال بارگذاری…",
+    "error": "خطایی رخ داد",
+    "staleData": "نمایش آخرین داده‌های دریافت‌شده — اتصال به دیمن برقرار نیست"
+  }
+}

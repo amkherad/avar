@@ -1,0 +1,89 @@
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { QueueList } from "@/components/queue/QueueList";
+import { CreateQueueModal } from "@/components/queue/CreateQueueModal";
+import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
+import { createDefaultQueueInfo, isDefaultQueue, withDefaultQueue } from "@/queue/defaultQueue";
+import { useConnectionStore } from "@/stores/connectionStore";
+import {
+  selectDownloadCounts,
+  selectEffectiveQueueId,
+  useDataStore,
+} from "@/stores/dataStore";
+
+export function QueuePanel() {
+  const { t } = useTranslation();
+  const client = useConnectionStore((s) => s.client);
+  const queues = useDataStore((s) => s.queues);
+  const downloads = useDataStore((s) => s.downloads);
+  const status = useDataStore((s) => s.status);
+  const setSelectedQueueId = useDataStore((s) => s.setSelectedQueueId);
+
+  const effectiveQueueId = useDataStore(selectEffectiveQueueId);
+  const defaultQueue = createDefaultQueueInfo(
+    t("queue.defaultName"),
+    t("queue.defaultDescription"),
+  );
+  const displayQueues = withDefaultQueue(queues, defaultQueue);
+  const downloadCounts = selectDownloadCounts(displayQueues, downloads);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function runQueueAction(id: string, action: () => Promise<void>) {
+    if (!client || isDefaultQueue(id)) {
+      return;
+    }
+    setBusyId(id);
+    setError(null);
+    try {
+      await action();
+      await useDataStore.getState().refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("common.error"));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="avar-card__header" style={{ padding: 0, border: "none", marginBottom: "0.75rem" }}>
+        <h3 className="avar-card__title">{t("queue.title")}</h3>
+        <Button size="sm" onClick={() => setModalOpen(true)}>
+          {t("queue.add")}
+        </Button>
+      </div>
+
+      {error ? <p className="avar-field__error">{error}</p> : null}
+      {status === "loading" && queues.length === 0 && downloads.length === 0 ? <Spinner /> : null}
+
+      <QueueList
+        queues={displayQueues}
+        selectedId={effectiveQueueId}
+        downloadCounts={downloadCounts}
+        onSelect={setSelectedQueueId}
+        onStart={(id) => void runQueueAction(id, () => client!.startQueue(id))}
+        onStop={(id) => void runQueueAction(id, () => client!.stopQueue(id))}
+        onDelete={(id) => {
+          if (!window.confirm(t("queue.deleteConfirm"))) {
+            return;
+          }
+          void runQueueAction(id, () => client!.removeQueue(id, false));
+        }}
+        busyId={busyId}
+      />
+
+      <CreateQueueModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={(id) => {
+          setSelectedQueueId(id);
+          void useDataStore.getState().refresh();
+        }}
+      />
+    </>
+  );
+}

@@ -536,16 +536,114 @@ static const DaemonTransportVTable unix_vtable = {
 
 #endif
 
+static bool http_uri_is_api(const struct mg_http_message *hm) {
+    if (hm == NULL || hm->uri.len < 4) {
+        return false;
+    }
+    if (memcmp(hm->uri.buf, "/api", 4) != 0) {
+        return false;
+    }
+    return hm->uri.len == 4 || hm->uri.buf[4] == '/' || hm->uri.buf[4] == '?';
+}
+
+static const char *http_cors_allow_origin(const DaemonCorsConfig *cors,
+                                          struct mg_http_message *hm) {
+    if (cors == NULL || cors->allow_origin[0] == '\0') {
+        return "*";
+    }
+    if (strcmp(cors->allow_origin, "*") == 0) {
+        return "*";
+    }
+
+    if (hm != NULL) {
+        struct mg_str *origin = mg_http_get_header(hm, "Origin");
+        if (origin != NULL && mg_strcmp(*origin, mg_str(cors->allow_origin)) == 0) {
+            return cors->allow_origin;
+        }
+    }
+
+    return cors->allow_origin;
+}
+
+static size_t http_write_cors_headers(char *buf, size_t buflen, const DaemonCorsConfig *cors,
+                                      struct mg_http_message *hm) {
+    if (cors == NULL || !cors->enabled) {
+        return 0;
+    }
+
+    return (size_t)snprintf(buf, buflen,
+                            "Access-Control-Allow-Origin: %s\r\n"
+                            "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                            "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
+                            "Access-Control-Expose-Headers: Content-Type\r\n",
+                            http_cors_allow_origin(cors, hm));
+}
+
+static void http_reply_json(struct mg_connection *c, int status, const char *body,
+                            const DaemonCorsConfig *cors, struct mg_http_message *hm) {
+    char headers[512];
+    size_t off = (size_t)snprintf(headers, sizeof headers,
+                                  "Content-Type: application/json; charset=utf-8\r\n");
+    off += http_write_cors_headers(headers + off, sizeof headers - off, cors, hm);
+    mg_http_reply(c, status, headers, "%s", body);
+}
+
 static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+    if (ev == MG_EV_CLOSE) {
+        daemon_rpc_stream_detach(c);
+        return;
+    }
+
+    if (ev == MG_EV_WS_OPEN) {
+        daemon_rpc_stream_attach_ws(c);
+        return;
+    }
+
+    if (ev == MG_EV_WS_MSG) {
+        struct mg_ws_message *wm = (struct mg_ws_message *)ev_data;
+        if (wm != NULL && wm->data.len >= 6U &&
+            memcmp(wm->data.buf, "ping", 4) == 0) {
+            mg_ws_send(c, "pong", 4, WEBSOCKET_OP_TEXT);
+        }
+        return;
+    }
+
     if (ev != MG_EV_HTTP_MSG) {
         return;
     }
 
     struct mg_http_message *hm = (struct mg_http_message *)ev_data;
+    const DaemonConfig *cfg = (const DaemonConfig *)c->fn_data;
+    const DaemonCorsConfig *cors = cfg != NULL ? &cfg->server.cors : NULL;
+
+    if (cors != NULL && cors->enabled && http_uri_is_api(hm) &&
+        mg_strcasecmp(hm->method, mg_str("OPTIONS")) == 0) {
+        char headers[512];
+        size_t off = http_write_cors_headers(headers, sizeof headers, cors, hm);
+        snprintf(headers + off, sizeof headers - off, "Access-Control-Max-Age: 86400\r\n");
+        mg_http_reply(c, 204, headers, "");
+        return;
+    }
 
     if (!daemon_rpc_check_http_auth(hm)) {
-        mg_http_reply(c, 401, "Content-Type: application/json; charset=utf-8\r\n",
-                      "{%m:%m}\n", MG_ESC("error"), MG_ESC("unauthorized"));
+        http_reply_json(c, 401, "{\"error\":\"unauthorized\"}\n", cors, hm);
+        return;
+    }
+
+    if (mg_match(hm->uri, mg_str("/api/events"), NULL)) {
+        char headers[512];
+        size_t off = (size_t)snprintf(headers, sizeof headers,
+                                      "Content-Type: text/event-stream\r\n"
+                                      "Cache-Control: no-cache\r\n"
+                                      "Connection: keep-alive\r\n");
+        off += http_write_cors_headers(headers + off, sizeof headers - off, cors, hm);
+        mg_printf(c, "HTTP/1.1 200 OK\r\n%s\r\n", headers);
+        daemon_rpc_stream_attach_sse(c);
+        return;
+    }
+
+    if (mg_match(hm->uri, mg_str("/api/ws"), NULL)) {
+        mg_ws_upgrade(c, hm, NULL);
         return;
     }
 
@@ -555,12 +653,11 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     char *body = NULL;
     int status = 500;
     if (!daemon_rpc_handle_http(uri, hm->body.buf, hm->body.len, &body, &status)) {
-        mg_http_reply(c, 500, "Content-Type: application/json; charset=utf-8\r\n",
-                      "{%m:%m}\n", MG_ESC("error"), MG_ESC("internal"));
+        http_reply_json(c, 500, "{\"error\":\"internal\"}\n", cors, hm);
         return;
     }
 
-    mg_http_reply(c, status, "Content-Type: application/json; charset=utf-8\r\n", "%s", body);
+    http_reply_json(c, status, body, cors, hm);
     free(body);
 }
 
@@ -954,6 +1051,7 @@ void daemon_transport_poll(DaemonTransport *transport, unsigned timeout_ms) {
     HttpTransportContext *ctx = transport->context;
     if (ctx != NULL && ctx->started) {
         mg_mgr_poll(&ctx->mgr, (int)timeout_ms);
+        daemon_rpc_streams_tick(&ctx->mgr);
     }
 }
 

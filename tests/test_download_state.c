@@ -66,7 +66,76 @@ AVAR_TEST(download_state_merges_adjacent_ranges) {
     download_state_free(state);
 }
 
+/* Ranges may complete out of order and still coalesce into one span once the
+ * gap between them is filled. */
+AVAR_TEST(download_state_merges_out_of_order_and_bridging_ranges) {
+    DownloadState *state = download_state_create("https://x", "x", "/t", "/d", 3000U, 1000U);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 2000U, 2999U), 0);
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 0U, 999U), 0);
+    AVAR_ASSERT_EQ(state->done_range_count, 2U);
+    AVAR_ASSERT_EQ(state->done_ranges[0].start, 0U);
+    AVAR_ASSERT_EQ(state->done_ranges[1].start, 2000U);
+
+    /* Filling the middle bridges both into a single range. */
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 1000U, 1999U), 0);
+    AVAR_ASSERT_EQ(state->done_range_count, 1U);
+    AVAR_ASSERT_EQ(state->done_ranges[0].start, 0U);
+    AVAR_ASSERT_EQ(state->done_ranges[0].end, 2999U);
+    AVAR_ASSERT(download_state_all_chunks_done(state));
+
+    download_state_free(state);
+}
+
+/* Overlapping and duplicate ranges must not inflate the byte count. */
+AVAR_TEST(download_state_overlapping_ranges_counted_once) {
+    DownloadState *state = download_state_create("https://x", "x", "/t", "/d", 1000U, 1000U);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 0U, 599U), 0);
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 400U, 799U), 0);
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 400U, 799U), 0); /* duplicate */
+    AVAR_ASSERT_EQ(state->done_range_count, 1U);
+    AVAR_ASSERT_EQ(download_state_bytes_done(state), 800U);
+    AVAR_ASSERT(download_state_is_range_done(state, 100U, 700U));
+    AVAR_ASSERT(!download_state_is_range_done(state, 100U, 800U));
+
+    download_state_free(state);
+}
+
+/* A range that runs past the file end is clamped to total_size. */
+AVAR_TEST(download_state_clamps_range_to_total_size) {
+    DownloadState *state = download_state_create("https://x", "x", "/t", "/d", 500U, 1000U);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 0U, 4096U), 0);
+    AVAR_ASSERT_EQ(download_state_bytes_done(state), 500U);
+    AVAR_ASSERT(download_state_all_chunks_done(state));
+
+    download_state_free(state);
+}
+
+/* Learning the real size after the fact drops ranges that lie beyond it. */
+AVAR_TEST(download_state_init_chunks_clips_stale_ranges) {
+    DownloadState *state = download_state_create("https://x", "x", "/t", "/d", 0U, 1000U);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 0U, 999U), 0);
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 5000U, 5999U), 0);
+
+    AVAR_ASSERT_EQ(download_state_init_chunks(state, 1000U, 1000U), 0);
+    AVAR_ASSERT_EQ(download_state_bytes_done(state), 1000U);
+    AVAR_ASSERT(download_state_all_chunks_done(state));
+
+    download_state_free(state);
+}
+
 AVAR_TEST_MAIN(
         run_download_state_save_load_roundtrip();
         run_download_state_bytes_done_empty();
-        run_download_state_merges_adjacent_ranges();)
+        run_download_state_merges_adjacent_ranges();
+        run_download_state_merges_out_of_order_and_bridging_ranges();
+        run_download_state_overlapping_ranges_counted_once();
+        run_download_state_clamps_range_to_total_size();
+        run_download_state_init_chunks_clips_stale_ranges();)

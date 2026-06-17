@@ -1,0 +1,42 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root,
+.avar-root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--avar-font);
+  background: var(--avar-bg);
+  color: var(--avar-text);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: var(--avar-primary);
+}
+
+.avar-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--avar-bg);
+  color: var(--avar-text);
+}
+
+[dir="rtl"] .avar-icon-flip {
+  transform: scaleX(-1);
+}

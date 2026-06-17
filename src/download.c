@@ -35,6 +35,71 @@
     #include <unistd.h>
 #endif
 
+/* -------------------------------------------------------------------------- */
+/* Platform abstractions                                                      */
+/*                                                                            */
+/* These thin wrappers keep the rest of the file free of #if branches so the  */
+/* download logic reads the same on every platform.                           */
+/* -------------------------------------------------------------------------- */
+
+static void platform_sleep_ms(const unsigned ms) {
+#if defined(_WIN32)
+    Sleep(ms);
+#else
+    usleep((useconds_t)ms * 1000U);
+#endif
+}
+
+static void platform_gmtime(const time_t *t, struct tm *out) {
+#if defined(_WIN32)
+    gmtime_s(out, t);
+#else
+    gmtime_r(t, out);
+#endif
+}
+
+static int platform_seek(FILE *fp, const uint64_t offset) {
+#if defined(_WIN32)
+    return _fseeki64(fp, (__int64)offset, SEEK_SET);
+#else
+    return fseeko(fp, (off_t)offset, SEEK_SET);
+#endif
+}
+
+static void platform_fsync(FILE *fp) {
+    fflush(fp);
+#if defined(_WIN32)
+    _commit(_fileno(fp));
+#else
+    fsync(fileno(fp));
+#endif
+}
+
+static void platform_remove_dir(const char *dir) {
+#if defined(_WIN32)
+    _rmdir(dir);
+#else
+    rmdir(dir);
+#endif
+}
+
+/* Enables ANSI escape handling on the Windows console once; no-op elsewhere. */
+static void platform_enable_ansi_terminal(void) {
+#if defined(_WIN32)
+    static bool enabled = false;
+    if (enabled || !avar_stderr_is_tty()) {
+        return;
+    }
+
+    const HANDLE handle = GetStdHandle(STD_ERROR_HANDLE);
+    DWORD mode = 0;
+    if (handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode)) {
+        SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    }
+    enabled = true;
+#endif
+}
+
 static atomic_uint g_active_downloads = 0;
 
 typedef struct {
@@ -42,6 +107,16 @@ typedef struct {
     char *queue;
     char *name;
 } BackgroundDownloadArgs;
+
+static void background_args_free(BackgroundDownloadArgs *args) {
+    if (args == NULL) {
+        return;
+    }
+    free(args->url);
+    free(args->queue);
+    free(args->name);
+    free(args);
+}
 
 size_t download_active_count(void) {
     return (size_t)atomic_load(&g_active_downloads);
@@ -98,11 +173,7 @@ bool download_wait_idle(const unsigned timeout_ms) {
         if (download_active_count() == 0U) {
             return true;
         }
-#if defined(_WIN32)
-        Sleep(step_ms);
-#else
-        usleep((useconds_t)step_ms * 1000U);
-#endif
+        platform_sleep_ms(step_ms);
     }
     return download_active_count() == 0U;
 }
@@ -121,6 +192,7 @@ typedef struct ChunkSlot {
     uint64_t chunk_write_offset;
     uint64_t chunk_received;
     uint64_t chunk_expected;
+    uint64_t last_activity_ms;
     bool headers_received;
     bool streaming;
     bool request_sent;
@@ -251,6 +323,8 @@ static void request_close(DownloadJob *job, struct mg_connection *c, bool schedu
 
 static void schedule_pending_chunks(DownloadJob *job);
 
+static void touch_slot_activity(ChunkSlot *slot);
+
 static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot);
 
 static void dl_conn_ctx_free(struct mg_connection *c);
@@ -319,11 +393,7 @@ static char *build_state_path(const char *job_dir) {
 static char *format_datetime_iso(void) {
     const time_t now = time(NULL);
     struct tm tm_utc;
-#if defined(_WIN32)
-    gmtime_s(&tm_utc, &now);
-#else
-    gmtime_r(&now, &tm_utc);
-#endif
+    platform_gmtime(&now, &tm_utc);
     char *buf = malloc(AVAR_DATETIME_BUF_SIZE);
     if (buf == NULL) {
         return NULL;
@@ -417,11 +487,7 @@ static void remove_job_work_dir(const char *state_path) {
         return;
     }
 
-#if defined(_WIN32)
-    _rmdir(job_dir);
-#else
-    rmdir(job_dir);
-#endif
+    platform_remove_dir(job_dir);
     free(job_dir);
 }
 
@@ -530,17 +596,7 @@ static void clear_progress_line(DownloadJob *job) {
         return;
     }
 
-#if defined(_WIN32)
-    static bool vt_enabled = false;
-    if (!vt_enabled && avar_stderr_is_tty()) {
-        HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
-        DWORD mode = 0;
-        if (h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode)) {
-            SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        }
-        vt_enabled = true;
-    }
-#endif
+    platform_enable_ansi_terminal();
 
     if (avar_stderr_is_tty()) {
         fputs("\033[2K\r", stderr);
@@ -558,17 +614,7 @@ static void write_progress_line(DownloadJob *job, const char *line) {
         len = (size_t) cols;
     }
 
-#if defined(_WIN32)
-    static bool vt_enabled = false;
-    if (!vt_enabled && avar_stderr_is_tty()) {
-        HANDLE h = GetStdHandle(STD_ERROR_HANDLE);
-        DWORD mode = 0;
-        if (h != INVALID_HANDLE_VALUE && GetConsoleMode(h, &mode)) {
-            SetConsoleMode(h, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        }
-        vt_enabled = true;
-    }
-#endif
+    platform_enable_ansi_terminal();
 
     if (avar_stderr_is_tty()) {
         fputs("\033[2K\r", stderr);
@@ -843,6 +889,44 @@ static bool dl_connect(DownloadJob *job, ChunkSlot *slot, struct mg_connection *
     return true;
 }
 
+static void touch_slot_activity(ChunkSlot *slot) {
+    if (slot != NULL) {
+        slot->last_activity_ms = mg_millis();
+    }
+}
+
+/* Bytes still expected for this slot's range, or UINT64_MAX when the size is
+ * not yet known (no Content-Length parsed). */
+static uint64_t slot_bytes_remaining(const ChunkSlot *slot) {
+    if (slot->chunk_expected == 0U) {
+        return UINT64_MAX;
+    }
+    return slot->chunk_received >= slot->chunk_expected
+                   ? 0U
+                   : slot->chunk_expected - slot->chunk_received;
+}
+
+/* Writes received body bytes for a segment slot, clamping to the slot's range so
+ * a misbehaving server cannot overflow into a neighbouring segment. Any bytes
+ * past the range boundary are intentionally dropped. Returns false on I/O error. */
+static bool slot_write_body(DownloadJob *job, ChunkSlot *slot, const void *data, size_t len) {
+    const uint64_t remaining = slot_bytes_remaining(slot);
+    if (remaining != UINT64_MAX && (uint64_t)len > remaining) {
+        len = (size_t)remaining;
+    }
+    if (len == 0U) {
+        return true;
+    }
+
+    if (!write_at_offset(job, data, len, slot->chunk_write_offset + slot->chunk_received)) {
+        return false;
+    }
+
+    slot->chunk_received += len;
+    touch_slot_activity(slot);
+    return true;
+}
+
 static ChunkSlot *chunk_slot_acquire(DownloadJob *job, const uint64_t range_start,
                                      const uint64_t range_end) {
     if (job == NULL || job->slots == NULL) {
@@ -856,6 +940,7 @@ static ChunkSlot *chunk_slot_acquire(DownloadJob *job, const uint64_t range_star
             slot->in_use = true;
             slot->range_start = range_start;
             slot->range_end = range_end;
+            slot->last_activity_ms = mg_millis();
             return slot;
         }
     }
@@ -1078,6 +1163,7 @@ static void send_request_for_slot(DownloadJob *job, struct mg_connection *c, Chu
     c->data[0] = 1;
     if (slot != NULL) {
         slot->request_sent = true;
+        touch_slot_activity(slot);
     } else {
         job->request_sent = true;
     }
@@ -1141,11 +1227,7 @@ static bool write_at_offset(DownloadJob *job, const void *data, const size_t len
         }
     }
 
-#if defined(_WIN32)
-    if (_fseeki64(job->fp, (__int64)offset, SEEK_SET) != 0) {
-#else
-    if (fseeko(job->fp, (off_t)offset, SEEK_SET) != 0) {
-#endif
+    if (platform_seek(job->fp, offset) != 0) {
         if (job->mutex != NULL) {
             avar_mutex_unlock(job->mutex);
         }
@@ -1175,12 +1257,7 @@ static void sync_temp_file(DownloadJob *job) {
         return;
     }
 
-    fflush(job->fp);
-#if defined(_WIN32)
-    _commit(_fileno(job->fp));
-#else
-    fsync(fileno(job->fp));
-#endif
+    platform_fsync(job->fp);
 }
 
 static bool append_stream(DownloadJob *job, const void *data, const size_t len) {
@@ -1255,6 +1332,7 @@ static void begin_chunk_body(DownloadJob *job, ChunkSlot *slot, struct mg_connec
     if (slot != NULL) {
         slot->chunk_write_offset = write_offset;
         slot->chunk_received = 0;
+        touch_slot_activity(slot);
     } else {
         job->chunk_write_offset = write_offset;
         job->chunk_received = 0;
@@ -1262,13 +1340,14 @@ static void begin_chunk_body(DownloadJob *job, ChunkSlot *slot, struct mg_connec
 
     const size_t to_write = buffered_http_body(c, hm);
     if (to_write > 0) {
-        if (!write_at_offset(job, hm->body.buf, to_write, write_offset)) {
+        const bool ok = slot != NULL
+                                ? slot_write_body(job, slot, hm->body.buf, to_write)
+                                : write_at_offset(job, hm->body.buf, to_write, write_offset);
+        if (!ok) {
             c->is_draining = 1;
             return;
         }
-        if (slot != NULL) {
-            slot->chunk_received += to_write;
-        } else {
+        if (slot == NULL) {
             job->chunk_received += to_write;
         }
     }
@@ -1291,7 +1370,10 @@ static bool complete_chunk_slot(DownloadJob *job, ChunkSlot *slot, struct mg_con
     flush_recv_body(job, slot, c);
 
     if (slot->chunk_expected > 0 && slot->chunk_received < slot->chunk_expected) {
-        set_error(job, "Incomplete range %llu-%llu (%llu / %llu bytes)",
+        /* The connection dropped mid-segment. Leave the range unmarked so the
+         * scheduler retries just this segment; the caller decides whether the
+         * per-download retry budget has been exhausted. */
+        LOG_DEBUG("Incomplete segment %llu-%llu (%llu / %llu bytes), will retry",
                   (unsigned long long)slot->range_start, (unsigned long long)slot->range_end,
                   (unsigned long long)slot->chunk_received,
                   (unsigned long long)slot->chunk_expected);
@@ -1468,11 +1550,9 @@ static void flush_recv_body(DownloadJob *job, ChunkSlot *slot, struct mg_connect
     }
 
     if (slot != NULL && slot->streaming) {
-        const size_t len = c->recv.len;
-        if (!write_at_offset(job, c->recv.buf, len, slot->chunk_write_offset + slot->chunk_received)) {
+        if (!slot_write_body(job, slot, c->recv.buf, c->recv.len)) {
             return;
         }
-        slot->chunk_received += len;
         c->recv.len = 0;
         return;
     }
@@ -1515,8 +1595,32 @@ static bool try_parse_pending_response(DownloadJob *job, ChunkSlot *slot, struct
     return true;
 }
 
+/* Records a recoverable segment failure. Reschedules the pending segments when
+ * the retry budget still allows it, otherwise fails the whole download. */
+static void note_segment_failure(DownloadJob *job) {
+    if (job == NULL || job->state == NULL) {
+        return;
+    }
+
+    job->segment_error_count++;
+    const size_t budget = download_state_segment_count(job->state) * DL_SEGMENT_MAX_RETRY_FACTOR;
+    if (job->segment_error_count > budget) {
+        set_error(job, "Too many segment connection errors");
+        (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+    } else {
+        job->schedule_deferred = true;
+    }
+}
+
 static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c) {
     if (job == NULL || job->done || job->failed) {
+        dl_conn_ctx_free(c);
+        return;
+    }
+
+    /* The slot was already released (e.g. siblings drained when falling back from
+     * segmented to streaming mode). Nothing left to do for this connection. */
+    if (slot != NULL && (!slot->in_use || slot->conn != c)) {
         dl_conn_ctx_free(c);
         return;
     }
@@ -1549,7 +1653,7 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
         if (slot != NULL) {
             if (!complete_chunk_slot(job, slot, c)) {
                 chunk_slot_release(job, slot);
-                job->schedule_deferred = true;
+                note_segment_failure(job);
                 dl_conn_ctx_free(c);
                 return;
             }
@@ -1621,8 +1725,10 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
         }
         if (download_state_all_chunks_done(job->state)) {
             (void)finalize_download(job);
-        } else if (count_active_slots(job) == 0) {
-            job->schedule_deferred = true;
+        } else if (job->segment_mode) {
+            /* A segment connection dropped before delivering any data; retry it
+             * (subject to the per-download budget) rather than failing. */
+            note_segment_failure(job);
         } else {
             job->schedule_deferred = true;
         }
@@ -1680,7 +1786,7 @@ static void schedule_pending_chunks(DownloadJob *job) {
         struct mg_connection *c = NULL;
         if (!dl_connect(job, slot, &c)) {
             chunk_slot_release(job, slot);
-            return;
+            continue;
         }
     }
 }
@@ -1761,6 +1867,14 @@ static bool handle_redirect(DownloadJob *job, struct mg_connection *c,
 
 static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c,
                                     struct mg_http_message *hm) {
+    /* The slot was released/drained (e.g. another segment already triggered the
+     * fallback to streaming). Drain this stale connection instead of letting it
+     * drive a second, conflicting download. */
+    if (slot != NULL && (!slot->in_use || slot->conn != c)) {
+        request_close(job, c, false);
+        return;
+    }
+
     if (slot != NULL) {
         slot->headers_received = true;
     } else {
@@ -1889,9 +2003,17 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             LOG_ERROR("Connect timeout, jobId: %s", job->item_id);
         }
 
-        if (!job->failed && mg_millis() - job->last_activity_ms > DL_IDLE_TIMEOUT_MS) {
-            mg_error(c, "Download stalled");
-            LOG_ERROR("Download stalled, jobId: %s", job->item_id);
+        if (!job->failed) {
+            const uint64_t now = mg_millis();
+            if (job->segment_mode && slot != NULL && slot->in_use && slot->request_sent) {
+                if (now - slot->last_activity_ms > DL_IDLE_TIMEOUT_MS) {
+                    mg_error(c, "Segment stalled");
+                    LOG_ERROR("Segment stalled, jobId: %s", job->item_id);
+                }
+            } else if (!job->segment_mode && now - job->last_activity_ms > DL_IDLE_TIMEOUT_MS) {
+                mg_error(c, "Download stalled");
+                LOG_ERROR("Download stalled, jobId: %s", job->item_id);
+            }
         }
     }
 
@@ -1975,13 +2097,10 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         const bool streaming = slot != NULL ? slot->streaming : job->streaming;
         if (streaming && c->recv.len > 0) {
             if (slot != NULL) {
-                const size_t len = c->recv.len;
-                if (!write_at_offset(job, c->recv.buf, len,
-                                     slot->chunk_write_offset + slot->chunk_received)) {
+                if (!slot_write_body(job, slot, c->recv.buf, c->recv.len)) {
                     request_close(job, c, false);
                     return;
                 }
-                slot->chunk_received += len;
             } else if (job->step == DL_STEP_CHUNK) {
                 const size_t len = c->recv.len;
                 if (!write_at_offset(job, c->recv.buf, len,
@@ -2012,15 +2131,11 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             LOG_DEBUG("Connection error on %s: %s", job->current_url != NULL ? job->current_url : job->url,
                       message != NULL && message[0] != '\0' ? message : "(none)");
             if (slot != NULL && job->segment_mode) {
-                chunk_slot_release(job, slot);
-                job->segment_error_count++;
-                if (job->segment_error_count
-                    > download_state_segment_count(job->state) * 4U) {
-                    set_error(job, "Too many segment connection errors");
-                    (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
-                } else {
-                    job->schedule_deferred = true;
-                }
+                /* The matching MG_EV_CLOSE drives the retry/budget bookkeeping so
+                 * a single failure is not counted twice. */
+                LOG_DEBUG("Segment %llu-%llu connection error",
+                          (unsigned long long)slot->range_start,
+                          (unsigned long long)slot->range_end);
             } else {
                 if (message != NULL && message[0] != '\0') {
                     set_error(job, "%s", message);
@@ -2334,10 +2449,7 @@ static void *background_download_thread(void *arg) {
     (void)run_transient_download(args->url, args->queue, args->name);
     atomic_fetch_sub(&g_active_downloads, 1U);
 
-    free(args->url);
-    free(args->queue);
-    free(args->name);
-    free(args);
+    background_args_free(args);
 
 #if defined(_WIN32)
     return 0;
@@ -2365,10 +2477,7 @@ int download_start_background(const char *url, const char *queue, const char *na
     args->name = name != NULL ? strdup(name) : NULL;
     if (args->url == NULL || (queue != NULL && args->queue == NULL) ||
         (name != NULL && args->name == NULL)) {
-        free(args->url);
-        free(args->queue);
-        free(args->name);
-        free(args);
+        background_args_free(args);
         return EXIT_FAILURE;
     }
 
@@ -2387,20 +2496,14 @@ int download_start_background(const char *url, const char *queue, const char *na
 #if defined(_WIN32)
     const uintptr_t handle = _beginthreadex(NULL, 0, background_download_thread, args, 0, NULL);
     if (handle == 0U) {
-        free(args->url);
-        free(args->queue);
-        free(args->name);
-        free(args);
+        background_args_free(args);
         return EXIT_FAILURE;
     }
     CloseHandle((HANDLE)handle);
 #else
     pthread_t thread;
     if (pthread_create(&thread, NULL, background_download_thread, args) != 0) {
-        free(args->url);
-        free(args->queue);
-        free(args->name);
-        free(args);
+        background_args_free(args);
         return EXIT_FAILURE;
     }
     pthread_detach(thread);
