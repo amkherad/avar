@@ -2,21 +2,21 @@
 
 Queues organize downloads and control scheduling.
 
-## Queue list
+## Queue list (dashboard sidebar)
 
 The sidebar lists all queues from the daemon plus a **Default** entry for downloads without an assigned queue.
 
-Each row shows the queue name, status (running or stopped), and download count.
+Each row shows the queue name, status (running or stopped), and download count. Select a queue to filter the download list.
 
-## Queue actions
+From the sidebar you can **Start** or **Stop** a queue. Use **Manage** to open the full queue management page.
 
-- **Start** — begin processing items in the queue.
-- **Stop** — pause the queue scheduler.
+## Manage queues page
+
+The management page provides full queue control:
+
+- **Add queue** — create a new queue with name and optional description.
+- **Start / Stop** — control queue scheduling.
 - **Delete** — remove the queue (downloads are detached, not deleted).
-
-## Creating a queue
-
-Click **Add queue**, enter a name and optional description, then save.
 
 ## Default queue
 

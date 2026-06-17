@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/Card";
 
 import { Button } from "@/components/ui/Button";
 
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+
 import { Spinner } from "@/components/ui/Spinner";
 
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
@@ -370,37 +372,37 @@ function DownloadPanel() {
 
               {status === "loading" && queueDownloads.length === 0 ? <Spinner /> : null}
 
-              {status !== "loading" && filteredDownloads.length === 0 ? (
-
-                <p className="avar-empty">
-
-                  {searchQuery ? t("download.searchEmpty") : t("download.empty")}
-
-                </p>
-
-              ) : null}
-
-
-
               {downloadViewMode === "grid" ? (
 
-                filteredDownloads.map((item) => (
+                status !== "loading" && filteredDownloads.length === 0 ? (
 
-                  <DownloadRow
+                  <p className="avar-empty">
 
-                    key={item.id || item.filename}
+                    {searchQuery ? t("download.searchEmpty") : t("download.empty")}
 
-                    download={item}
+                  </p>
 
-                    selected={selectedDownloadIds.includes(item.id)}
+                ) : (
 
-                    onSelect={(event) => handleSelect(item.id, event)}
+                  filteredDownloads.map((item) => (
 
-                    onOpen={() => handleOpen(item.id)}
+                    <DownloadRow
 
-                  />
+                      key={item.id || item.filename}
 
-                ))
+                      download={item}
+
+                      selected={selectedDownloadIds.includes(item.id)}
+
+                      onSelect={(event) => handleSelect(item.id, event)}
+
+                      onOpen={() => handleOpen(item.id)}
+
+                    />
+
+                  ))
+
+                )
 
               ) : (
 
@@ -409,6 +411,14 @@ function DownloadPanel() {
                   downloads={filteredDownloads}
 
                   selectedIds={selectedDownloadIds}
+
+                  loading={status === "loading" && queueDownloads.length === 0}
+
+                  emptyMessage={
+
+                    searchQuery ? t("download.searchEmpty") : t("download.empty")
+
+                  }
 
                   onSelect={(id, event) => handleSelect(id, event)}
 
@@ -441,8 +451,6 @@ function DownloadPanel() {
               min={220}
 
               max={560}
-
-              invert
 
               label={t("layout.resizeDetailPanel")}
 
@@ -532,7 +540,11 @@ export function DashboardPage() {
 
 
 
-      <DownloadPanel />
+      <ErrorBoundary name={t("download.title")} resetLabel={t("common.tryAgain")}>
+
+        <DownloadPanel />
+
+      </ErrorBoundary>
 
     </>
 

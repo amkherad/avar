@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { QueueList } from "@/components/queue/QueueList";
 import { CreateQueueModal } from "@/components/queue/CreateQueueModal";
 import { FontAwesomeIcon } from "@/icons";
-import { faPlus } from "@fortawesome/free-solid-svg-icons";
+import { faPlus, faSliders } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { createDefaultQueueInfo, isDefaultQueue, withDefaultQueue } from "@/queue/defaultQueue";
@@ -16,7 +16,14 @@ import {
   useDataStore,
 } from "@/stores/dataStore";
 
-export function QueuePanel() {
+export type QueuePanelMode = "select" | "manage";
+
+export interface QueuePanelProps {
+  mode?: QueuePanelMode;
+  onManageQueues?: () => void;
+}
+
+export function QueuePanel({ mode = "select", onManageQueues }: QueuePanelProps) {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
   const queues = useDataStore((s) => s.queues);
@@ -36,6 +43,8 @@ export function QueuePanel() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const showDelete = mode === "manage";
+
   async function runQueueAction(id: string, action: () => Promise<void>) {
     if (!client || isDefaultQueue(id)) {
       return;
@@ -47,7 +56,9 @@ export function QueuePanel() {
       appLogger.gui.info("Queue action completed", id);
       await useDataStore.getState().refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("common.error"));
+      const message = err instanceof Error ? err.message : t("common.error");
+      setError(message);
+      appLogger.gui.error("Queue action failed", message);
     } finally {
       setBusyId(null);
     }
@@ -57,10 +68,18 @@ export function QueuePanel() {
     <>
       <div className="avar-card__header" style={{ padding: 0, border: "none", marginBottom: "0.75rem" }}>
         <h3 className="avar-card__title">{t("queue.title")}</h3>
-        <Button size="sm" onClick={() => setModalOpen(true)}>
-          <FontAwesomeIcon icon={faPlus} />
-          {t("queue.add")}
-        </Button>
+        <div className="avar-queue-panel__actions">
+          {mode === "select" && onManageQueues ? (
+            <Button size="sm" variant="ghost" onClick={onManageQueues}>
+              <FontAwesomeIcon icon={faSliders} />
+              {t("queue.manage")}
+            </Button>
+          ) : null}
+          <Button size="sm" onClick={() => setModalOpen(true)}>
+            <FontAwesomeIcon icon={faPlus} />
+            {t("queue.add")}
+          </Button>
+        </div>
       </div>
 
       {error ? <p className="avar-field__error">{error}</p> : null}
@@ -70,6 +89,7 @@ export function QueuePanel() {
         queues={displayQueues}
         selectedId={effectiveQueueId}
         downloadCounts={downloadCounts}
+        showDelete={showDelete}
         onSelect={setSelectedQueueId}
         onStart={(id) => void runQueueAction(id, () => client!.startQueue(id))}
         onStop={(id) => void runQueueAction(id, () => client!.stopQueue(id))}

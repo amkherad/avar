@@ -6,8 +6,9 @@ Welcome to **Avar**, a download manager with a web and desktop interface. The GU
 
 | Area | Location | Purpose |
 |------|----------|---------|
-| **Header** | Top bar | App branding, theme toggle, Help, and Settings |
-| **Sidebar** | Left (main page) | Queue list and daemon session selector |
+| **Header** | Top bar | App branding, back navigation, theme, Help, and Settings |
+| **Sidebar** | Left (all pages) | Queues, help topics, or settings categories |
+| **Session** | Bottom of sidebar | Active daemon session selector |
 | **Downloads** | Center | Search, add, select, and control downloads |
 | **Detail panel** | Right (optional) | Selected download metadata and actions |
 | **Footer** | Bottom | Server health stats, console and detail panel toggles |
@@ -15,9 +16,11 @@ Welcome to **Avar**, a download manager with a web and desktop interface. The GU
 
 ## Navigation
 
-- Click **Settings** (gear icon) in the header to open application settings. The main workspace is replaced entirely.
-- Click **Help** (question icon) to open in-app documentation.
+- Use the **back** arrow in the header to return to the dashboard from other pages.
+- Click **Settings** (gear icon) to open application settings.
+- Click **Help** (question icon) to open in-app documentation with Markdown tables and diagrams.
 - Press **Ctrl+1** to return to the main dashboard from anywhere.
+- Use **Manage** in the queue sidebar to open the queue management page.
 
 ## Getting started
 

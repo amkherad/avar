@@ -75,7 +75,7 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
     const { client, connection: prevConnection } = get();
     if (!client) {
       if (prevConnection !== "disconnected") {
-        appLogger.gui.warn("No client — disconnected");
+        appLogger.gui.error("Cannot connect to daemon — no active session");
         set({ connection: "disconnected" });
       }
       return false;
@@ -89,7 +89,11 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
     const ok = await pingWithTimeout(client);
     const nextConnection = ok ? "connected" : "disconnected";
     if (nextConnection !== get().connection) {
-      appLogger.gui.info(ok ? "Daemon reachable" : "Daemon unreachable");
+      if (ok) {
+        appLogger.gui.info("Daemon reachable");
+      } else {
+        appLogger.gui.error("Cannot connect to daemon");
+      }
       set({ connection: nextConnection });
     }
     return ok;

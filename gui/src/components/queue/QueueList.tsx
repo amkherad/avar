@@ -5,11 +5,13 @@ import { FontAwesomeIcon } from "@/icons";
 import { faPlay, faStop, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 
 export interface QueueListProps {
   queues: QueueInfo[];
   selectedId: string | null;
   downloadCounts: Record<string, number>;
+  showDelete?: boolean;
   onSelect: (id: string) => void;
   onStart: (id: string) => void;
   onStop: (id: string) => void;
@@ -21,6 +23,7 @@ export function QueueList({
   queues,
   selectedId,
   downloadCounts,
+  showDelete = false,
   onSelect,
   onStart,
   onStop,
@@ -37,6 +40,7 @@ export function QueueList({
     <ul className="avar-list">
       {queues.map((queue) => {
         const busy = busyId === queue.id;
+        const meta = queue.description ?? queue.id;
         return (
           <li key={queue.id}>
             <div
@@ -48,10 +52,8 @@ export function QueueList({
                 className="avar-list__item-select"
                 onClick={() => onSelect(queue.id)}
               >
-                <span className="avar-list__title">{queue.name}</span>
-                <span className="avar-list__meta">
-                  {queue.description ?? queue.id}
-                </span>
+                <TruncateWithTooltip text={queue.name} className="avar-list__title" />
+                <TruncateWithTooltip text={meta} className="avar-list__meta" />
                 <span style={{ display: "flex", gap: "0.35rem", marginTop: "0.25rem" }}>
                   {!queue.readonly ? (
                     <Badge tone={queue.running ? "success" : "default"}>
@@ -64,38 +66,40 @@ export function QueueList({
                 </span>
               </button>
               {!queue.readonly ? (
-              <div className="avar-queue-actions">
-                {queue.running ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    loading={busy}
-                    onClick={() => onStop(queue.id)}
-                  >
-                    <FontAwesomeIcon icon={faStop} />
-                    {t("queue.stop")}
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    loading={busy}
-                    onClick={() => onStart(queue.id)}
-                  >
-                    <FontAwesomeIcon icon={faPlay} />
-                    {t("queue.start")}
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  loading={busy}
-                  onClick={() => onDelete(queue.id)}
-                >
-                  <FontAwesomeIcon icon={faTrash} />
-                  {t("queue.delete")}
-                </Button>
-              </div>
+                <div className="avar-queue-actions">
+                  {queue.running ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={busy}
+                      onClick={() => onStop(queue.id)}
+                    >
+                      <FontAwesomeIcon icon={faStop} />
+                      {t("queue.stop")}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={busy}
+                      onClick={() => onStart(queue.id)}
+                    >
+                      <FontAwesomeIcon icon={faPlay} />
+                      {t("queue.start")}
+                    </Button>
+                  )}
+                  {showDelete ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={busy}
+                      onClick={() => onDelete(queue.id)}
+                    >
+                      <FontAwesomeIcon icon={faTrash} />
+                      {t("queue.delete")}
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
             </div>
           </li>

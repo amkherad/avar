@@ -27,12 +27,14 @@ export interface ConsoleSettings {
 interface ConsoleState {
   open: boolean;
   entries: LogEntry[];
+  hasUnseenErrors: boolean;
   settings: ConsoleSettings;
   setOpen: (open: boolean) => void;
   toggleOpen: () => void;
   append: (entry: Omit<LogEntry, "id">) => void;
   appendDaemonLines: (text: string) => void;
   clear: () => void;
+  markErrorsSeen: () => void;
   updateSettings: (patch: Partial<ConsoleSettings>) => void;
 }
 
@@ -89,6 +91,13 @@ function pruneEntries(
   });
 }
 
+function entryVisible(entry: LogEntry, settings: ConsoleSettings): boolean {
+  if (entry.source === "gui") {
+    return settings.showGuiLogs && logLevelMeetsMin(entry.level, settings.guiMinLevel);
+  }
+  return settings.showDaemonLogs && logLevelMeetsMin(entry.level, settings.daemonMinLevel);
+}
+
 const defaultSettings: ConsoleSettings = {
   maxEntries: 500,
   autoScroll: true,
@@ -104,52 +113,49 @@ export const useConsoleStore = create<ConsoleState>()(
     (set, get) => ({
       open: false,
       entries: [],
+      hasUnseenErrors: false,
       settings: defaultSettings,
 
       setOpen: (open) => {
-        if (!open) {
-          set({ open: false, entries: [] });
+        if (open) {
+          set({ open: true, hasUnseenErrors: false });
           return;
         }
-        set({ open: true });
+        set({ open: false });
       },
 
       toggleOpen: () => {
         const { open } = get();
         if (open) {
-          set({ open: false, entries: [] });
+          set({ open: false });
         } else {
-          set({ open: true });
+          set({ open: true, hasUnseenErrors: false });
         }
       },
 
+      markErrorsSeen: () => set({ hasUnseenErrors: false }),
+
       append: (entry) => {
         const { open, settings } = get();
-        if (!open) {
-          return;
-        }
-
-        const minLevel = entry.source === "gui" ? settings.guiMinLevel : settings.daemonMinLevel;
-        const show =
-          entry.source === "gui" ? settings.showGuiLogs : settings.showDaemonLogs;
-        if (!show || !logLevelMeetsMin(entry.level, minLevel)) {
-          return;
-        }
-
         const id = nextEntryId();
+        const fullEntry = { ...entry, id };
+
         set((state) => {
           const max = state.settings.maxEntries;
-          const next = [...state.entries, { ...entry, id }];
-          if (next.length > max) {
-            return { entries: next.slice(next.length - max) };
-          }
-          return { entries: next };
+          const next = [...state.entries, fullEntry];
+          const entries = next.length > max ? next.slice(next.length - max) : next;
+          const visible = entryVisible(fullEntry, settings);
+          const hasUnseenErrors =
+            !open && visible && entry.level === "error"
+              ? true
+              : state.hasUnseenErrors;
+          return { entries, hasUnseenErrors };
         });
       },
 
       appendDaemonLines: (text) => {
         const { open, settings } = get();
-        if (!open || !settings.showDaemonLogs) {
+        if (!settings.showDaemonLogs) {
           return;
         }
 
@@ -180,10 +186,10 @@ export const useConsoleStore = create<ConsoleState>()(
         set((state) => {
           const max = state.settings.maxEntries;
           const next = [...state.entries, ...additions];
-          if (next.length > max) {
-            return { entries: next.slice(next.length - max) };
-          }
-          return { entries: next };
+          const entries = next.length > max ? next.slice(next.length - max) : next;
+          const hasError = additions.some((item) => item.level === "error");
+          const hasUnseenErrors = !open && hasError ? true : state.hasUnseenErrors;
+          return { entries, hasUnseenErrors };
         });
       },
 

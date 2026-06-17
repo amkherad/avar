@@ -7,6 +7,7 @@
     "dashboard": "Dashboard",
     "settings": "Settings",
     "help": "Help",
+    "back": "Back to dashboard",
     "settingsAria": "Open settings",
     "helpAria": "Open help",
     "themeLight": "Switch to light theme",
@@ -39,6 +40,9 @@
     "stop": "Stop",
     "delete": "Delete",
     "deleteConfirm": "Remove this queue? Downloads will be detached.",
+    "manage": "Manage",
+    "manageTitle": "Manage queues",
+    "manageHint": "Create, start, stop, or remove download queues.",
     "defaultName": "Default",
     "defaultDescription": "Downloads without an assigned queue",
     "downloads": "{{count}} download(s)"
@@ -166,6 +170,7 @@
     "retry": "Retry",
     "loading": "Loading…",
     "error": "Something went wrong",
+    "tryAgain": "Try again",
     "staleData": "Showing last known data — not connected to the daemon",
     "close": "Close"
   },

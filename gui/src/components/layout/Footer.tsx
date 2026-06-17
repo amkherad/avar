@@ -25,6 +25,7 @@ export function Footer() {
   const { t } = useTranslation();
   const health = useDataStore((s) => s.health);
   const consoleOpen = useConsoleStore((s) => s.open);
+  const hasUnseenErrors = useConsoleStore((s) => s.hasUnseenErrors);
   const toggleConsole = useConsoleStore((s) => s.toggleOpen);
   const detailPanelOpen = useLayoutStore((s) => s.detailPanelOpen);
   const toggleDetailPanel = useLayoutStore((s) => s.toggleDetailPanel);
@@ -69,7 +70,9 @@ export function Footer() {
         </Button>
         <Button
           size="sm"
-          variant={consoleOpen ? "secondary" : "ghost"}
+          variant={
+            consoleOpen ? "secondary" : hasUnseenErrors ? "danger" : "ghost"
+          }
           className="avar-footer__console-toggle"
           aria-label={t("console.toggle")}
           aria-pressed={consoleOpen}

@@ -4,9 +4,11 @@ import type { AppPage } from "@/components/layout/Sidebar";
 import { ThemeProvider } from "@/theme/ThemeContext";
 import { PopupHost } from "@/components/ui/PopupHost";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { SettingsPage } from "@/pages/SettingsPage";
+import { SettingsPage, type SettingsCategory } from "@/pages/SettingsPage";
 import { HelpPage } from "@/pages/HelpPage";
+import { QueuesPage } from "@/pages/QueuesPage";
 import { DownloadDetailPopupPage } from "@/pages/DownloadDetailPopupPage";
+import { HELP_TOPICS } from "@/lib/helpDocs";
 import { useConfigStore } from "@/stores/configStore";
 import { useLayoutStore } from "@/stores/layoutStore";
 import { useConsoleStore } from "@/stores/consoleStore";
@@ -20,6 +22,8 @@ import i18n, { isRtlLocale } from "@/i18n";
 
 function AppContent() {
   const [page, setPage] = useState<AppPage>("dashboard");
+  const [helpTopicId, setHelpTopicId] = useState(HELP_TOPICS[0].id);
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
   const locale = useConfigStore((s) => s.config.locale);
   const toggleConsole = useConsoleStore((s) => s.toggleOpen);
   const toggleDetailPanel = useLayoutStore((s) => s.toggleDetailPanel);
@@ -50,9 +54,11 @@ function AppContent() {
   function renderPage() {
     switch (page) {
       case "settings":
-        return <SettingsPage />;
+        return <SettingsPage category={settingsCategory} />;
       case "help":
-        return <HelpPage />;
+        return <HelpPage topicId={helpTopicId} />;
+      case "queues":
+        return <QueuesPage />;
       default:
         return <DashboardPage />;
     }
@@ -60,7 +66,14 @@ function AppContent() {
 
   return (
     <>
-      <AppShell page={page} onNavigate={handleNavigate}>
+      <AppShell
+        page={page}
+        onNavigate={handleNavigate}
+        helpTopicId={helpTopicId}
+        onHelpTopicChange={setHelpTopicId}
+        settingsCategory={settingsCategory}
+        onSettingsCategoryChange={setSettingsCategory}
+      >
         {renderPage()}
       </AppShell>
       <PopupHost />
