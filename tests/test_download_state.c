@@ -131,6 +131,27 @@ AVAR_TEST(download_state_init_chunks_clips_stale_ranges) {
     download_state_free(state);
 }
 
+AVAR_TEST(download_state_proxy_roundtrip) {
+    setup_temp_state_path();
+
+    DownloadState *state = download_state_create("https://example.com/a.bin", "a.bin", "/tmp/a.bin",
+                                                 "/dl/a.bin", 1000U, DL_CHUNK_SIZE);
+    AVAR_ASSERT_NOT_NULL(state);
+    state->proxy = strdup("http://proxy:8080");
+    AVAR_ASSERT_NOT_NULL(state->proxy);
+
+    AVAR_ASSERT_EQ(download_state_save(state, g_guard.stats_path), 0);
+
+    DownloadState *loaded = download_state_load(g_guard.stats_path);
+    AVAR_ASSERT_NOT_NULL(loaded);
+    AVAR_ASSERT_NOT_NULL(loaded->proxy);
+    AVAR_ASSERT_STR_EQ(loaded->proxy, "http://proxy:8080");
+
+    download_state_free(state);
+    download_state_free(loaded);
+    remove(g_guard.stats_path);
+}
+
 AVAR_TEST_MAIN(
         run_download_state_save_load_roundtrip();
         run_download_state_bytes_done_empty();
@@ -138,4 +159,5 @@ AVAR_TEST_MAIN(
         run_download_state_merges_out_of_order_and_bridging_ranges();
         run_download_state_overlapping_ranges_counted_once();
         run_download_state_clamps_range_to_total_size();
-        run_download_state_init_chunks_clips_stale_ranges();)
+        run_download_state_init_chunks_clips_stale_ranges();
+        run_download_state_proxy_roundtrip();)

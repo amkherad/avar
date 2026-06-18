@@ -75,4 +75,4 @@ Use **Copy curl** in the detail panel to generate an equivalent `curl` command a
 
 Small copy buttons beside **filename**, **URL**, and **ID** copy those values individually.
 
-The detail panel also shows **Retries** (errors vs. max retry limit) and whether the filename was **set by you** or **inferred automatically** from the download.
+The detail panel also shows **Retries** (errors vs. max retry limit), an **Error** message when a download fails, and whether the filename was **set by you** or **inferred automatically** from the download.

@@ -52,6 +52,6 @@ int daemon_session_delegate_argv(int argc, char **argv);
  * falls back to a local attached download when the daemon is unavailable.
  */
 int daemon_session_download_url(const char *url, const char *queue, const char *name,
-                                bool attached);
+                                const char *proxy_url, bool attached);
 
 #endif

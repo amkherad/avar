@@ -2,6 +2,7 @@ import type { DownloadInfo } from "@/api/types";
 import { usePopupStore } from "@/stores/popupStore";
 
 const POPUP_STORAGE_PREFIX = "avar.popup.download.";
+const CONFIRM_STORAGE_PREFIX = "avar.popup.confirm.";
 
 export interface PopupWindowOptions {
   width?: number;
@@ -55,12 +56,39 @@ export function readStashedDownload(id: string): DownloadInfo | null {
   }
 }
 
-export function parsePopupHash(hash: string): { type: "download"; id: string } | null {
-  const match = /^#\/popup\/download\/(.+)$/.exec(hash);
-  if (!match) {
+export function parsePopupHash(
+  hash: string,
+): { type: "download"; id: string } | { type: "confirm"; id: string } | null {
+  const downloadMatch = /^#\/popup\/download\/(.+)$/.exec(hash);
+  if (downloadMatch) {
+    return { type: "download", id: decodeURIComponent(downloadMatch[1]) };
+  }
+  const confirmMatch = /^#\/popup\/confirm\/(.+)$/.exec(hash);
+  if (confirmMatch) {
+    return { type: "confirm", id: decodeURIComponent(confirmMatch[1]) };
+  }
+  return null;
+}
+
+export function stashConfirmForPopup(id: string, options: ConfirmDialogOptions): void {
+  localStorage.setItem(`${CONFIRM_STORAGE_PREFIX}${id}`, JSON.stringify(options));
+}
+
+export function readStashedConfirm(id: string): ConfirmDialogOptions | null {
+  const raw = localStorage.getItem(`${CONFIRM_STORAGE_PREFIX}${id}`);
+  if (!raw) {
     return null;
   }
-  return { type: "download", id: decodeURIComponent(match[1]) };
+  try {
+    return JSON.parse(raw) as ConfirmDialogOptions;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveConfirmInPopup(id: string, result: ConfirmDialogResult): void {
+  localStorage.setItem(`${CONFIRM_STORAGE_PREFIX}${id}.result`, JSON.stringify(result));
+  localStorage.removeItem(`${CONFIRM_STORAGE_PREFIX}${id}`);
 }
 
 /**
@@ -111,10 +139,40 @@ export function openDownloadPopup(
 
 /**
  * Shows a confirmation dialog. Resolves true if confirmed, false if cancelled.
- * - Electron: in-app confirm (PopupHost) — OS confirm is not used for consistency
+ * - Electron: separate BrowserWindow (popup route)
  * - Web: in-app confirm dialog (PopupHost)
  */
 export function showConfirmDialog(options: ConfirmDialogOptions): Promise<ConfirmDialogResult> {
+  if (window.avar?.isElectron) {
+    return new Promise((resolve) => {
+      const id = nextPopupId();
+      const resultKey = `${CONFIRM_STORAGE_PREFIX}${id}.result`;
+      stashConfirmForPopup(id, options);
+
+      const onStorage = (event: StorageEvent) => {
+        if (event.key !== resultKey || !event.newValue) {
+          return;
+        }
+        window.removeEventListener("storage", onStorage);
+        try {
+          resolve(JSON.parse(event.newValue) as ConfirmDialogResult);
+        } catch {
+          resolve({ confirmed: false, checkboxChecked: false });
+        }
+        localStorage.removeItem(resultKey);
+      };
+
+      window.addEventListener("storage", onStorage);
+      const height = options.checkboxLabel ? 280 : 240;
+      void window.avar.openPopup({
+        url: buildPopupUrl(`#/popup/confirm/${encodeURIComponent(id)}`),
+        title: options.title,
+        width: 440,
+        height,
+      });
+    });
+  }
+
   return new Promise((resolve) => {
     const id = nextPopupId();
     usePopupStore.getState().setConfirm({

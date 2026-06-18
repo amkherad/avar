@@ -57,7 +57,7 @@ export function initNotificationWatcher(): () => void {
     if (state.connection === "disconnected" && prevConnection === "connected") {
       notifyConnectionLost();
     }
-    if (state.connection === "connected" && prevConnection !== "connected") {
+    if (state.connection === "connected" && prevConnection === "disconnected") {
       notifyConnectionRestored();
     }
     prevConnection = state.connection;

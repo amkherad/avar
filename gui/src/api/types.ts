@@ -79,6 +79,8 @@ export interface DownloadInfo {
 
   maxRetries?: number | null;
 
+  description?: string;
+
 }
 
 

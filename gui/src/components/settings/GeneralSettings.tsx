@@ -127,6 +127,28 @@ export function GeneralSettings() {
         </div>
       </section>
 
+      <section className="avar-settings-group">
+        <h3 className="avar-settings-group__heading">{t("settings.notifications.title")}</h3>
+        <p className="avar-settings-hint">{t("settings.notifications.hint")}</p>
+        <label className="avar-checkbox-row">
+          <input
+            type="checkbox"
+            checked={config.notificationsEnabled}
+            onChange={(e) => updateConfig({ notificationsEnabled: e.target.checked })}
+          />
+          {t("settings.notifications.enabled")}
+        </label>
+        {isPwaSupported() && !window.avar?.isElectron ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void requestNotificationPermission()}
+          >
+            {t("settings.pwa.enableNotifications")}
+          </Button>
+        ) : null}
+      </section>
+
       {isPwaSupported() ? (
         <section className="avar-settings-group">
           <h3 className="avar-settings-group__heading">{t("settings.pwa.title")}</h3>
@@ -140,13 +162,6 @@ export function GeneralSettings() {
           ) : (
             <p className="avar-settings-hint">{t("settings.pwa.installUnavailable")}</p>
           )}
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void requestNotificationPermission()}
-          >
-            {t("settings.pwa.enableNotifications")}
-          </Button>
         </section>
       ) : null}
 

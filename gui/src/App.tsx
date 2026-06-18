@@ -5,6 +5,7 @@ import { PopupHost } from "@/components/ui/PopupHost";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { HelpPage } from "@/pages/HelpPage";
+import { ConfirmDialogPopupPage } from "@/pages/ConfirmDialogPopupPage";
 import { DownloadDetailPopupPage } from "@/pages/DownloadDetailPopupPage";
 import { useConfigStore } from "@/stores/configStore";
 import { useConsoleStore } from "@/stores/consoleStore";
@@ -125,6 +126,10 @@ function PopupContent() {
 
   if (popupRoute?.type === "download") {
     return <DownloadDetailPopupPage downloadId={popupRoute.id} />;
+  }
+
+  if (popupRoute?.type === "confirm") {
+    return <ConfirmDialogPopupPage confirmId={popupRoute.id} />;
   }
 
   return null;

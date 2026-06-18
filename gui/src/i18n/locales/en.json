@@ -134,6 +134,7 @@
     "toggleDetailPanel": "Toggle detail panel",
     "retries": "Retries",
     "retriesQueueDefault": "queue default",
+    "errorMessage": "Error",
     "filenameSource": "Filename source",
     "filenameInferred": "Inferred automatically",
     "filenameUser": "Set by user"
@@ -204,6 +205,11 @@
       "daemon": "Daemon",
       "browser": "Browser integration",
       "shortcuts": "Shortcuts"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "hint": "Show desktop notifications when downloads change status, queues start or stop, or the daemon connection is lost.",
+      "enabled": "Show notifications"
     },
     "pwa": {
       "title": "Install web app",
@@ -363,6 +369,7 @@
     "port": "Port",
     "username": "Username (optional)",
     "password": "Password (optional)",
+    "noProxy": "Bypass proxy for (NO_PROXY)",
     "types": {
       "http": "HTTP",
       "https": "HTTPS",

@@ -1,4 +1,9 @@
 const DEFAULT_BRIDGE = "http://127.0.0.1:18766";
+const DEFAULT_MEDIA_FILTER = "all";
+const DEFAULT_MEDIA_SORT = "type";
+const DEFAULT_POPUP_WIDTH = 420;
+const DEFAULT_POPUP_HEIGHT = 560;
+
 const api = typeof browser !== "undefined" ? browser : chrome;
 
 const bridgeUrlInput = document.getElementById("bridgeUrl");
@@ -8,11 +13,39 @@ const mediaList = document.getElementById("mediaList");
 const downloadAllBtn = document.getElementById("downloadAll");
 const settingsPanel = document.getElementById("settingsPanel");
 const settingsBtn = document.getElementById("settingsBtn");
+const refreshBtn = document.getElementById("refreshBtn");
+const defaultQueueSelect = document.getElementById("defaultQueue");
+const defaultMediaFilterSelect = document.getElementById("defaultMediaFilter");
+const mediaTypeFilterSelect = document.getElementById("mediaTypeFilter");
+const mediaSortSelect = document.getElementById("mediaSort");
+const queueManagementEl = document.getElementById("queueManagement");
 
 let lastMediaItems = [];
+let knownQueues = [];
+let pageReferer = null;
+let pageTitle = "";
+let bridgeConnected = false;
+let hlsExpandGeneration = 0;
+const probedSizes = new Map();
+const probedFilenames = new Map();
+const probingUrls = new Set();
 
 const DOWNLOAD_ICON =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2Zm7-18-5.5 5.5 1.42 1.42L11 6.17V16h2V6.17l3.08 3.09 1.42-1.42L12 2Z"/></svg>';
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5v2zm7-18v10h3l-4 4-4-4h3V2z"/></svg>';
+
+const COPY_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>';
+
+const MEDIA_TYPE_ICONS = {
+  video:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 2.5v-9l-4 2.5z"/></svg>',
+  audio:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z"/></svg>',
+  image:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>',
+  binary:
+    '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>',
+};
 
 function setStatus(text) {
   statusEl.textContent = text;
@@ -25,93 +58,496 @@ function setBridgeConnected(connected) {
     : "Cannot reach Avar bridge";
 }
 
+function getActiveMediaFilter() {
+  return mediaTypeFilterSelect?.value || DEFAULT_MEDIA_FILTER;
+}
+
+function getActiveMediaSort() {
+  return mediaSortSelect?.value || DEFAULT_MEDIA_SORT;
+}
+
+function displayFilename(item) {
+  if (probedFilenames.has(item.url)) {
+    const probed = probedFilenames.get(item.url);
+    if (probed) {
+      return probed;
+    }
+  }
+  return AvarMedia.itemDisplayFilename(item, pageTitle);
+}
+
+function getFilteredMediaItems(items) {
+  return AvarMedia.filterMediaItems(items, getActiveMediaFilter());
+}
+
+function getVisibleMediaItems(items) {
+  const listed = items.filter((item) => AvarMedia.shouldListMediaItem(item));
+  const filtered = AvarMedia.filterMediaItems(listed, getActiveMediaFilter());
+  return AvarMedia.sortMediaItemsByMode(filtered, getActiveMediaSort(), getItemSize);
+}
+
+function appendStreamBadge(nameEl, item) {
+  if (item.hlsLabel) {
+    const badge = document.createElement("span");
+    badge.className = "media-kind";
+    badge.textContent = item.hlsLabel;
+    nameEl.appendChild(badge);
+    return;
+  }
+  if (item.kind === "hls" || item.kind === "dash") {
+    const badge = document.createElement("span");
+    badge.className = "media-kind";
+    badge.textContent = item.kind;
+    nameEl.appendChild(badge);
+  }
+}
+
+function updateScanStatus(totalCount) {
+  const filter = getActiveMediaFilter();
+  const filtered = AvarMedia.filterMediaItems(lastMediaItems, filter);
+  if (filter === "all" || filtered.length === totalCount) {
+    setStatus(`${totalCount} media URL(s) found.`);
+  } else {
+    setStatus(`${filtered.length} of ${totalCount} media URL(s) shown.`);
+  }
+}
+
+function queueNameForId(queueId) {
+  if (!queueId) {
+    return null;
+  }
+  const queue = knownQueues.find((item) => item.id === queueId);
+  return queue?.name || null;
+}
+
+function applyPopupSize(width, height) {
+  const nextWidth = Math.max(320, Math.min(760, Number(width) || DEFAULT_POPUP_WIDTH));
+  const nextHeight = Math.max(400, Math.min(760, Number(height) || DEFAULT_POPUP_HEIGHT));
+  document.documentElement.style.width = `${nextWidth}px`;
+  document.documentElement.style.height = `${nextHeight}px`;
+}
+
+function installPopupResizePersistence() {
+  let saveTimer = null;
+  const observer = new ResizeObserver((entries) => {
+    const entry = entries[0];
+    if (!entry) {
+      return;
+    }
+    const width = Math.round(entry.contentRect.width);
+    const height = Math.round(entry.contentRect.height);
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+    }
+    saveTimer = setTimeout(() => {
+      void api.storage.local.set({ popupWidth: width, popupHeight: height });
+    }, 200);
+  });
+  observer.observe(document.documentElement);
+}
+
+function populateDefaultQueueOptions(selectedId) {
+  const previous = selectedId ?? defaultQueueSelect.value;
+  defaultQueueSelect.innerHTML = '<option value="">Default queue</option>';
+  for (const queue of knownQueues) {
+    const option = document.createElement("option");
+    option.value = queue.id;
+    option.textContent = queue.name;
+    defaultQueueSelect.appendChild(option);
+  }
+  if (previous && knownQueues.some((queue) => queue.id === previous)) {
+    defaultQueueSelect.value = previous;
+  }
+}
+
+function renderQueueManagement(queues) {
+  queueManagementEl.innerHTML = "";
+  if (!queues.length) {
+    const empty = document.createElement("p");
+    empty.className = "queue-management__empty";
+    empty.textContent = "No queues found.";
+    queueManagementEl.appendChild(empty);
+    return;
+  }
+
+  for (const queue of queues) {
+    const row = document.createElement("div");
+    row.className = "queue-row";
+
+    const name = document.createElement("span");
+    name.className = "queue-row__name";
+    name.textContent = queue.name;
+    name.title = queue.description || queue.name;
+
+    const status = document.createElement("span");
+    status.className = queue.running
+      ? "queue-row__status queue-row__status--running"
+      : "queue-row__status";
+    status.textContent = queue.running ? "Running" : "Stopped";
+
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "queue-row__btn";
+    action.textContent = queue.running ? "Stop" : "Start";
+    action.addEventListener("click", async () => {
+      const wasRunning = queue.running;
+      const type = wasRunning ? "avar-queue-stop" : "avar-queue-start";
+      const response = await api.runtime.sendMessage({ type, queueId: queue.id });
+      if (response?.ok) {
+        await loadQueues();
+        setStatus(wasRunning ? `Stopped queue: ${queue.name}` : `Started queue: ${queue.name}`);
+      } else {
+        setStatus(response?.error || "Queue action failed.");
+      }
+    });
+
+    row.appendChild(name);
+    row.appendChild(status);
+    row.appendChild(action);
+    queueManagementEl.appendChild(row);
+  }
+}
+
+async function loadQueues() {
+  const response = await api.runtime.sendMessage({ type: "avar-list-queues" });
+  if (!response?.ok) {
+    knownQueues = [];
+    renderQueueManagement([]);
+    populateDefaultQueueOptions();
+    return;
+  }
+
+  knownQueues = (response.queues || []).map((queue) => ({
+    id: String(queue.id ?? ""),
+    name: String(queue.name ?? ""),
+    description: queue.description ? String(queue.description) : "",
+    running: Boolean(queue.started ?? queue.running),
+  }));
+  renderQueueManagement(knownQueues);
+  populateDefaultQueueOptions(defaultQueueSelect.value);
+}
+
+function getItemSize(item) {
+  if (typeof item.size === "number" && item.size >= 0) {
+    return item.size;
+  }
+  if (probedSizes.has(item.url)) {
+    return probedSizes.get(item.url);
+  }
+  return undefined;
+}
+
+function shouldProbeItemSize(item) {
+  if (!bridgeConnected) {
+    return false;
+  }
+  if (item.kind === "hls" || item.kind === "dash") {
+    return false;
+  }
+  return getItemSize(item) === undefined;
+}
+
+function updateItemSizeElement(url) {
+  const sizeEl = mediaList.querySelector(`.media-item[data-url="${CSS.escape(url)}"] .media-item__size`);
+  if (!sizeEl) {
+    return;
+  }
+  const item = lastMediaItems.find((entry) => entry.url === url);
+  if (!item) {
+    return;
+  }
+  const size = getItemSize(item);
+  sizeEl.classList.remove("media-item__size--pending");
+  if (size === undefined) {
+    sizeEl.textContent = "…";
+    sizeEl.classList.add("media-item__size--pending");
+    sizeEl.title = "Checking file size";
+    return;
+  }
+  if (size === null) {
+    sizeEl.textContent = "—";
+    sizeEl.title = "Size unknown";
+    return;
+  }
+  sizeEl.textContent = AvarMedia.formatFileSize(size);
+  sizeEl.title = "File size";
+}
+
+async function probeItemSize(item) {
+  if (!shouldProbeItemSize(item) || probingUrls.has(item.url)) {
+    return;
+  }
+
+  probingUrls.add(item.url);
+  updateItemSizeElement(item.url);
+
+  const response = await api.runtime.sendMessage({
+    type: "avar-probe-size",
+    url: item.url,
+    referer: pageReferer,
+  });
+
+  probingUrls.delete(item.url);
+  if (!response?.ok) {
+    probedSizes.set(item.url, null);
+    updateItemSizeElement(item.url);
+    return;
+  }
+
+  const size =
+    typeof response?.size === "number" && response.size >= 0 ? response.size : null;
+  probedSizes.set(item.url, size);
+  if (typeof response?.filename === "string" && response.filename.trim()) {
+    probedFilenames.set(item.url, response.filename.trim());
+  }
+  if (getActiveMediaSort() !== DEFAULT_MEDIA_SORT) {
+    renderMediaList(lastMediaItems);
+    return;
+  }
+  updateItemSizeElement(item.url);
+  updateItemNameElement(item.url);
+}
+
+function queueSizeProbes(items) {
+  for (const item of items) {
+    if (shouldProbeItemSize(item)) {
+      void probeItemSize(item);
+    }
+  }
+}
+
+function createSizeElement(item) {
+  const sizeEl = document.createElement("span");
+  sizeEl.className = "media-item__size";
+  const size = getItemSize(item);
+
+  if (size === undefined && shouldProbeItemSize(item)) {
+    sizeEl.textContent = "…";
+    sizeEl.classList.add("media-item__size--pending");
+    sizeEl.title = "Checking file size";
+  } else if (size === null || size === undefined) {
+    sizeEl.textContent = "—";
+    sizeEl.title = item.kind === "hls" || item.kind === "dash" ? "Stream size unknown" : "Size unknown";
+  } else {
+    sizeEl.textContent = AvarMedia.formatFileSize(size);
+    sizeEl.title = "File size";
+  }
+
+  return sizeEl;
+}
+
+function updateItemNameElement(url) {
+  const nameEl = mediaList.querySelector(`.media-item[data-url="${CSS.escape(url)}"] .media-item__name`);
+  if (!nameEl) {
+    return;
+  }
+  const item = lastMediaItems.find((entry) => entry.url === url);
+  if (!item) {
+    return;
+  }
+  const filename = displayFilename(item);
+  nameEl.textContent = filename;
+  appendStreamBadge(nameEl, item);
+  nameEl.title = filename;
+}
+
 function createDownloadButton(item) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "media-item__download";
   btn.setAttribute("aria-label", "Download");
-  btn.title = "Download";
+  btn.title = bridgeConnected ? "Download" : "Connect to Avar to download";
+  btn.disabled = !bridgeConnected;
   btn.innerHTML = DOWNLOAD_ICON;
   btn.addEventListener("click", async () => {
+    if (!bridgeConnected) {
+      setStatus("Cannot reach Avar bridge.");
+      return;
+    }
+    const queue = queueNameForId(defaultQueueSelect.value);
     const result = await api.runtime.sendMessage({
       type: "avar-add-download",
       url: item.url,
       streamKind: item.kind,
+      queue,
     });
-    const name = AvarMedia.guessFilename(item.url);
+    const name = displayFilename(item);
     setStatus(result?.ok ? `Queued: ${name}` : result?.error || "Failed");
+  });
+  return btn;
+}
+
+function createCopyButton(url) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "media-item__copy icon-btn";
+  btn.setAttribute("aria-label", "Copy link");
+  btn.title = "Copy link";
+  btn.innerHTML = COPY_ICON;
+  btn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setStatus("Link copied.");
+    } catch {
+      setStatus("Could not copy link.");
+    }
   });
   return btn;
 }
 
 function renderMediaList(items) {
   lastMediaItems = items;
+  const visibleItems = getVisibleMediaItems(lastMediaItems);
   mediaList.innerHTML = "";
 
-  for (const item of items) {
+  for (const item of visibleItems) {
     const li = document.createElement("li");
     li.className = "media-item";
+    li.dataset.url = item.url;
+
+    const category = AvarMedia.classifyMediaCategory(item);
+    const typeIcon = document.createElement("span");
+    typeIcon.className = "media-item__type-icon";
+    typeIcon.title = category;
+    typeIcon.innerHTML = MEDIA_TYPE_ICONS[category] || MEDIA_TYPE_ICONS.binary;
+
+    const typeSep = document.createElement("span");
+    typeSep.className = "media-item__sep";
+    typeSep.setAttribute("aria-hidden", "true");
 
     const info = document.createElement("div");
     info.className = "media-item__info";
 
     const name = document.createElement("div");
     name.className = "media-item__name";
-    const filename = AvarMedia.guessFilename(item.url);
+    const filename = displayFilename(item);
     name.textContent = filename;
     name.title = filename;
-    if (item.kind === "hls" || item.kind === "dash") {
-      const badge = document.createElement("span");
-      badge.className = "media-kind";
-      badge.textContent = item.kind;
-      name.appendChild(badge);
-    }
+    appendStreamBadge(name, item);
 
-    const urlLine = document.createElement("div");
+    const metaRow = document.createElement("div");
+    metaRow.className = "media-item__meta";
+    metaRow.appendChild(createSizeElement(item));
+
+    const urlRow = document.createElement("div");
+    urlRow.className = "media-item__url-row";
+    urlRow.appendChild(createCopyButton(item.url));
+
+    const urlLine = document.createElement("span");
     urlLine.className = "media-item__url";
     urlLine.textContent = AvarMedia.formatDisplayUrl(item.url);
     urlLine.title = item.url;
+    urlRow.appendChild(urlLine);
+
+    metaRow.appendChild(urlRow);
 
     info.appendChild(name);
-    info.appendChild(urlLine);
+    info.appendChild(metaRow);
 
     const actions = document.createElement("div");
     actions.className = "media-item__actions";
 
-    const sep = document.createElement("span");
-    sep.className = "media-item__sep";
-    sep.setAttribute("aria-hidden", "true");
+    const actionSep = document.createElement("span");
+    actionSep.className = "media-item__sep";
+    actionSep.setAttribute("aria-hidden", "true");
 
-    actions.appendChild(sep);
+    actions.appendChild(actionSep);
     actions.appendChild(createDownloadButton(item));
 
+    li.appendChild(typeIcon);
+    li.appendChild(typeSep);
     li.appendChild(info);
     li.appendChild(actions);
     mediaList.appendChild(li);
   }
 
-  downloadAllBtn.hidden = items.length === 0;
+  downloadAllBtn.hidden = visibleItems.length === 0;
+  updateScanStatus(lastMediaItems.length);
+  queueSizeProbes(visibleItems);
 }
 
 async function refreshBridgeStatus() {
+  const wasConnected = bridgeConnected;
   const response = await api.runtime.sendMessage({ type: "avar-ping-bridge" });
-  setBridgeConnected(Boolean(response?.ok));
+  bridgeConnected = Boolean(response?.ok);
+  setBridgeConnected(bridgeConnected);
   if (response?.bridgeUrl && bridgeUrlInput.value !== response.bridgeUrl) {
     bridgeUrlInput.value = response.bridgeUrl;
+  }
+  if (wasConnected !== bridgeConnected && lastMediaItems.length > 0) {
+    renderMediaList(lastMediaItems);
+    if (bridgeConnected) {
+      void expandHlsInBackground(lastMediaItems);
+      queueSizeProbes(getVisibleMediaItems(lastMediaItems));
+    }
   }
   return response;
 }
 
 async function loadConfig() {
-  const stored = await api.storage.local.get(["bridgeUrl", "guiUrl", "daemonUrl"]);
-  bridgeUrlInput.value = stored.bridgeUrl || stored.guiUrl || stored.daemonUrl || DEFAULT_BRIDGE;
+  const stored = await api.storage.local.get([
+    "bridgeUrl",
+    "guiUrl",
+    "daemonUrl",
+    "defaultQueueId",
+    "defaultMediaFilter",
+    "mediaSort",
+    "popupWidth",
+    "popupHeight",
+  ]);
+  bridgeUrlInput.value =
+    AvarExtensionProtocol.normalizeBridgeUrl(
+      stored.bridgeUrl || stored.guiUrl || stored.daemonUrl || DEFAULT_BRIDGE,
+    );
+
+  const defaultFilter = stored.defaultMediaFilter || DEFAULT_MEDIA_FILTER;
+  defaultMediaFilterSelect.value = defaultFilter;
+  mediaTypeFilterSelect.value = defaultFilter;
+  mediaSortSelect.value = stored.mediaSort || DEFAULT_MEDIA_SORT;
+
+  applyPopupSize(stored.popupWidth, stored.popupHeight);
+  installPopupResizePersistence();
+
+  if (stored.defaultQueueId) {
+    defaultQueueSelect.value = stored.defaultQueueId;
+  }
+
   await refreshBridgeStatus();
+}
+
+async function expandHlsInBackground(items) {
+  if (!bridgeConnected) {
+    return;
+  }
+
+  const hlsItems = items.filter((item) => item.kind === "hls");
+  if (hlsItems.length === 0) {
+    return;
+  }
+
+  const generation = ++hlsExpandGeneration;
+  const expanded = await api.runtime.sendMessage({
+    type: "avar-expand-hls-items",
+    items,
+    referer: pageReferer,
+  });
+
+  if (generation !== hlsExpandGeneration) {
+    return;
+  }
+
+  if (expanded?.ok && Array.isArray(expanded.items)) {
+    renderMediaList(expanded.items);
+  }
 }
 
 async function scanPage() {
   setStatus("Scanning…");
   mediaList.innerHTML = "";
   downloadAllBtn.hidden = true;
+  pageReferer = null;
+  pageTitle = "";
+  hlsExpandGeneration += 1;
 
   const response = await api.runtime.sendMessage({ type: "avar-list-media" });
   if (!response?.ok) {
@@ -120,44 +556,82 @@ async function scanPage() {
     return;
   }
 
+  pageReferer = response.pageUrl || null;
+  pageTitle = response.pageTitle || "";
   const items = response.items || (response.urls || []).map((url) => ({
     url,
     kind: AvarMedia.classifyStreamKind(url),
   }));
-  setStatus(`${items.length} media URL(s) found.`);
+
   renderMediaList(items);
+
+  const hlsCount = items.filter((item) => item.kind === "hls").length;
+  if (hlsCount > 0 && bridgeConnected) {
+    setStatus(`${items.length} media URL(s) found. Resolving ${hlsCount} HLS stream(s)…`);
+    void expandHlsInBackground(items);
+  }
 }
 
-settingsBtn.addEventListener("click", () => {
+settingsBtn.addEventListener("click", async () => {
   const open = settingsPanel.hasAttribute("hidden");
   if (open) {
     settingsPanel.removeAttribute("hidden");
+    await loadQueues();
   } else {
     settingsPanel.setAttribute("hidden", "");
   }
 });
 
+refreshBtn.addEventListener("click", () => {
+  void scanPage();
+});
+
+mediaTypeFilterSelect.addEventListener("change", () => {
+  renderMediaList(lastMediaItems);
+});
+
+mediaSortSelect.addEventListener("change", () => {
+  void api.storage.local.set({ mediaSort: getActiveMediaSort() });
+  renderMediaList(lastMediaItems);
+});
+
 document.getElementById("save").addEventListener("click", async () => {
-  const bridgeUrl = bridgeUrlInput.value.trim() || DEFAULT_BRIDGE;
+  const bridgeUrl = AvarExtensionProtocol.normalizeBridgeUrl(
+    bridgeUrlInput.value.trim() || DEFAULT_BRIDGE,
+  );
+  bridgeUrlInput.value = bridgeUrl;
+  const defaultMediaFilter = defaultMediaFilterSelect.value || DEFAULT_MEDIA_FILTER;
   await api.runtime.sendMessage({
     type: "avar-set-config",
     bridgeUrl,
+    defaultQueueId: defaultQueueSelect.value,
+    defaultMediaFilter,
   });
+  mediaTypeFilterSelect.value = defaultMediaFilter;
+  renderMediaList(lastMediaItems);
   setStatus("Settings saved.");
   await refreshBridgeStatus();
+  await loadQueues();
 });
 
 downloadAllBtn.addEventListener("click", async () => {
-  if (lastMediaItems.length === 0) {
+  if (!bridgeConnected) {
+    setStatus("Cannot reach Avar bridge.");
+    return;
+  }
+  const items = getVisibleMediaItems(lastMediaItems);
+  if (items.length === 0) {
     return;
   }
 
+  const queue = queueNameForId(defaultQueueSelect.value);
   let count = 0;
-  for (const item of lastMediaItems) {
+  for (const item of items) {
     const result = await api.runtime.sendMessage({
       type: "avar-add-download",
       url: item.url,
       streamKind: item.kind,
+      queue,
     });
     if (result?.ok) {
       count += 1;
@@ -168,6 +642,7 @@ downloadAllBtn.addEventListener("click", async () => {
 
 void (async () => {
   await loadConfig();
+  void loadQueues();
   await scanPage();
 })();
 

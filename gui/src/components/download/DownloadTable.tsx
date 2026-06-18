@@ -78,7 +78,14 @@ export function DownloadTable({
   const setColumn = useLayoutStore((s) => s.setDownloadTableColumn);
 
   const checkboxCol = showCheckboxes ? "2.25rem " : "";
-  const gridTemplate = `${checkboxCol}${columns.filename}px ${columns.status}px ${columns.progress}px ${columns.url}px 1fr`;
+  const gridTemplate = `${checkboxCol}${columns.filename}px ${columns.status}px ${columns.progress}px ${columns.url}px 3rem`;
+  const tableMinWidth =
+    (showCheckboxes ? 36 : 0) +
+    columns.filename +
+    columns.status +
+    columns.progress +
+    columns.url +
+    48;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const showPaging = totalPages > 1;
   const allSelected = downloads.length > 0 && downloads.every((item) => selectedIds.includes(item.id));
@@ -104,11 +111,13 @@ export function DownloadTable({
 
   return (
     <div className="avar-download-table">
-      <div
-        className="avar-download-table__header"
-        style={{ gridTemplateColumns: gridTemplate }}
-        role="row"
-      >
+      <div className="avar-download-table__scroll">
+        <div className="avar-download-table__inner" style={{ minWidth: tableMinWidth }}>
+          <div
+            className="avar-download-table__header"
+            style={{ gridTemplateColumns: gridTemplate }}
+            role="row"
+          >
         {showCheckboxes ? (
           <div className="avar-download-table__th avar-download-table__th--checkbox" role="columnheader">
             <input
@@ -191,9 +200,9 @@ export function DownloadTable({
           />
         </div>
         <div className="avar-download-table__th avar-download-table__th--fill" role="columnheader" />
-      </div>
+          </div>
 
-      <div className="avar-download-table__body" role="rowgroup">
+          <div className="avar-download-table__body" role="rowgroup">
         {loading ? (
           <div className="avar-download-table__empty">
             <Spinner />
@@ -261,6 +270,8 @@ export function DownloadTable({
             );
           })
         )}
+          </div>
+        </div>
       </div>
 
       {showPaging ? (

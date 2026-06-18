@@ -38,6 +38,7 @@ function parseDownloadItem(item: unknown): DownloadInfo {
     doneRanges: parseDoneRanges(record.doneRanges),
     errorCount: record.errorCount !== undefined ? toNumber(record.errorCount) : undefined,
     maxRetries,
+    description: record.description ? String(record.description) : undefined,
   };
 }
 

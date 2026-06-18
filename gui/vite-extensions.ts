@@ -18,7 +18,7 @@ const MIME: Record<string, string> = {
 
 function syncSharedAssets(): void {
   const sharedDir = path.join(extensionsRoot, "shared");
-  for (const file of ["media.js", "protocol.js"]) {
+  for (const file of ["media.js", "protocol.js", "capture.js", "hls.js", "popup.js", "popup.html", "page-response-hook.js", "media-hook.js", "content.js"]) {
     const source = path.join(sharedDir, file);
     if (!fs.existsSync(source)) {
       continue;

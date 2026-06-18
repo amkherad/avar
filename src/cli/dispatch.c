@@ -63,7 +63,8 @@ int cli_run(int argc, char *argv[]) {
     if (args.url != NULL && is_valid_http_url(args.url)) {
         LOG_DEBUG("Found a valid url '%s'", args.url);
 
-        return daemon_session_download_url(args.url, args.queue, args.name, args.attached);
+        return daemon_session_download_url(args.url, args.queue, args.name, args.proxy,
+                                           args.attached);
     }
 
     LOG_ERROR("Unknown command '%s'", cmd);

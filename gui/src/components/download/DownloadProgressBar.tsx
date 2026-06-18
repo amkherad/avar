@@ -36,7 +36,7 @@ export function DownloadProgressBar({ download, className }: DownloadProgressBar
   const totalBytes = download.totalBytes;
   const chunkSize = download.chunkSize ?? 0;
   const doneRanges = download.doneRanges ?? [];
-  const showSegments = totalBytes > 0 && chunkSize > 0;
+  const showSegments = totalBytes > 0 && chunkSize > 0 && doneRanges.length > 0;
 
   if (!showSegments) {
     return (

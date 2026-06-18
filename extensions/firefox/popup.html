@@ -4,13 +4,39 @@
     <meta charset="UTF-8" />
     <title>Avar</title>
     <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html {
+        width: 420px;
+        height: 560px;
+        min-width: 320px;
+        min-height: 400px;
+        max-width: 760px;
+        max-height: 760px;
+        resize: both;
+        overflow: hidden;
+      }
+
       body {
         font-family: system-ui, sans-serif;
         margin: 0;
-        padding: 12px;
-        width: 320px;
+        width: 100%;
+        height: 100%;
+        box-sizing: border-box;
         background: #0f172a;
         color: #e2e8f0;
+        overflow: hidden;
+      }
+
+      .popup-root {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        padding: 12px;
+        box-sizing: border-box;
+        overflow: hidden;
       }
 
       .header {
@@ -18,6 +44,7 @@
         align-items: center;
         gap: 8px;
         margin-bottom: 8px;
+        flex-shrink: 0;
       }
 
       .header img {
@@ -51,6 +78,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        flex-shrink: 0;
       }
 
       .icon-btn:hover {
@@ -79,10 +107,21 @@
         margin-top: 8px;
         padding-top: 8px;
         border-top: 1px solid #334155;
+        flex-shrink: 0;
+        max-height: 45%;
+        overflow-y: auto;
+        overflow-x: hidden;
       }
 
       .settings-panel[hidden] {
         display: none;
+      }
+
+      .settings-section-title {
+        margin: 10px 0 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #cbd5e1;
       }
 
       label {
@@ -92,7 +131,8 @@
         color: #94a3b8;
       }
 
-      input {
+      input,
+      select {
         width: 100%;
         box-sizing: border-box;
         margin-top: 4px;
@@ -101,6 +141,73 @@
         border: 1px solid #334155;
         background: #1e293b;
         color: inherit;
+      }
+
+      .queue-management {
+        margin-top: 4px;
+        max-height: 140px;
+        overflow-y: auto;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        background: #1e293b;
+      }
+
+      .queue-management__empty {
+        margin: 0;
+        padding: 8px;
+        font-size: 0.72rem;
+        color: #64748b;
+      }
+
+      .queue-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        border-bottom: 1px solid #334155;
+        font-size: 0.75rem;
+      }
+
+      .queue-row:last-child {
+        border-bottom: none;
+      }
+
+      .queue-row__name {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .queue-row__status {
+        font-size: 0.65rem;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: #334155;
+        color: #94a3b8;
+        flex-shrink: 0;
+      }
+
+      .queue-row__status--running {
+        background: #14532d;
+        color: #86efac;
+      }
+
+      .queue-row__btn {
+        margin: 0;
+        padding: 2px 6px;
+        border: none;
+        border-radius: 4px;
+        background: #334155;
+        color: #e2e8f0;
+        font-size: 0.65rem;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .queue-row__btn:hover {
+        background: #475569;
       }
 
       button.primary {
@@ -125,21 +232,51 @@
         color: #e2e8f0;
         font-weight: 600;
         cursor: pointer;
+        flex-shrink: 0;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 8px;
+        flex-shrink: 0;
       }
 
       #status {
-        margin-top: 8px;
+        margin: 0;
         font-size: 0.75rem;
         color: #94a3b8;
         min-height: 1rem;
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #mediaTypeFilter,
+      #mediaSort {
+        width: auto;
+        min-width: 72px;
+        margin: 0;
+        flex-shrink: 0;
+        font-size: 0.72rem;
+        padding: 4px 6px;
+      }
+
+      #mediaSort {
+        min-width: 96px;
+        max-width: 120px;
       }
 
       ul {
         margin: 8px 0 0;
         padding: 0;
         list-style: none;
-        max-height: 220px;
-        overflow: auto;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
       }
 
       .media-item {
@@ -148,6 +285,22 @@
         gap: 8px;
         padding: 6px 0;
         border-bottom: 1px solid #334155;
+      }
+
+      .media-item__type-icon {
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+        flex-shrink: 0;
+      }
+
+      .media-item__type-icon svg {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
       }
 
       .media-item__info {
@@ -163,13 +316,50 @@
         text-overflow: ellipsis;
       }
 
-      .media-item__url {
+      .media-item__meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 1px;
+        min-width: 0;
+      }
+
+      .media-item__size {
+        font-size: 0.65rem;
+        color: #94a3b8;
+        flex-shrink: 0;
+        min-width: 3.5rem;
+      }
+
+      .media-item__size--pending {
+        color: #64748b;
+      }
+
+      .media-item__url-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
         margin-top: 2px;
+        min-width: 0;
+      }
+
+      .media-item__copy {
+        width: 22px;
+        height: 22px;
+      }
+
+      .media-item__copy svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .media-item__url {
         font-size: 0.68rem;
         color: #64748b;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        min-width: 0;
       }
 
       .media-item__actions {
@@ -183,6 +373,7 @@
         width: 1px;
         height: 24px;
         background: #334155;
+        flex-shrink: 0;
       }
 
       .media-item__download {
@@ -221,34 +412,83 @@
     </style>
   </head>
   <body>
-    <div class="header">
-      <img src="icons/icon-48.png" alt="" />
-      <h1>Avar Download Helper</h1>
-      <div class="header-actions">
-        <button id="settingsBtn" class="icon-btn" type="button" aria-label="Settings" title="Settings">
+    <div class="popup-root">
+      <div class="header">
+        <img src="icons/icon-48.png" alt="" />
+        <h1>Avar Download Helper</h1>
+        <div class="header-actions">
+          <button id="settingsBtn" class="icon-btn" type="button" aria-label="Settings" title="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.4-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66Z"
+              />
+            </svg>
+          </button>
+          <span id="bridgeStatus" class="status-dot" title="Avar bridge connection"></span>
+        </div>
+      </div>
+
+      <div id="settingsPanel" class="settings-panel" hidden>
+        <label>
+          Avar bridge URL
+          <input id="bridgeUrl" type="url" placeholder="http://127.0.0.1:18766" />
+        </label>
+
+        <label>
+          Default download queue
+          <select id="defaultQueue">
+            <option value="">Default queue</option>
+          </select>
+        </label>
+
+        <label>
+          Default media type filter
+          <select id="defaultMediaFilter">
+            <option value="all">All</option>
+            <option value="video">Video</option>
+            <option value="audio">Audio</option>
+            <option value="image">Image</option>
+            <option value="binary">Binary</option>
+          </select>
+        </label>
+
+        <p class="settings-section-title">Queue management</p>
+        <div id="queueManagement" class="queue-management">
+          <p class="queue-management__empty">Connect to Avar to load queues.</p>
+        </div>
+
+        <button id="save" class="primary" type="button">Save settings</button>
+      </div>
+
+      <div class="status-row">
+        <button id="refreshBtn" class="icon-btn" type="button" aria-label="Refresh scan" title="Scan page again">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path
-              d="M12 15.5A3.5 3.5 0 0 1 8.5 12 3.5 3.5 0 0 1 12 8.5a3.5 3.5 0 0 1 3.5 3.5 3.5 3.5 0 0 1-3.5 3.5m7.43-2.53c.04-.32.07-.64.07-.97 0-.33-.03-.66-.07-1l2.11-1.63c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.31-.61-.22l-2.49 1c-.52-.4-1.06-.73-1.69-.98l-.37-2.65A.506.506 0 0 0 14 2h-4c-.25 0-.46.18-.5.42l-.37 2.65c-.63.25-1.17.59-1.69.98l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64L4.57 11c-.04.34-.07.67-.07 1 0 .33.03.65.07.97l-2.11 1.66c-.19.15-.25.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1.01c.52.4 1.06.74 1.69.99l.37 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.17-.59 1.69-.99l2.49 1.01c.22.08.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.66Z"
+              d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
             />
           </svg>
         </button>
-        <span id="bridgeStatus" class="status-dot" title="Avar bridge connection"></span>
+        <p id="status"></p>
+        <select id="mediaSort" aria-label="Sort media" title="Sort media list">
+          <option value="type">By type</option>
+          <option value="size-asc">By size (smallest first)</option>
+          <option value="size-desc">By size (largest first)</option>
+        </select>
+        <select id="mediaTypeFilter" aria-label="Media type filter" title="Filter media by type">
+          <option value="all">All</option>
+          <option value="video">Video</option>
+          <option value="audio">Audio</option>
+          <option value="image">Image</option>
+          <option value="binary">Binary</option>
+        </select>
       </div>
-    </div>
 
-    <div id="settingsPanel" class="settings-panel" hidden>
-      <label>
-        Avar bridge URL
-        <input id="bridgeUrl" type="url" placeholder="http://127.0.0.1:18766" />
-      </label>
-      <button id="save" class="primary" type="button">Save settings</button>
+      <ul id="mediaList"></ul>
+      <button id="downloadAll" class="secondary" type="button" hidden>Download all on page</button>
     </div>
-
-    <p id="status"></p>
-    <ul id="mediaList"></ul>
-    <button id="downloadAll" class="secondary" type="button" hidden>Download all on page</button>
 
     <script src="media.js"></script>
+    <script src="protocol.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

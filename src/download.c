@@ -104,6 +104,23 @@ static void platform_enable_ansi_terminal(void) {
 
 static atomic_uint g_active_downloads = 0;
 
+#define DL_SNOWFLAKE_EPOCH_MS 1704067200000ULL
+#define DL_SNOWFLAKE_MACHINE_BITS 10U
+#define DL_SNOWFLAKE_SEQUENCE_BITS 12U
+#define DL_SNOWFLAKE_MACHINE_MASK ((1U << DL_SNOWFLAKE_MACHINE_BITS) - 1U)
+#define DL_SNOWFLAKE_SEQUENCE_MASK ((1U << DL_SNOWFLAKE_SEQUENCE_BITS) - 1U)
+#define DL_SNOWFLAKE_MACHINE_SHIFT DL_SNOWFLAKE_SEQUENCE_BITS
+#define DL_SNOWFLAKE_TIMESTAMP_SHIFT (DL_SNOWFLAKE_MACHINE_BITS + DL_SNOWFLAKE_SEQUENCE_BITS)
+
+typedef struct {
+    AvarMutex *mutex;
+    uint64_t last_ms;
+    uint32_t sequence;
+    uint32_t machine_id;
+} DownloadSnowflakeState;
+
+static DownloadSnowflakeState g_download_snowflake = {0};
+
 typedef struct {
     char *url;
     char *queue;
@@ -208,8 +225,12 @@ typedef struct ChunkSlot {
 typedef struct DlConnCtx {
     DownloadJob *job;
     ChunkSlot *slot;
+    char *proxy_url;
+    ProxyKind proxy_kind;
+    ProxySocksCtx socks;
     bool use_proxy;
     bool proxy_tunnel_done;
+    bool proxy_http_forward;
 } DlConnCtx;
 
 typedef struct DownloadJob {
@@ -295,6 +316,12 @@ static char *format_datetime_iso(void);
 
 static char *find_resumable_item_id(const char *url);
 
+static int find_download_item_index(const char *target, bool by_id);
+
+static char *download_generate_id(void);
+
+static uint64_t download_snowflake_next(void);
+
 static uint64_t job_bytes_done(const DownloadJob *job);
 
 static void sync_state_metadata(DownloadJob *job, const char *status);
@@ -314,8 +341,6 @@ static bool record_recoverable_error(DownloadJob *job);
 static void reset_retry_count_on_success(DownloadJob *job);
 
 static void load_job_retry_state(DownloadJob *job);
-
-static int find_download_item_index(const char *target, bool by_id);
 
 static char *build_item_json(const DownloadJob *job, const char *status);
 
@@ -367,6 +392,8 @@ static void schedule_pending_chunks(DownloadJob *job);
 static void touch_slot_activity(ChunkSlot *slot);
 
 static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot);
+
+static void dl_conn_ctx_destroy(DlConnCtx *ctx);
 
 static void dl_conn_ctx_free(struct mg_connection *c);
 
@@ -1034,7 +1061,7 @@ static ChunkSlot *chunk_slot_find(DownloadJob *job, const struct mg_connection *
 }
 
 static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot) {
-    DlConnCtx *ctx = malloc(sizeof(*ctx));
+    DlConnCtx *ctx = calloc(1, sizeof(*ctx));
     if (ctx == NULL) {
         return NULL;
     }
@@ -1044,12 +1071,20 @@ static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot) {
     return ctx;
 }
 
+static void dl_conn_ctx_destroy(DlConnCtx *ctx) {
+    if (ctx == NULL) {
+        return;
+    }
+    free(ctx->proxy_url);
+    free(ctx);
+}
+
 static void dl_conn_ctx_free(struct mg_connection *c) {
     if (c == NULL || c->fn_data == NULL) {
         return;
     }
 
-    free(c->fn_data);
+    dl_conn_ctx_destroy((DlConnCtx *)c->fn_data);
     c->fn_data = NULL;
 }
 
@@ -1066,14 +1101,31 @@ static bool dl_connect(DownloadJob *job, ChunkSlot *slot, struct mg_connection *
 
     const char *proxy_url =
             job->state != NULL && job->state->proxy != NULL ? job->state->proxy : NULL;
-    const char *connect_url =
-            proxy_url != NULL ? proxy_url : job->current_url;
     ctx->use_proxy = proxy_url != NULL;
+    if (proxy_url != NULL) {
+        ctx->proxy_url = strdup(proxy_url);
+        if (ctx->proxy_url == NULL) {
+            free(ctx);
+            set_error(job, "Out of memory");
+            return false;
+        }
+        ctx->proxy_kind = proxy_kind_from_url(proxy_url);
+        ctx->proxy_http_forward = proxy_uses_http_forward(proxy_url, job->current_url);
+    }
 
-    struct mg_connection *c = mg_http_connect(&job->mgr, connect_url, dl_handler, ctx);
+    char *connect_url = proxy_url != NULL ? proxy_connect_url(proxy_url) : NULL;
+    if (connect_url == NULL && proxy_url != NULL) {
+        dl_conn_ctx_destroy(ctx);
+        set_error(job, "Invalid proxy URL");
+        return false;
+    }
+
+    const char *resolved_connect = connect_url != NULL ? connect_url : job->current_url;
+    struct mg_connection *c = mg_http_connect(&job->mgr, resolved_connect, dl_handler, ctx);
+    free(connect_url);
     if (c == NULL) {
-        free(ctx);
-        set_error(job, "Failed to connect to %s", connect_url);
+        dl_conn_ctx_destroy(ctx);
+        set_error(job, "Failed to connect to %s", resolved_connect);
         return false;
     }
 
@@ -1282,6 +1334,10 @@ static void send_request(DownloadJob *job, struct mg_connection *c, const uint64
                          const uint64_t range_end) {
     const struct mg_str host = mg_url_host(job->current_url);
     const char *uri = mg_url_uri(job->current_url);
+    const DlConnCtx *ctx = (const DlConnCtx *)c->fn_data;
+    if (ctx != NULL && ctx->proxy_http_forward) {
+        uri = job->current_url;
+    }
 
     LOG_DEBUG("Sending http request to %s", job->current_url);
 
@@ -2238,8 +2294,12 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
 
         if (ctx->use_proxy && !ctx->proxy_tunnel_done) {
+            if (ctx->proxy_kind == ProxyKindSocks5) {
+                proxy_socks5_begin(c, job->current_url, ctx->proxy_url, &ctx->socks);
+                return;
+            }
             if (proxy_target_is_https(job->current_url)) {
-                proxy_send_connect(c, job->current_url);
+                proxy_send_connect(c, job->current_url, ctx->proxy_url);
                 return;
             }
             send_request_for_slot(job, c, slot);
@@ -2308,6 +2368,26 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
     } else if (ev == MG_EV_READ) {
         if (ctx->use_proxy && !ctx->proxy_tunnel_done && c->recv.len > 0) {
+            if (ctx->proxy_kind == ProxyKindSocks5) {
+                if (proxy_socks5_handle_read((const char *)c->recv.buf, c->recv.len, c,
+                                             job->current_url, ctx->proxy_url, &ctx->socks)) {
+                    ctx->proxy_tunnel_done = true;
+                    c->recv.len = 0;
+                    if (proxy_target_is_https(job->current_url)) {
+                        init_download_tls(c, job->current_url);
+                    } else {
+                        send_request_for_slot(job, c, slot);
+                    }
+                    return;
+                }
+                if (ctx->socks.stage == ProxySocksStageFailed) {
+                    set_error(job, "SOCKS5 proxy failed");
+                    request_close(job, c, false);
+                    return;
+                }
+                return;
+            }
+
             if (proxy_connect_response_ok((const char *)c->recv.buf, c->recv.len)) {
                 ctx->proxy_tunnel_done = true;
                 c->recv.len = 0;
@@ -2561,8 +2641,8 @@ static void job_free(DownloadJob *job) {
 
 static int run_transient_download_ex(const char *url, const char *queue, const char *name,
                                      const char *proxy_override, const bool start_immediately,
-                                     char **id_out, const char *stream_kind,
-                                     const char *referer) {
+                                     char **id_out, const char *stream_kind, const char *referer,
+                                     const char *preset_item_id) {
     char *normalized_url = url != NULL ? strdup(url) : NULL;
     if (normalized_url == NULL) {
         LOG_ERROR("Out of memory");
@@ -2598,10 +2678,11 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
 
     char *item_id = find_resumable_item_id(url);
     if (item_id == NULL) {
-        char generated[AVAR_DL_ID_BUF_SIZE];
-        snprintf(generated, sizeof generated, "%s%llu", AVAR_DL_ID_PREFIX,
-                 (unsigned long long) time(NULL));
-        item_id = strdup(generated);
+        if (preset_item_id != NULL && preset_item_id[0] != '\0') {
+            item_id = strdup(preset_item_id);
+        } else {
+            item_id = download_generate_id();
+        }
     }
 
     if (item_id == NULL) {
@@ -2787,8 +2868,9 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
 }
 
 static int run_transient_download(const char *url, const char *queue, const char *name,
-                                  const char *proxy_override) {
-    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL, NULL, NULL);
+                                  const char *proxy_override, const char *preset_item_id) {
+    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL, NULL, NULL,
+                                     preset_item_id);
 }
 
 int download_enqueue_with_proxy(const char *url, const char *queue, const char *name,
@@ -2800,15 +2882,16 @@ int download_enqueue_ex(const char *url, const char *queue, const char *name,
                         const char *proxy_url, const char *stream_kind, const char *referer,
                         char **id_out) {
     return run_transient_download_ex(url, queue, name, proxy_url, false, id_out, stream_kind,
-                                     referer);
+                                     referer, NULL);
 }
 
-int transient_download(const char *url, const char *queue, const char *name, const bool attached) {
+int transient_download(const char *url, const char *queue, const char *name, const char *proxy_url,
+                       const bool attached) {
     if (!attached) {
         LOG_ERROR("Only --attached downloads are supported in local CLI mode");
         return EXIT_FAILURE;
     }
-    return run_transient_download(url, queue, name, NULL);
+    return run_transient_download(url, queue, name, proxy_url, NULL);
 }
 
 #if defined(_WIN32)
@@ -2826,11 +2909,7 @@ static void *background_download_thread(void *arg) {
     }
 
     atomic_fetch_add(&g_active_downloads, 1U);
-    if (args->item_id != NULL) {
-        (void)run_download_for_item_id(args->item_id, args->proxy);
-    } else {
-        (void)run_transient_download(args->url, args->queue, args->name, args->proxy);
-    }
+    (void)run_transient_download(args->url, args->queue, args->name, args->proxy, args->item_id);
     atomic_fetch_sub(&g_active_downloads, 1U);
 
     background_args_free(args);
@@ -2880,10 +2959,16 @@ int download_start_background_with_proxy(const char *url, const char *queue, con
     }
 
     if (id_out != NULL) {
-        char generated[AVAR_DL_ID_BUF_SIZE];
-        snprintf(generated, sizeof generated, "%s%llu", AVAR_DL_ID_PREFIX,
-                 (unsigned long long)time(NULL));
-        *id_out = strdup(generated);
+        args->item_id = download_generate_id();
+        if (args->item_id == NULL) {
+            background_args_free(args);
+            return EXIT_FAILURE;
+        }
+        *id_out = strdup(args->item_id);
+        if (*id_out == NULL) {
+            background_args_free(args);
+            return EXIT_FAILURE;
+        }
     }
 
     ThreadPool *pool = thread_pool_global();
@@ -2929,6 +3014,87 @@ static int find_download_item_index(const char *target, const bool by_id) {
     return -1;
 }
 
+static uint32_t download_snowflake_machine_id(void) {
+#if defined(_WIN32)
+    const unsigned long pid = (unsigned long)GetCurrentProcessId();
+#else
+    const unsigned long pid = (unsigned long)getpid();
+#endif
+    return (uint32_t)(pid & DL_SNOWFLAKE_MACHINE_MASK);
+}
+
+static uint64_t download_snowflake_mix(const uint64_t value) {
+    uint64_t mixed = value;
+
+    mixed ^= mixed >> 30;
+    mixed *= 0xbf58476d1ce4e5b9ULL;
+    mixed ^= mixed >> 27;
+    mixed *= 0x94d049bb133111ebULL;
+    mixed ^= mixed >> 31;
+    return mixed;
+}
+
+static uint64_t download_snowflake_wait_next_ms(const uint64_t last_ms) {
+    uint64_t now = (uint64_t)mg_millis();
+    while (now <= last_ms) {
+        platform_sleep_ms(1U);
+        now = (uint64_t)mg_millis();
+    }
+    return now;
+}
+
+static uint64_t download_snowflake_next(void) {
+    if (g_download_snowflake.mutex == NULL) {
+        g_download_snowflake.mutex = avar_mutex_create();
+        g_download_snowflake.machine_id = download_snowflake_machine_id();
+    }
+
+    avar_mutex_lock(g_download_snowflake.mutex);
+
+    uint64_t now = (uint64_t)mg_millis();
+    if (now < g_download_snowflake.last_ms) {
+        now = g_download_snowflake.last_ms;
+    }
+
+    if (now == g_download_snowflake.last_ms) {
+        g_download_snowflake.sequence++;
+        if (g_download_snowflake.sequence > DL_SNOWFLAKE_SEQUENCE_MASK) {
+            now = download_snowflake_wait_next_ms(g_download_snowflake.last_ms);
+            g_download_snowflake.sequence = 0U;
+        }
+    } else {
+        g_download_snowflake.sequence = 0U;
+    }
+
+    g_download_snowflake.last_ms = now;
+
+    const uint64_t timestamp = now - DL_SNOWFLAKE_EPOCH_MS;
+    const uint64_t raw =
+        (timestamp << DL_SNOWFLAKE_TIMESTAMP_SHIFT)
+        | ((uint64_t)g_download_snowflake.machine_id << DL_SNOWFLAKE_MACHINE_SHIFT)
+        | (uint64_t)g_download_snowflake.sequence;
+
+    avar_mutex_unlock(g_download_snowflake.mutex);
+    return raw;
+}
+
+static char *download_generate_id(void) {
+    char generated[AVAR_DL_ID_BUF_SIZE];
+
+    for (unsigned attempt = 0U; attempt < 32U; ++attempt) {
+        const uint64_t mixed = download_snowflake_mix(download_snowflake_next());
+        snprintf(generated, sizeof generated, "%s%016llx", AVAR_DL_ID_PREFIX,
+                 (unsigned long long)mixed);
+
+        if (find_download_item_index(generated, true) < 0) {
+            return strdup(generated);
+        }
+    }
+
+    LOG_ERROR("Failed to generate unique download id");
+    return NULL;
+}
+
 static int update_download_item_status(const char *item_id, const char *status) {
     if (item_id == NULL || status == NULL) {
         return -1;
@@ -2969,16 +3135,17 @@ static void apply_proxy_to_state(DownloadState *state, const char *proxy_overrid
         return;
     }
 
-    char *proxy_url = NULL;
+    char *proxy_url = proxy_resolve_for_target(state->url, proxy_override);
     if (proxy_override != NULL && proxy_override[0] != '\0') {
-        proxy_url = strdup(proxy_override);
-    } else if (state->proxy == NULL) {
-        proxy_url = proxy_load_global_url();
-    }
-
-    if (proxy_url != NULL) {
         free(state->proxy);
         state->proxy = proxy_url;
+        return;
+    }
+
+    if (state->proxy == NULL && proxy_url != NULL) {
+        state->proxy = proxy_url;
+    } else {
+        free(proxy_url);
     }
 }
 

@@ -22,7 +22,7 @@ static void print_download_command_help(void) {
     puts("Avar Download Manager - Download");
     puts("");
     puts("Usage:");
-    puts("  avar dl|download <url> [--attached] [--queue=<queue>]");
+    puts("  avar dl|download <url> [--attached] [--queue=<queue>] [--proxy=<url>]");
     puts("      (default: queue on daemon; falls back to --attached if daemon is down)");
     puts("  avar dl add <name>");
     puts("  avar dl rm <id|name> [--force] [--purge-files]");
@@ -94,10 +94,11 @@ static int handle_download_url(int argc, char *argv[]) {
 
     arg_str_t *url = arg_str1(NULL, NULL, "URL", "download URL");
     arg_str_t *queue = arg_str0(NULL, "queue", "QUEUE", "target queue name");
+    arg_str_t *proxy = arg_str0(NULL, "proxy", "URL", "proxy URL (http/https/socks5)");
     arg_lit_t *attached = arg_lit0(NULL, "attached", "run download in foreground with progress");
     arg_lit_t *help = arg_lit0("h", "help", "show help");
     arg_end_t *end = arg_end(20);
-    void *argtable[] = {url, queue, attached, help, end};
+    void *argtable[] = {url, queue, proxy, attached, help, end};
 
     bool help_requested = false;
     const int parse_rc = cli_run_argtable(sub_argv[0], argtable, end, sub_argc, sub_argv, &help_requested);
@@ -115,6 +116,7 @@ static int handle_download_url(int argc, char *argv[]) {
     const bool is_attached = attached->count > 0;
     const int rc = daemon_session_download_url(url->sval[0],
                                                queue->count > 0 ? queue->sval[0] : NULL, NULL,
+                                               proxy->count > 0 ? proxy->sval[0] : NULL,
                                                is_attached);
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return rc;

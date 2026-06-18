@@ -340,6 +340,10 @@
 
 .avar-modal {
   width: min(480px, 100%);
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--avar-bg-elevated);
   border: 1px solid var(--avar-border);
   border-radius: var(--avar-radius);
@@ -354,12 +358,19 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   padding: 1rem 1rem 0.5rem;
+  flex-shrink: 0;
 }
 
 .avar-modal__header h2 {
   margin: 0;
   font-size: 1.1rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .avar-modal__header--draggable {
@@ -375,6 +386,13 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.avar-modal__body p {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .avar-modal__footer {
@@ -382,6 +400,7 @@
   justify-content: flex-end;
   gap: 0.5rem;
   padding: 0 1rem 1rem;
+  flex-shrink: 0;
 }
 
 .avar-card {
@@ -1187,6 +1206,12 @@
 .avar-download-detail__field dd {
   margin: 0;
   font-size: 0.85rem;
+  word-break: break-word;
+}
+
+.avar-download-detail__error {
+  color: var(--avar-danger);
+  white-space: pre-wrap;
 }
 
 .avar-download-detail__url,
@@ -1410,6 +1435,21 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.avar-download-table__scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.avar-download-table__inner {
+  display: flex;
+  flex-direction: column;
+  min-width: 100%;
 }
 
 .avar-download-table__header,
@@ -1417,7 +1457,7 @@
   display: grid;
   align-items: center;
   gap: 0.5rem;
-  min-width: 0;
+  width: 100%;
 }
 
 .avar-download-table__header {
@@ -1822,6 +1862,56 @@
   background: var(--avar-bg);
   display: flex;
   flex-direction: column;
+}
+
+.avar-confirm-popup {
+  padding: 0;
+  min-height: 100vh;
+  justify-content: stretch;
+}
+
+.avar-confirm-popup__card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--avar-bg-elevated);
+}
+
+.avar-confirm-popup__header {
+  padding: 1rem 1rem 0.5rem;
+  flex-shrink: 0;
+}
+
+.avar-confirm-popup__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avar-confirm-popup__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.avar-confirm-popup__body p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.avar-confirm-popup__footer {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0 1rem 1rem;
 }
 
 .avar-page-scroll {

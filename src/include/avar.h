@@ -130,6 +130,7 @@
 #define AVAR_CFG_DM_PROXY_PORT "dm.proxy.port"
 #define AVAR_CFG_DM_PROXY_USERNAME "dm.proxy.username"
 #define AVAR_CFG_DM_PROXY_PASSWORD "dm.proxy.password"
+#define AVAR_CFG_DM_PROXY_NO_PROXY "dm.proxy.noProxy"
 
 #define AVAR_CFG_LOG_FILE "log.file"
 #define AVAR_CFG_LOG_FILE_ENABLED "log.file.enabled"

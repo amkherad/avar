@@ -129,12 +129,251 @@ async function handleDownloadAdd(payload) {
   if (typeof payload.referer === "string" && payload.referer) {
     params.referer = payload.referer;
   }
+  if (typeof payload.queue === "string" && payload.queue) {
+    params.queue = payload.queue;
+  }
+  if (payload.autoStart !== false || payload.startNow) {
+    params.startNow = true;
+  }
   const result = await daemonRpc("download.add", params);
   const exitCode = result?.exitCode;
   if (exitCode !== undefined && exitCode !== 0) {
     throw new Error("download.add failed");
   }
   recordPing();
+  return result;
+}
+
+async function probeRemoteUrl(url, referer) {
+  const headers = {};
+  if (typeof referer === "string" && referer) {
+    headers.Referer = referer;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    let response = await fetch(url, {
+      method: "HEAD",
+      headers,
+      redirect: "follow",
+      signal: controller.signal,
+    });
+
+    if (response.status === 405 || response.status === 501) {
+      response = await fetch(url, {
+        method: "GET",
+        headers: { ...headers, Range: "bytes=0-0" },
+        redirect: "follow",
+        signal: controller.signal,
+      });
+    }
+
+    const result = { size: null, filename: null };
+
+    const contentDisposition = response.headers.get("content-disposition");
+    if (contentDisposition) {
+      const starMatch = /filename\*\s*=\s*([^;]+)/i.exec(contentDisposition);
+      if (starMatch) {
+        let encoded = starMatch[1].trim();
+        if (encoded.toLowerCase().startsWith("utf-8''")) {
+          encoded = encoded.slice(7);
+        }
+        encoded = encoded.replace(/^["']|["']$/g, "");
+        try {
+          result.filename = decodeURIComponent(encoded);
+        } catch {
+          result.filename = encoded;
+        }
+      } else {
+        const match = /filename\s*=\s*([^;]+)/i.exec(contentDisposition);
+        if (match) {
+          result.filename = match[1].trim().replace(/^["']|["']$/g, "");
+        }
+      }
+    }
+
+    if (!result.filename) {
+      for (const name of [
+        "x-filename",
+        "x-file-name",
+        "x-suggested-filename",
+        "x-download-filename",
+      ]) {
+        const value = response.headers.get(name);
+        if (value?.trim()) {
+          result.filename = value.trim().replace(/^["']|["']$/g, "");
+          break;
+        }
+      }
+    }
+
+    if (!result.filename) {
+      const contentLocation = response.headers.get("content-location");
+      if (contentLocation) {
+        try {
+          const segment = new URL(contentLocation, url).pathname.split("/").filter(Boolean).pop();
+          if (segment) {
+            result.filename = decodeURIComponent(segment);
+          }
+        } catch {
+          // Ignore malformed content-location values.
+        }
+      }
+    }
+
+    const contentLength = response.headers.get("content-length");
+    if (contentLength) {
+      const size = Number(contentLength);
+      if (Number.isFinite(size) && size >= 0) {
+        result.size = size;
+      }
+    }
+
+    if (result.size === null) {
+      const contentRange = response.headers.get("content-range");
+      if (contentRange) {
+        const match = /\/(\d+)\s*$/i.exec(contentRange);
+        if (match) {
+          const size = Number(match[1]);
+          if (Number.isFinite(size) && size >= 0) {
+            result.size = size;
+          }
+        }
+      }
+    }
+
+    return result;
+  } catch {
+    return { size: null, filename: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function resolvePlaylistUrl(raw, baseUrl) {
+  try {
+    return new URL(raw.trim(), baseUrl).href;
+  } catch {
+    return null;
+  }
+}
+
+function formatHlsVariantLabel(resolution, bandwidth) {
+  if (resolution) {
+    const parts = resolution.split("x");
+    const height = Number(parts[1]);
+    if (Number.isFinite(height) && height > 0) {
+      return `${height}p`;
+    }
+    return resolution;
+  }
+  if (bandwidth) {
+    const mbps = Number(bandwidth) / 1_000_000;
+    if (Number.isFinite(mbps) && mbps >= 0.1) {
+      return `${mbps.toFixed(1)} Mbps`;
+    }
+  }
+  return "HLS";
+}
+
+function parseHlsMasterPlaylist(text, baseUrl) {
+  const variants = [];
+  const lines = text.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line.startsWith("#EXT-X-STREAM-INF:")) {
+      continue;
+    }
+
+    const resolution = /RESOLUTION=(\d+x\d+)/i.exec(line)?.[1] ?? null;
+    const bandwidthMatch = /BANDWIDTH=(\d+)/i.exec(line);
+    const bandwidth = bandwidthMatch ? Number(bandwidthMatch[1]) : null;
+
+    let uri = "";
+    for (let j = i + 1; j < lines.length; j++) {
+      const next = lines[j].trim();
+      if (!next || next.startsWith("#")) {
+        continue;
+      }
+      uri = next;
+      break;
+    }
+    if (!uri) {
+      continue;
+    }
+
+    const resolved = resolvePlaylistUrl(uri, baseUrl);
+    if (!resolved) {
+      continue;
+    }
+
+    variants.push({
+      url: resolved,
+      resolution,
+      bandwidth: Number.isFinite(bandwidth) ? bandwidth : null,
+      label: formatHlsVariantLabel(resolution, bandwidth),
+    });
+  }
+
+  return variants;
+}
+
+async function fetchPlaylistText(url, referer) {
+  const headers = {};
+  if (typeof referer === "string" && referer) {
+    headers.Referer = referer;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, {
+      headers,
+      redirect: "follow",
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function listHlsVariants(url, referer) {
+  const text = await fetchPlaylistText(url, referer);
+  if (text.includes("#EXT-X-STREAM-INF")) {
+    const variants = parseHlsMasterPlaylist(text, url);
+    if (variants.length > 0) {
+      return { variants, master: true };
+    }
+  }
+
+  return {
+    variants: [{ url, resolution: null, bandwidth: null, label: "HLS" }],
+    master: false,
+  };
+}
+
+async function handleQueueList() {
+  const result = await daemonRpc("queue.list", {});
+  const exitCode = result?.exitCode;
+  if (exitCode !== undefined && exitCode !== 0) {
+    throw new Error("queue.list failed");
+  }
+  return Array.isArray(result?.queues) ? result.queues : [];
+}
+
+async function handleQueueControl(action, queueId) {
+  const method = action === "start" ? "queue.start" : "queue.stop";
+  const result = await daemonRpc(method, { id: queueId });
+  const exitCode = result?.exitCode;
+  if (exitCode !== undefined && exitCode !== 0) {
+    throw new Error(`${method} failed`);
+  }
 }
 
 async function handleProtocolMessage(message, origin, res) {
@@ -177,6 +416,95 @@ async function handleProtocolMessage(message, origin, res) {
           id,
           error instanceof Error ? error.message : "Request failed",
         ),
+        origin,
+      );
+    }
+    return;
+  }
+
+  if (type === "url.probe") {
+    try {
+      const url = typeof payload.url === "string" ? payload.url : "";
+      if (!url.trim()) {
+        sendJson(res, 400, createErrorResponse("url.probe", id, "Missing url"), origin);
+        return;
+      }
+      const referer = typeof payload.referer === "string" ? payload.referer : undefined;
+      const result = await probeRemoteUrl(url.trim(), referer);
+      sendJson(res, 200, createResponse("url.probe", id, result), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "url.probe",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
+  if (type === "hls.list") {
+    try {
+      const url = typeof payload.url === "string" ? payload.url : "";
+      if (!url.trim()) {
+        sendJson(res, 400, createErrorResponse("hls.list", id, "Missing url"), origin);
+        return;
+      }
+      const referer = typeof payload.referer === "string" ? payload.referer : undefined;
+      const result = await listHlsVariants(url.trim(), referer);
+      sendJson(res, 200, createResponse("hls.list", id, result), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "hls.list",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
+  if (type === "queue.list") {
+    try {
+      const queues = await handleQueueList();
+      sendJson(res, 200, createResponse("queue.list", id, { queues }), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "queue.list",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
+  if (type === "queue.start" || type === "queue.stop") {
+    try {
+      const queueId = typeof payload.id === "string" ? payload.id : "";
+      if (!queueId) {
+        sendJson(res, 400, createErrorResponse(type, id, "Missing queue id"), origin);
+        return;
+      }
+      await handleQueueControl(type === "queue.start" ? "start" : "stop", queueId);
+      sendJson(res, 200, createResponse(type, id, {}), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(type, id, error instanceof Error ? error.message : "Request failed"),
         origin,
       );
     }

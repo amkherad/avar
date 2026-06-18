@@ -12,12 +12,13 @@
     "activeTab",
     "storage",
     "contextMenus",
+    "webRequest",
     "<all_urls>",
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
   "background": {
-    "scripts": ["media.js", "background.js"]
+    "scripts": ["media.js", "capture.js", "protocol.js", "hls.js", "background.js"]
   },
   "browser_action": {
     "default_title": "Avar",
@@ -35,6 +36,7 @@
       "run_at": "document_idle"
     }
   ],
+  "web_accessible_resources": ["page-response-hook.js", "media-hook.js"],
   "browser_specific_settings": {
     "gecko": {
       "id": "avar-download-helper@avar.io",

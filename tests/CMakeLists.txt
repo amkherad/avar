@@ -122,6 +122,19 @@ set(AVAR_DOWNLOAD_TEST_SOURCES
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
 
+avar_add_test(test_http_proxy
+        test_http_proxy.c
+        ${AVAR_TEST_GUARD_SOURCES}
+        ${AVAR_INSTANCE_SOURCE}
+        "${SRC_DIR}/http_proxy.c"
+        "${SRC_DIR}/config.c"
+        "${SRC_DIR}/file-system.c"
+        "${SRC_DIR}/logger.c"
+        "${SRC_DIR}/utils.c"
+        "${SRC_DIR}/third_party/cJSON/cJSON.c"
+        "${SRC_DIR}/third_party/mongoose/mongoose.c"
+)
+
 avar_add_test(test_download_integration
         test_download_integration.c
         ${AVAR_TEST_GUARD_SOURCES}

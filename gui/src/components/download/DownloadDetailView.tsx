@@ -109,6 +109,13 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
           </div>
         ) : null}
 
+        {download.status === "error" && download.description ? (
+          <div className="avar-download-detail__field">
+            <dt>{t("download.errorMessage")}</dt>
+            <dd className="avar-download-detail__error">{download.description}</dd>
+          </div>
+        ) : null}
+
         {download.filenameInferred !== undefined ? (
           <div className="avar-download-detail__field">
             <dt>{t("download.filenameSource")}</dt>

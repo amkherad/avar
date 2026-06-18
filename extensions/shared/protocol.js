@@ -12,9 +12,8 @@
   const PROTOCOL_VERSION = 1;
 
   const DEFAULT_ELECTRON_BRIDGE = "http://127.0.0.1:18766";
-  const DEFAULT_VITE_BRIDGE = "http://127.0.0.1:5173";
-
-  const KNOWN_BRIDGE_URLS = [DEFAULT_ELECTRON_BRIDGE, DEFAULT_VITE_BRIDGE];
+  const ELECTRON_BRIDGE_PORT = 18766;
+  const LOCAL_BRIDGE_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
   /**
    * @param {string} type
@@ -36,7 +35,7 @@
    * @param {Record<string, unknown>} [payload]
    */
   async function sendMessage(baseUrl, type, payload) {
-    const url = baseUrl.replace(/\/+$/, "");
+    const url = normalizeBridgeUrl(baseUrl);
     const response = await fetch(`${url}/v1`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -56,7 +55,7 @@
    * @param {string} baseUrl
    */
   async function pingBridge(baseUrl) {
-    const url = baseUrl.replace(/\/+$/, "");
+    const url = normalizeBridgeUrl(baseUrl);
     const response = await fetch(`${url}/v1/ping`);
     if (!response.ok) {
       throw new Error(`Bridge HTTP ${response.status}`);
@@ -69,29 +68,41 @@
   }
 
   /**
-   * Try known bridge URLs and return the first reachable one.
+   * Extensions must only talk to the Electron bridge — never the daemon or Vite dev server.
+   * @param {string} [url]
+   */
+  function normalizeBridgeUrl(url) {
+    if (!url) {
+      return DEFAULT_ELECTRON_BRIDGE;
+    }
+
+    try {
+      const parsed = new URL(url.replace(/\/+$/, ""));
+      const port = Number(parsed.port || (parsed.protocol === "https:" ? 443 : 80));
+      const host = parsed.hostname.toLowerCase();
+
+      if (LOCAL_BRIDGE_HOSTS.has(host) && port === ELECTRON_BRIDGE_PORT) {
+        return `${parsed.protocol}//${parsed.host}`.replace(/\/+$/, "");
+      }
+    } catch {
+      // Fall through to the Electron default.
+    }
+
+    return DEFAULT_ELECTRON_BRIDGE;
+  }
+
+  /**
+   * Resolve the Electron extension bridge URL.
    * @param {string} [storedUrl]
    */
   async function discoverBridgeUrl(storedUrl) {
-    const candidates = [];
-    if (storedUrl) {
-      candidates.push(storedUrl.replace(/\/+$/, ""));
+    const normalized = normalizeBridgeUrl(storedUrl);
+    try {
+      await pingBridge(normalized);
+      return normalized;
+    } catch {
+      return DEFAULT_ELECTRON_BRIDGE;
     }
-    for (const url of KNOWN_BRIDGE_URLS) {
-      if (!candidates.includes(url)) {
-        candidates.push(url);
-      }
-    }
-
-    for (const url of candidates) {
-      try {
-        await pingBridge(url);
-        return url;
-      } catch {
-        // try next
-      }
-    }
-    return storedUrl?.replace(/\/+$/, "") || DEFAULT_ELECTRON_BRIDGE;
   }
 
   if (typeof globalThis !== "undefined") {
@@ -99,11 +110,11 @@
       PROTOCOL,
       PROTOCOL_VERSION,
       DEFAULT_ELECTRON_BRIDGE,
-      DEFAULT_VITE_BRIDGE,
-      KNOWN_BRIDGE_URLS,
+      ELECTRON_BRIDGE_PORT,
       createMessage,
       sendMessage,
       pingBridge,
+      normalizeBridgeUrl,
       discoverBridgeUrl,
     };
   }

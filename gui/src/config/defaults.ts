@@ -46,11 +46,12 @@ export interface GuiConfig {
   downloadPageSize: number;
   showDownloadCheckboxes: boolean;
   browserExtensionEnabled: boolean;
+  notificationsEnabled: boolean;
 }
 
 export const GUI_CONFIG_KEY = "avar.gui.config";
 export const GUI_SECRETS_KEY = "avar.gui.secrets";
-export const GUI_CONFIG_VERSION = 7;
+export const GUI_CONFIG_VERSION = 8;
 
 export const defaultFooterMonitors = (): FooterMonitorSettings => ({
   disk: true,
@@ -93,4 +94,5 @@ export const defaultGuiConfig = (): GuiConfig => ({
   downloadPageSize: 100,
   showDownloadCheckboxes: true,
   browserExtensionEnabled: true,
+  notificationsEnabled: true,
 });

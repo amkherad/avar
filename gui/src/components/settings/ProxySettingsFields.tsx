@@ -7,9 +7,10 @@ export interface ProxySettingsFieldsProps {
   value: ProxySettings;
   onChange: (value: ProxySettings) => void;
   disabled?: boolean;
+  showNoProxy?: boolean;
 }
 
-export function ProxySettingsFields({ value, onChange, disabled = false }: ProxySettingsFieldsProps) {
+export function ProxySettingsFields({ value, onChange, disabled = false, showNoProxy = false }: ProxySettingsFieldsProps) {
   const { t } = useTranslation();
 
   function patch(partial: Partial<ProxySettings>) {
@@ -70,6 +71,14 @@ export function ProxySettingsFields({ value, onChange, disabled = false }: Proxy
             onChange={(e) => patch({ password: e.target.value })}
             autoComplete="new-password"
           />
+          {showNoProxy ? (
+            <Input
+              label={t("proxy.noProxy")}
+              value={value.noProxy ?? ""}
+              onChange={(e) => patch({ noProxy: e.target.value })}
+              placeholder="localhost,127.0.0.1,.example.com"
+            />
+          ) : null}
         </div>
       ) : null}
     </fieldset>

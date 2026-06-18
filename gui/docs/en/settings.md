@@ -17,7 +17,8 @@ Use the inner sidebar to switch between setting groups.
 - **Refresh interval** — Poll frequency when using periodic sync (seconds).
 - **Connection check interval** — How often the GUI pings the daemon (seconds).
 - **Footer monitors** — Toggle disk, memory, CPU, and network stats in the footer (collected from the daemon when connected). Choose **Text values** or **Histogram + values** to show sparkline-style history for memory, CPU, and network. Histogram mode keeps labels inline with semi-transparent values overlaid on the chart.
-- **Install web app** — Install Avar as a standalone PWA (when your browser supports it) and enable desktop notifications.
+- **Notifications** — Toggle desktop notifications for download status changes, queue start/stop, and connection alerts. In the browser, you may still need to grant notification permission separately.
+- **Install web app** — Install Avar as a standalone PWA (when your browser supports it).
 
 ### 🌐 Browser integration
 
@@ -42,6 +43,16 @@ Use the **puzzle-piece icon** in the header (next to the theme toggle) to open t
 View and remap keyboard shortcuts in a single aligned table. Click a shortcut button, then press the new key combination. Press **Escape** to cancel recording.
 
 Use **Reset all** to restore defaults.
+
+### 📥 Downloads
+
+Configure default download paths, segmentation, progress display, and **proxy** settings:
+
+- **Use proxy** — Enable a global HTTP, HTTPS, or SOCKS5 proxy for downloads that do not specify their own proxy.
+- **Host / Port / Username / Password** — Proxy server credentials. Stored in `config.json` under `dm.proxy.*`.
+- **Bypass proxy for (NO_PROXY)** — Comma-separated hosts or domains that should connect directly (for example `localhost,127.0.0.1,.example.com`). Matches the `NO_PROXY` environment variable when set.
+
+Per-download proxy overrides are available in **Add download**. Global proxy settings apply when a download has no override and when standard environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`) are not set.
 
 ### Daemon
 

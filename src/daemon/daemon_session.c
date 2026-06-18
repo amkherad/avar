@@ -93,14 +93,14 @@ int daemon_session_delegate_argv(const int argc, char **argv) {
 }
 
 int daemon_session_download_url(const char *url, const char *queue, const char *name,
-                                const bool attached) {
+                                const char *proxy_url, const bool attached) {
     if (url == NULL || !is_valid_http_url(url)) {
         LOG_ERROR("Invalid download URL");
         return EXIT_FAILURE;
     }
 
     if (attached) {
-        return transient_download(url, queue, name, true);
+        return transient_download(url, queue, name, proxy_url, true);
     }
 
     if (daemon_session_ping()) {
@@ -110,6 +110,9 @@ int daemon_session_download_url(const char *url, const char *queue, const char *
             cJSON_AddBoolToObject(params, "attached", false);
             if (queue != NULL) {
                 cJSON_AddStringToObject(params, "queue", queue);
+            }
+            if (proxy_url != NULL && proxy_url[0] != '\0') {
+                cJSON_AddStringToObject(params, "proxy", proxy_url);
             }
 
             char *params_str = cJSON_PrintUnformatted(params);
@@ -130,5 +133,5 @@ int daemon_session_download_url(const char *url, const char *queue, const char *
     }
 
     LOG_INFO("Daemon unavailable; running attached download locally");
-    return transient_download(url, queue, name, true);
+    return transient_download(url, queue, name, proxy_url, true);
 }
