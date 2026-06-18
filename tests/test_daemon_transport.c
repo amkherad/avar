@@ -68,9 +68,9 @@ AVAR_TEST(transport_create_destroy_kinds) {
     AVAR_ASSERT_NOT_NULL(pipe);
     daemon_transport_destroy(pipe);
 
-    DaemonTransport *unix = daemon_transport_create(AvarTransportUnix);
-    AVAR_ASSERT_NOT_NULL(unix);
-    daemon_transport_destroy(unix);
+    DaemonTransport *unix_transport = daemon_transport_create(AvarTransportUnix);
+    AVAR_ASSERT_NOT_NULL(unix_transport);
+    daemon_transport_destroy(unix_transport);
 
     DaemonTransport *https = daemon_transport_create_https();
     AVAR_ASSERT_NOT_NULL(https);
