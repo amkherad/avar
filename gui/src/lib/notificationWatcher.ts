@@ -1,5 +1,6 @@
 import type { DownloadInfo, QueueInfo } from "@/api/types";
 import {
+  clearNotifiedDownloadStatuses,
   notifyConnectionLost,
   notifyConnectionRestored,
   notifyDownloadStatusChange,
@@ -33,12 +34,25 @@ export function initNotificationWatcher(): () => void {
   let prevConnection = useConnectionStore.getState().connection;
 
   const unsubData = useDataStore.subscribe((state) => {
+    const currentDownloadIds = new Set<string>();
     for (const download of state.downloads) {
+      currentDownloadIds.add(download.id);
       const previous = prevDownloads.get(download.id);
       if (previous !== undefined && previous !== download.status) {
         notifyDownloadStatusChange(download, previous);
       }
     }
+
+    const removedDownloadIds: string[] = [];
+    for (const id of prevDownloads.keys()) {
+      if (!currentDownloadIds.has(id)) {
+        removedDownloadIds.push(id);
+      }
+    }
+    if (removedDownloadIds.length > 0) {
+      clearNotifiedDownloadStatuses(removedDownloadIds);
+    }
+
     prevDownloads = trackDownloadStatuses(state.downloads);
 
     for (const queue of state.queues) {

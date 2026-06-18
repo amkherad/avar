@@ -15,6 +15,8 @@ export interface AppNotification {
 
 const NOTIFY_DOWNLOAD_STATUSES = new Set(["completed", "error", "paused", "cancelled"]);
 
+const lastNotifiedDownloadStatus = new Map<string, string>();
+
 let permissionRequested = false;
 let connectionNotifyTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingConnectionNotify: (() => void) | null = null;
@@ -89,6 +91,16 @@ export async function showNotification(notification: AppNotification): Promise<v
   new Notification(title, { body, tag });
 }
 
+export function clearNotifiedDownloadStatuses(removedIds?: Iterable<string>): void {
+  if (removedIds) {
+    for (const id of removedIds) {
+      lastNotifiedDownloadStatus.delete(id);
+    }
+    return;
+  }
+  lastNotifiedDownloadStatus.clear();
+}
+
 export function notifyDownloadStatusChange(
   download: DownloadInfo,
   previousStatus?: string,
@@ -99,6 +111,11 @@ export function notifyDownloadStatusChange(
   if (!NOTIFY_DOWNLOAD_STATUSES.has(download.status)) {
     return;
   }
+  if (lastNotifiedDownloadStatus.get(download.id) === download.status) {
+    return;
+  }
+
+  lastNotifiedDownloadStatus.set(download.id, download.status);
 
   const statusLabel = formatDownloadStatus(download.status, i18n.t.bind(i18n));
   void showNotification({

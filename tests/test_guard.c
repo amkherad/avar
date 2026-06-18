@@ -13,13 +13,166 @@
     #include <process.h>
     #include <winsock2.h>
     #include <ws2tcpip.h>
+    #include <windows.h>
 #else
     #include <arpa/inet.h>
     #include <netinet/in.h>
+    #include <signal.h>
     #include <sys/stat.h>
     #include <sys/socket.h>
+    #include <sys/wait.h>
     #include <unistd.h>
 #endif
+
+#define TEST_GUARD_SERVER_READY_MS 10000
+#define TEST_GUARD_SERVER_POLL_MS 50
+
+static bool test_guard_tcp_connect(int port) {
+    if (port <= 0) {
+        return false;
+    }
+
+#if defined(_WIN32)
+    static bool winsock_ready = false;
+    if (!winsock_ready) {
+        WSADATA wsa = {0};
+        if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
+            return false;
+        }
+        winsock_ready = true;
+    }
+#endif
+
+    const int sock = (int)socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock < 0) {
+        return false;
+    }
+
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons((uint16_t)port);
+
+    const bool connected = connect(sock, (struct sockaddr *)&addr, sizeof addr) == 0;
+#if defined(_WIN32)
+    closesocket(sock);
+#else
+    close(sock);
+#endif
+    return connected;
+}
+
+#if defined(_WIN32)
+static bool test_guard_process_running(void *process) {
+    if (process == NULL) {
+        return false;
+    }
+
+    DWORD exit_code = 0;
+    if (!GetExitCodeProcess((HANDLE)process, &exit_code)) {
+        return false;
+    }
+
+    return exit_code == STILL_ACTIVE;
+}
+#else
+static bool test_guard_process_running(int pid) {
+    if (pid <= 0) {
+        return false;
+    }
+
+    int status = 0;
+    const pid_t result = waitpid(pid, &status, WNOHANG);
+    return result == 0;
+}
+#endif
+
+static bool test_guard_wait_http_server(const TestGuard *guard, TestHttpServer *server) {
+    if (guard == NULL || server == NULL || guard->http_port <= 0) {
+        return false;
+    }
+
+    for (int elapsed = 0; elapsed < TEST_GUARD_SERVER_READY_MS; elapsed += TEST_GUARD_SERVER_POLL_MS) {
+#if defined(_WIN32)
+        if (!test_guard_process_running(server->process)) {
+            return false;
+        }
+#else
+        if (!test_guard_process_running(server->pid)) {
+            return false;
+        }
+#endif
+        if (test_guard_tcp_connect(guard->http_port)) {
+            return true;
+        }
+#if defined(_WIN32)
+        Sleep((DWORD)TEST_GUARD_SERVER_POLL_MS);
+#else
+        usleep((useconds_t)TEST_GUARD_SERVER_POLL_MS * 1000U);
+#endif
+    }
+
+    return test_guard_tcp_connect(guard->http_port);
+}
+
+static bool test_guard_http_request(const TestGuard *guard, const char *request,
+                                    int *status_out) {
+    if (guard == NULL || request == NULL || guard->http_port <= 0) {
+        return false;
+    }
+
+    const int sock = (int)socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock < 0) {
+        return false;
+    }
+
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons((uint16_t)guard->http_port);
+
+    if (connect(sock, (struct sockaddr *)&addr, sizeof addr) != 0) {
+#if defined(_WIN32)
+        closesocket(sock);
+#else
+        close(sock);
+#endif
+        return false;
+    }
+
+    if (send(sock, request, (int)strlen(request), 0) < 0) {
+#if defined(_WIN32)
+        closesocket(sock);
+#else
+        close(sock);
+#endif
+        return false;
+    }
+
+    char response[64] = {0};
+    const int received = (int)recv(sock, response, (int)sizeof response - 1, 0);
+#if defined(_WIN32)
+    closesocket(sock);
+#else
+    close(sock);
+#endif
+
+    if (received <= 0) {
+        return false;
+    }
+
+    response[received] = '\0';
+    int status = 0;
+    if (sscanf(response, "HTTP/%*s %d", &status) != 1) {
+        return false;
+    }
+
+    if (status_out != NULL) {
+        *status_out = status;
+    }
+
+    return true;
+}
 
 static bool test_guard_make_dir(const char *path) {
     if (path == NULL || path[0] == '\0') {
@@ -177,4 +330,92 @@ void test_guard_set_server_env(const TestGuard *guard) {
     (void)setenv(AVAR_TEST_ENV_HTTP_PORT, port_value, 1);
     (void)setenv(AVAR_TEST_ENV_RANGE_STATS_PATH, guard->stats_path, 1);
 #endif
+}
+
+void test_guard_http_server_init(TestHttpServer *server) {
+    if (server == NULL) {
+        return;
+    }
+
+    memset(server, 0, sizeof *server);
+}
+
+bool test_guard_http_server_start(const TestGuard *guard, const char *script_path,
+                                  TestHttpServer *server) {
+    if (guard == NULL || script_path == NULL || server == NULL || script_path[0] == '\0') {
+        return false;
+    }
+
+    if (server->running) {
+        test_guard_http_server_stop(server);
+    }
+
+    test_guard_set_server_env(guard);
+
+#if defined(_WIN32)
+    STARTUPINFOA si = {0};
+    si.cb = sizeof si;
+    char command[768];
+    snprintf(command, sizeof command, "python \"%s\"", script_path);
+
+    PROCESS_INFORMATION proc = {0};
+    if (!CreateProcessA(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si,
+                        &proc)) {
+        return false;
+    }
+
+    server->process = proc.hProcess;
+    server->thread = proc.hThread;
+#else
+    const pid_t pid = fork();
+    if (pid < 0) {
+        return false;
+    }
+
+    if (pid == 0) {
+        execlp("python3", "python3", script_path, (char *)NULL);
+        execlp("python", "python", script_path, (char *)NULL);
+        _exit(127);
+    }
+
+    server->pid = (int)pid;
+#endif
+
+    if (!test_guard_wait_http_server(guard, server)) {
+        test_guard_http_server_stop(server);
+        return false;
+    }
+
+    server->running = true;
+    return true;
+}
+
+void test_guard_http_server_stop(TestHttpServer *server) {
+    if (server == NULL || !server->running) {
+        return;
+    }
+
+#if defined(_WIN32)
+    if (server->process != NULL) {
+        TerminateProcess((HANDLE)server->process, 0);
+        WaitForSingleObject((HANDLE)server->process, 2000);
+        CloseHandle((HANDLE)server->process);
+        CloseHandle((HANDLE)server->thread);
+    }
+#else
+    if (server->pid > 0) {
+        kill(server->pid, SIGTERM);
+        waitpid(server->pid, NULL, 0);
+    }
+#endif
+
+    test_guard_http_server_init(server);
+}
+
+bool test_guard_http_server_reset_stats(const TestGuard *guard) {
+    int status = 0;
+    char request[128];
+    snprintf(request, sizeof request,
+             "GET /test_reset HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
+    return test_guard_http_request(guard, request, &status) && status == 204;
 }

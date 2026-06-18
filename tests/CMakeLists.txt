@@ -4,7 +4,7 @@ set(AVAR_TEST_GUARD_SOURCES test_guard.c)
 
 # CTest timeouts (seconds). Integration tests spawn HTTP servers and may wait on downloads.
 set(AVAR_TEST_TIMEOUT_DEFAULT 30)
-set(AVAR_TEST_TIMEOUT_INTEGRATION 120)
+set(AVAR_TEST_TIMEOUT_INTEGRATION 180)
 set(AVAR_TEST_TIMEOUT_LIFECYCLE 240)
 
 function(avar_add_test test_name)

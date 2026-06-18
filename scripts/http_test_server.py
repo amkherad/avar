@@ -143,6 +143,12 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        if self.path == "/test_reset":
+            _reset_stats()
+            self.send_response(204)
+            self.end_headers()
+            return
+
         if self.path.startswith("/flaky_segmented"):
             self._serve_flaky_segmented()
             return
