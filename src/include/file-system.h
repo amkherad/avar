@@ -29,4 +29,7 @@ int move_file_atomic(const char *src, const char *dest);
 /* Returns true when path exists and is a regular file. */
 bool file_exists(const char *path);
 
+/* Recursively deletes a directory and its contents. Returns 0 on success. */
+int remove_directory_recursive(const char *path);
+
 #endif

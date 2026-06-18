@@ -81,6 +81,12 @@ static char *queue_build_json(const char *id, const char *name, const QueueOptio
         cJSON_AddNullToObject(obj, AVAR_QUEUE_FIELD_MAX_CONNECTIONS);
     }
 
+    if (options != NULL && options->max_retries > 0) {
+        cJSON_AddNumberToObject(obj, AVAR_QUEUE_FIELD_MAX_RETRIES, (double)options->max_retries);
+    } else {
+        cJSON_AddNullToObject(obj, AVAR_QUEUE_FIELD_MAX_RETRIES);
+    }
+
     if (options != NULL && options->temp_path != NULL && options->temp_path[0] != '\0') {
         cJSON_AddStringToObject(obj, AVAR_QUEUE_FIELD_TEMP_PATH, options->temp_path);
     } else {
@@ -275,6 +281,17 @@ QueueError queue_edit(const char *id, const QueuePatch *patch) {
                 cJSON_CreateNumber((double)patch->max_connections));
         } else {
             cJSON_ReplaceItemInObjectCaseSensitive(obj, AVAR_QUEUE_FIELD_MAX_CONNECTIONS,
+                                                   cJSON_CreateNull());
+        }
+    }
+
+    if (patch->set_max_retries) {
+        if (patch->max_retries > 0) {
+            cJSON_ReplaceItemInObjectCaseSensitive(
+                obj, AVAR_QUEUE_FIELD_MAX_RETRIES,
+                cJSON_CreateNumber((double)patch->max_retries));
+        } else {
+            cJSON_ReplaceItemInObjectCaseSensitive(obj, AVAR_QUEUE_FIELD_MAX_RETRIES,
                                                    cJSON_CreateNull());
         }
     }

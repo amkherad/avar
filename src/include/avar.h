@@ -97,6 +97,7 @@
 #define AVAR_ENV_XDG_DATA_HOME "XDG_DATA_HOME"
 #define AVAR_ENV_XDG_DOWNLOAD_DIR "XDG_DOWNLOAD_DIR"
 #define AVAR_ENV_TEMP "TEMP"
+#define AVAR_ENV_INSTANCE "AVAR_INSTANCE"
 
 /* -------------------------------------------------------------------------- */
 /* Config keys                                                                */
@@ -108,6 +109,38 @@
 #define AVAR_CFG_DM_DOWNLOAD_PATH "dm.downloadPath"
 #define AVAR_CFG_DM_PROGRESS_SIZE_UNIT "dm.progress.sizeUnit"
 #define AVAR_CFG_DM_PROGRESS_SPEED_UNIT "dm.progress.speedUnit"
+#define AVAR_CFG_DM_PROGRESS_STYLE "dm.progress.style"
+
+#define AVAR_PROGRESS_STYLE_AGGREGATE "aggregate"
+#define AVAR_PROGRESS_STYLE_SEGMENTED "segmented"
+#define AVAR_DEFAULT_PROGRESS_STYLE AVAR_PROGRESS_STYLE_SEGMENTED
+
+#define AVAR_CFG_DM_SEGMENTATION "dm.segmentation"
+#define AVAR_CFG_DM_SEGMENTATION_ENABLED "dm.segmentation.enabled"
+#define AVAR_CFG_DM_SEGMENTATION_STRATEGY "dm.segmentation.strategy"
+#define AVAR_CFG_DM_SEGMENTATION_CONCURRENCY "dm.segmentation.concurrency"
+#define AVAR_CFG_DM_SEGMENTATION_CHUNK_SIZE "dm.segmentation.chunkSize"
+#define AVAR_CFG_DM_SEGMENTATION_MIN_FILE_SIZE "dm.segmentation.minFileSize"
+#define AVAR_CFG_DM_SEGMENTATION_LEFT_HEAVY_RATIO "dm.segmentation.leftHeavyFrontRatio"
+
+#define AVAR_CFG_DM_PROXY "dm.proxy"
+#define AVAR_CFG_DM_PROXY_ENABLED "dm.proxy.enabled"
+#define AVAR_CFG_DM_PROXY_TYPE "dm.proxy.type"
+#define AVAR_CFG_DM_PROXY_HOST "dm.proxy.host"
+#define AVAR_CFG_DM_PROXY_PORT "dm.proxy.port"
+#define AVAR_CFG_DM_PROXY_USERNAME "dm.proxy.username"
+#define AVAR_CFG_DM_PROXY_PASSWORD "dm.proxy.password"
+
+#define AVAR_CFG_LOG_FILE "log.file"
+#define AVAR_CFG_LOG_FILE_ENABLED "log.file.enabled"
+#define AVAR_CFG_LOG_FILE_PATH "log.file.path"
+
+#define AVAR_SEGMENT_STRATEGY_BALANCED "balanced"
+#define AVAR_SEGMENT_STRATEGY_LEFT_HEAVY "left-heavy"
+
+#define DL_DEFAULT_SEGMENT_CONCURRENCY 4U
+#define DL_DEFAULT_MIN_SEGMENT_FILE_SIZE AVAR_MIB
+#define DL_DEFAULT_LEFT_HEAVY_FRONT_RATIO 0.25
 
 /* -------------------------------------------------------------------------- */
 /* Download manager                                                           */
@@ -117,12 +150,18 @@
 #define DL_CHUNK_SIZE (256U * AVAR_KIB)
 #define DL_CONNECT_TIMEOUT_MS 30000U
 #define DL_IDLE_TIMEOUT_MS 120000U
+/* Allowed segment connection failures before the whole download is abandoned,
+ * expressed as a multiple of the segment count (retries are per-segment). */
+#define DL_SEGMENT_MAX_RETRY_FACTOR 4U
+#define DL_DEFAULT_MAX_RETRIES 10U
 #define DL_MAX_REDIRECTS 10
 #define DL_WRITE_CHUNK_SIZE AVAR_MIB
 #define DL_PROGRESS_BAR_WIDTH 22
+#define DL_PROGRESS_BAR_WIDTH_MIN 10
+#define DL_PROGRESS_BAR_WIDTH_MAX 400
 #define DL_PROGRESS_PERCENT_WIDTH 3
 #define DL_PROGRESS_SPEED_NUMBER_WIDTH 6
-#define DL_PROGRESS_LINE_BUF_SIZE 160U
+#define DL_PROGRESS_LINE_BUF_SIZE 512U
 #define DL_PROGRESS_PERCENT_MAX 100
 #define DL_POLL_MS 50U
 
@@ -138,8 +177,14 @@
 #define AVAR_DL_STATUS_DOWNLOADING "downloading"
 #define AVAR_DL_STATUS_FAILED "failed"
 #define AVAR_DL_STATUS_QUEUED "queued"
+#define AVAR_DL_STATUS_PAUSED "paused"
+#define AVAR_DL_STATUS_STOPPED "stopped"
 
 #define AVAR_DL_ADDED_DIRECT "direct"
+
+#define AVAR_PROXY_TYPE_HTTP "http"
+#define AVAR_PROXY_TYPE_HTTPS "https"
+#define AVAR_PROXY_TYPE_SOCKS5 "socks5"
 
 /* -------------------------------------------------------------------------- */
 /* JSON field names (config items and download state)                           */
@@ -149,6 +194,9 @@
 #define AVAR_FIELD_URL "url"
 #define AVAR_FIELD_STATUS "status"
 #define AVAR_FIELD_FILENAME "filename"
+#define AVAR_FIELD_FILENAME_INFERRED "filenameInferred"
+#define AVAR_FIELD_MAX_RETRIES "maxRetries"
+#define AVAR_FIELD_ERROR_COUNT "errorCount"
 #define AVAR_FIELD_PROXY "proxy"
 #define AVAR_FIELD_BYTES_DOWNLOADED "bytesDownloaded"
 #define AVAR_FIELD_TOTAL_BYTES "totalBytes"
@@ -157,12 +205,14 @@
 #define AVAR_FIELD_DESCRIPTION "description"
 #define AVAR_FIELD_ORIGINAL_PAGE "originalPage"
 #define AVAR_FIELD_REFERER "referer"
+#define AVAR_FIELD_STREAM_KIND "streamKind"
 #define AVAR_FIELD_ADDED_THROUGH "addedThrough"
 #define AVAR_FIELD_QUEUE_ID "queueId"
 
 #define AVAR_QUEUE_FIELD_NAME "name"
 #define AVAR_QUEUE_FIELD_MAX_CONCURRENT "maxConcurrentDownloads"
 #define AVAR_QUEUE_FIELD_MAX_CONNECTIONS "maxConnections"
+#define AVAR_QUEUE_FIELD_MAX_RETRIES "maxRetries"
 #define AVAR_QUEUE_FIELD_TEMP_PATH "tempPath"
 #define AVAR_QUEUE_FIELD_DOWNLOAD_PATH "downloadPath"
 #define AVAR_QUEUE_FIELD_STARTED "started"
@@ -176,6 +226,7 @@
 #define AVAR_STATE_FIELD_DEST_PATH "dest_path"
 #define AVAR_STATE_FIELD_CHUNK_SIZE "chunk_size"
 #define AVAR_STATE_FIELD_CHUNK_COUNT "chunk_count"
+#define AVAR_STATE_FIELD_DONE_RANGES "done_ranges"
 #define AVAR_STATE_FIELD_TOTAL_SIZE "total_size"
 #define AVAR_STATE_TMP_SUFFIX ".tmp"
 
@@ -206,6 +257,8 @@
 #define AVAR_CFG_DAEMON_SERVER_PID_FILE "daemon.server.pidFile"
 #define AVAR_CFG_DAEMON_SERVER_CONTAINER "daemon.server.containerMode"
 #define AVAR_CFG_DAEMON_SERVER_AUTH_TOKEN "daemon.server.authToken"
+#define AVAR_CFG_DAEMON_SERVER_CORS_ENABLED "daemon.server.cors.enabled"
+#define AVAR_CFG_DAEMON_SERVER_CORS_ALLOW_ORIGIN "daemon.server.cors.allowOrigin"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTP "daemon.server.channels.http"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTPS "daemon.server.channels.https"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTPS_ENABLED "daemon.server.channels.https.enabled"
@@ -222,6 +275,12 @@
 #define AVAR_CFG_DAEMON_CHANNELS_UNIX "daemon.server.channels.unix"
 #define AVAR_CFG_DAEMON_CHANNELS_UNIX_ENABLED "daemon.server.channels.unix.enabled"
 #define AVAR_CFG_DAEMON_CHANNELS_UNIX_PATH "daemon.server.channels.unix.path"
+#define AVAR_CFG_DAEMON_SERVER_AUTO_SHUTDOWN "daemon.server.autoShutdown"
+#define AVAR_CFG_DAEMON_SERVER_AUTO_SHUTDOWN_IDLE_SECONDS "daemon.server.autoShutdownIdleSeconds"
+
+#define AVAR_DAEMON_AUTO_SHUTDOWN_NEVER "never"
+#define AVAR_DAEMON_AUTO_SHUTDOWN_WHEN_IDLE "whenIdle"
+#define AVAR_DAEMON_AUTO_SHUTDOWN_IDLE_SECONDS_DEFAULT 60U
 
 #define AVAR_DAEMON_SESSION_MODE_LOCAL "local"
 #define AVAR_DAEMON_SESSION_MODE_REMOTE "remote"

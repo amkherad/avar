@@ -2,6 +2,11 @@
 
 #include <stdio.h>
 
+#if !defined(_WIN32)
+    #include <fcntl.h>
+    #include <unistd.h>
+#endif
+
 #include "avar.h"
 #include "utils.h"
 
@@ -110,6 +115,18 @@ AVAR_TEST(utils_is_valid_http_url_delegates_to_http_schemes) {
     AVAR_ASSERT(!is_valid_http_url(NULL));
 }
 
+AVAR_TEST(utils_trim_whitespace_inplace_trims_ends) {
+    char value[] = "  https://example.com/file.mkv  ";
+    trim_whitespace_inplace(value);
+    AVAR_ASSERT_STR_EQ(value, "https://example.com/file.mkv");
+}
+
+AVAR_TEST(utils_is_valid_http_url_accepts_trimmed_urls) {
+    char value[] = "https://example.com/file.mkv ";
+    trim_whitespace_inplace(value);
+    AVAR_ASSERT(is_valid_http_url(value));
+}
+
 AVAR_TEST(utils_print_help_returns_success) {
     const char *messages[] = {
             "Avar",
@@ -133,6 +150,51 @@ AVAR_TEST(utils_format_progress_bar_renders_percent_fill) {
     char bar[32];
     format_progress_bar(50, 22, bar, sizeof bar);
     AVAR_ASSERT_STR_EQ(bar, "[===========           ]");
+}
+
+AVAR_TEST(utils_format_spatial_progress_bar_renders_separate_regions) {
+    const AvarByteRange ranges[] = {{0, 24}, {50, 74}};
+    char bar[32];
+
+    format_spatial_progress_bar(100, ranges, 2, 20, bar, sizeof bar);
+    AVAR_ASSERT_STR_EQ(bar, "[=====     =====     ]");
+}
+
+AVAR_TEST(utils_progress_style_parse_accepts_known_values) {
+    AvarProgressStyle style = AVAR_PROGRESS_SEGMENTED;
+
+    AVAR_ASSERT(avar_progress_style_parse(AVAR_PROGRESS_STYLE_AGGREGATE, &style));
+    AVAR_ASSERT_EQ(style, AVAR_PROGRESS_AGGREGATE);
+
+    AVAR_ASSERT(avar_progress_style_parse(AVAR_PROGRESS_STYLE_SEGMENTED, &style));
+    AVAR_ASSERT_EQ(style, AVAR_PROGRESS_SEGMENTED);
+
+    AVAR_ASSERT(avar_progress_style_parse(NULL, &style));
+    AVAR_ASSERT_EQ(style, AVAR_PROGRESS_AGGREGATE);
+
+    AVAR_ASSERT(!avar_progress_style_parse("invalid", &style));
+}
+
+AVAR_TEST(utils_progress_bar_width_accounts_for_brackets) {
+    AVAR_ASSERT_EQ(avar_progress_bar_width_for_columns(80, 40), 38);
+    AVAR_ASSERT_EQ(avar_progress_bar_width_for_columns(0, 40), DL_PROGRESS_BAR_WIDTH);
+}
+
+AVAR_TEST(utils_progress_bar_width_uses_fixed_size_without_tty) {
+#if !defined(_WIN32)
+    const int fd = dup(STDERR_FILENO);
+    AVAR_ASSERT(fd >= 0);
+
+    int devnull = open("/dev/null", O_WRONLY);
+    AVAR_ASSERT(devnull >= 0);
+    AVAR_ASSERT(dup2(devnull, STDERR_FILENO) >= 0);
+
+    AVAR_ASSERT_EQ(avar_progress_bar_width(40), DL_PROGRESS_BAR_WIDTH);
+
+    AVAR_ASSERT(dup2(fd, STDERR_FILENO) >= 0);
+    close(fd);
+    close(devnull);
+#endif
 }
 
 AVAR_TEST(utils_format_progress_percent_right_aligns) {
@@ -229,8 +291,14 @@ AVAR_TEST_MAIN(
         run_utils_is_valid_url_accepts_paths_queries_and_fragments();
         run_utils_is_valid_url_accepts_userinfo_and_port();
         run_utils_is_valid_http_url_delegates_to_http_schemes();
+        run_utils_trim_whitespace_inplace_trims_ends();
+        run_utils_is_valid_http_url_accepts_trimmed_urls();
         run_utils_print_help_returns_success();
         run_utils_format_progress_bar_renders_percent_fill();
+        run_utils_format_spatial_progress_bar_renders_separate_regions();
+        run_utils_progress_style_parse_accepts_known_values();
+        run_utils_progress_bar_width_accounts_for_brackets();
+        run_utils_progress_bar_width_uses_fixed_size_without_tty();
         run_utils_format_progress_percent_right_aligns();
         run_utils_data_size_number_width_matches_value();
         run_utils_padded_size_uses_inferred_width();

@@ -7,6 +7,8 @@
 #include <daemon/daemon.h>
 
 struct mg_http_message;
+struct mg_connection;
+struct mg_mgr;
 
 #define AVAR_DAEMON_RPC_FRAME_MAX (256U * 1024U)
 
@@ -50,6 +52,37 @@ int daemon_rpc_delegate_argv(int argc, char **argv);
 
 void daemon_rpc_log_append(const char *line);
 
-bool daemon_rpc_logs_fetch(bool follow, unsigned max_lines, char **text_out);
+bool daemon_rpc_logs_fetch(bool follow, unsigned max_lines, uint64_t since, char **text_out,
+                           uint64_t *next_offset_out);
+
+/**
+ * Builds a JSON snapshot of queues, health, and download items for streaming clients.
+ * Caller must free(*json_out).
+ */
+bool daemon_rpc_build_snapshot(char **json_out);
+
+/** Sends a snapshot to an SSE or WebSocket connection. */
+void daemon_rpc_stream_send(struct mg_connection *connection, bool websocket);
+
+/** Pushes snapshots to registered streaming clients (call from HTTP poll loop). */
+void daemon_rpc_streams_tick(struct mg_mgr *mgr);
+
+/** Registers an SSE connection and sends the initial snapshot. */
+void daemon_rpc_stream_attach_sse(struct mg_connection *connection);
+
+/** Registers a WebSocket connection and sends the initial snapshot. */
+void daemon_rpc_stream_attach_ws(struct mg_connection *connection);
+
+/** Removes a streaming connection from the registry. */
+void daemon_rpc_stream_detach(struct mg_connection *connection);
+
+/** Records HTTP or streaming client activity (keeps auto-shutdown idle timer reset). */
+void daemon_rpc_note_frontend_activity(void);
+
+/**
+ * Returns true when a GUI client is connected: active SSE/WebSocket streams, or
+ * recent /api activity within grace_seconds.
+ */
+bool daemon_rpc_frontend_clients_active(unsigned grace_seconds);
 
 #endif

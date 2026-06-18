@@ -1,4 +1,5 @@
 #include "avar_test.h"
+#include "test_guard.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,22 +15,12 @@
     #include <unistd.h>
 #endif
 
-static char g_config_path[512];
+static TestGuard g_guard;
 
 static void setup_temp_config(void) {
-#if defined(_WIN32)
-    const char *base = getenv("TEMP");
-#else
-    const char *base = "/tmp";
-#endif
-    if (base == NULL) {
-        base = ".";
-    }
-
-    snprintf(g_config_path, sizeof g_config_path, "%s%cavar-test-config-env.json", base,
-             PATH_SEPARATOR);
-    remove(g_config_path);
-    AVAR_ASSERT_EQ(config_open_at(g_config_path), 0);
+    AVAR_ASSERT(test_guard_init(&g_guard, "avar-test-config-env"));
+    remove(g_guard.config_path);
+    AVAR_ASSERT_EQ(config_open_at(g_guard.config_path), 0);
 }
 
 static void set_test_env(const char *key, const char *value) {

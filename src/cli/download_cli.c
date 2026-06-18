@@ -10,6 +10,7 @@ static int handle_download_url(int argc, char *argv[]);
 static int handle_download_add(int argc, char *argv[]);
 static int handle_download_rm(int argc, char *argv[]);
 static int handle_download_ls(int argc, char *argv[]);
+static int handle_download_control(int argc, char *argv[], int (*action)(const char *));
 
 static void print_download_command_help(void) {
     arg_str_t *url = arg_str0(NULL, NULL, "URL", "download URL");
@@ -24,7 +25,11 @@ static void print_download_command_help(void) {
     puts("  avar dl|download <url> [--attached] [--queue=<queue>]");
     puts("      (default: queue on daemon; falls back to --attached if daemon is down)");
     puts("  avar dl add <name>");
-    puts("  avar dl rm <name> [--force]");
+    puts("  avar dl rm <id|name> [--force] [--purge-files]");
+    puts("  avar dl pause <id>");
+    puts("  avar dl resume <id>");
+    puts("  avar dl start <id>");
+    puts("  avar dl stop <id>");
     puts("  avar dl ls [--list]");
     puts("");
     puts("Options:");
@@ -59,6 +64,18 @@ int handle_download(int argc, char *argv[]) {
     }
     if (strcmp(sub, "rm") == 0) {
         return handle_download_rm(argc, argv);
+    }
+    if (strcmp(sub, "pause") == 0) {
+        return handle_download_control(argc, argv, download_pause);
+    }
+    if (strcmp(sub, "resume") == 0) {
+        return handle_download_control(argc, argv, download_resume);
+    }
+    if (strcmp(sub, "start") == 0) {
+        return handle_download_control(argc, argv, download_start);
+    }
+    if (strcmp(sub, "stop") == 0) {
+        return handle_download_control(argc, argv, download_stop);
     }
     if (strcmp(sub, "ls") == 0) {
         return handle_download_ls(argc, argv);
@@ -136,11 +153,12 @@ static int handle_download_rm(int argc, char *argv[]) {
         return EXIT_FAILURE;
     }
 
-    arg_str_t *name = arg_str1(NULL, NULL, "NAME", "download name");
+    arg_str_t *name = arg_str1(NULL, NULL, "ID", "download id or filename");
     arg_lit_t *force = arg_lit0(NULL, "force", "force removal");
+    arg_lit_t *purge_files = arg_lit0(NULL, "purge-files", "also delete downloaded files");
     arg_lit_t *help = arg_lit0("h", "help", "show help");
     arg_end_t *end = arg_end(20);
-    void *argtable[] = {name, force, help, end};
+    void *argtable[] = {name, force, purge_files, help, end};
 
     bool help_requested = false;
     const int parse_rc = cli_run_argtable(sub_argv[0], argtable, end, sub_argc, sub_argv, &help_requested);
@@ -151,9 +169,36 @@ static int handle_download_rm(int argc, char *argv[]) {
         return parse_rc;
     }
 
-    printf("download rm: %s%s\n", name->sval[0], force->count > 0 ? " (force)" : "");
+    const bool by_id = strncmp(name->sval[0], AVAR_DL_ID_PREFIX, strlen(AVAR_DL_ID_PREFIX)) == 0;
+    const int rc = download_remove(name->sval[0], by_id, purge_files->count > 0, force->count > 0);
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
-    return EXIT_SUCCESS;
+    return rc;
+}
+
+static int handle_download_control(int argc, char *argv[], int (*action)(const char *)) {
+    int sub_argc = 0;
+    char **sub_argv = NULL;
+    if (cli_make_subargv(argc, argv, 3, "avar dl", &sub_argc, &sub_argv) != EXIT_SUCCESS) {
+        return EXIT_FAILURE;
+    }
+
+    arg_str_t *id = arg_str1(NULL, NULL, "ID", "download id");
+    arg_lit_t *help = arg_lit0("h", "help", "show help");
+    arg_end_t *end = arg_end(20);
+    void *argtable[] = {id, help, end};
+
+    bool help_requested = false;
+    const int parse_rc = cli_run_argtable(sub_argv[0], argtable, end, sub_argc, sub_argv, &help_requested);
+    cli_free_subargv(sub_argv);
+
+    if (parse_rc != EXIT_SUCCESS || help_requested) {
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return parse_rc;
+    }
+
+    const int rc = action(id->sval[0]);
+    arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+    return rc;
 }
 
 static int handle_download_ls(int argc, char *argv[]) {

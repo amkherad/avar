@@ -1,4 +1,9 @@
-﻿# Project Structure
+﻿---
+name: code-style
+description: C23 code style for the Avar download manager backend. Apply when modifying files under src/, include/, or tests/ — not when editing gui/ TypeScript or React code (use gui-code-style instead).
+---
+
+# Project Structure
 
 This project uses a flat source layout.
 

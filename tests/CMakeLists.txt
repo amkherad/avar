@@ -1,5 +1,8 @@
 enable_testing()
 
+set(AVAR_TEST_GUARD_SOURCES test_guard.c)
+set(AVAR_INSTANCE_SOURCE "${SRC_DIR}/instance.c")
+
 function(avar_add_test test_name)
     add_executable(${test_name} ${ARGN})
     target_include_directories(${test_name} PRIVATE
@@ -42,12 +45,15 @@ avar_add_test(test_http
 
 avar_add_test(test_download_state
         test_download_state.c
+        ${AVAR_TEST_GUARD_SOURCES}
         "${SRC_DIR}/download_state.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
 
 avar_add_test(test_config_array
         test_config_array.c
+        ${AVAR_TEST_GUARD_SOURCES}
+        ${AVAR_INSTANCE_SOURCE}
         "${SRC_DIR}/config.c"
         "${SRC_DIR}/file-system.c"
         "${SRC_DIR}/logger.c"
@@ -57,6 +63,8 @@ avar_add_test(test_config_array
 
 avar_add_test(test_config_env
         test_config_env.c
+        ${AVAR_TEST_GUARD_SOURCES}
+        ${AVAR_INSTANCE_SOURCE}
         "${SRC_DIR}/config.c"
         "${SRC_DIR}/file-system.c"
         "${SRC_DIR}/logger.c"
@@ -66,6 +74,8 @@ avar_add_test(test_config_env
 
 avar_add_test(test_queue
         test_queue.c
+        ${AVAR_TEST_GUARD_SOURCES}
+        ${AVAR_INSTANCE_SOURCE}
         "${SRC_DIR}/queue.c"
         "${SRC_DIR}/config.c"
         "${SRC_DIR}/file-system.c"
@@ -74,21 +84,47 @@ avar_add_test(test_queue
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
 
+avar_add_test(test_download_segment
+        test_download_segment.c
+        "${SRC_DIR}/download_state.c"
+        "${SRC_DIR}/download_segment.c"
+        "${SRC_DIR}/third_party/cJSON/cJSON.c"
+)
+
+avar_add_test(test_thread_pool
+        test_thread_pool.c
+        "${SRC_DIR}/thread_pool.c"
+)
+
+avar_add_test(test_instance
+        test_instance.c
+        ${AVAR_INSTANCE_SOURCE}
+)
+
 set(AVAR_DOWNLOAD_TEST_SOURCES
         "${SRC_DIR}/logger.c"
         "${SRC_DIR}/utils.c"
+        ${AVAR_INSTANCE_SOURCE}
         "${SRC_DIR}/file-system.c"
         "${SRC_DIR}/config.c"
         "${SRC_DIR}/queue.c"
         "${SRC_DIR}/http.c"
+        "${SRC_DIR}/http_proxy.c"
         "${SRC_DIR}/download_state.c"
+        "${SRC_DIR}/download_sync.c"
+        "${SRC_DIR}/download_segment.c"
+        "${SRC_DIR}/download_config.c"
+        "${SRC_DIR}/thread_pool.c"
         "${SRC_DIR}/download.c"
+        "${SRC_DIR}/stream_hls.c"
+        "${SRC_DIR}/system_stats.c"
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
 )
 
 avar_add_test(test_download_integration
         test_download_integration.c
+        ${AVAR_TEST_GUARD_SOURCES}
         ${AVAR_DOWNLOAD_TEST_SOURCES}
 )
 target_compile_definitions(test_download_integration PRIVATE AVAR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
@@ -96,12 +132,20 @@ target_compile_definitions(test_download_integration PRIVATE AVAR_SOURCE_DIR="${
 set(AVAR_DAEMON_TEST_SOURCES
         "${SRC_DIR}/logger.c"
         "${SRC_DIR}/utils.c"
+        ${AVAR_INSTANCE_SOURCE}
         "${SRC_DIR}/file-system.c"
         "${SRC_DIR}/config.c"
         "${SRC_DIR}/queue.c"
         "${SRC_DIR}/http.c"
+        "${SRC_DIR}/http_proxy.c"
         "${SRC_DIR}/download_state.c"
+        "${SRC_DIR}/download_sync.c"
+        "${SRC_DIR}/download_segment.c"
+        "${SRC_DIR}/download_config.c"
+        "${SRC_DIR}/thread_pool.c"
         "${SRC_DIR}/download.c"
+        "${SRC_DIR}/stream_hls.c"
+        "${SRC_DIR}/system_stats.c"
         "${SRC_DIR}/transport.c"
         "${SRC_DIR}/torrent.c"
         "${SRC_DIR}/daemon/daemon.c"
@@ -125,6 +169,7 @@ set(AVAR_DAEMON_TEST_SOURCES
 
 avar_add_test(test_daemon
         test_daemon.c
+        ${AVAR_TEST_GUARD_SOURCES}
         ${AVAR_DAEMON_TEST_SOURCES}
 )
 target_compile_definitions(test_daemon PRIVATE VERSION_STR=\"0.0.1\")

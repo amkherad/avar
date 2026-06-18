@@ -59,6 +59,10 @@ bool is_log_level(log_level_t lvl);
 
 void init_logger(bool isVerbose);
 
+void logger_apply_config(void);
+
+void logger_close(void);
+
 /* Forward declaration for static inline helpers */
 
 void _vlog_msg(log_level_t lvl, const char *file,

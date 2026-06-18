@@ -1,6 +1,7 @@
 #include <config.h>
 #include <daemon/daemon.h>
 #include <file-system.h>
+#include <instance.h>
 #include <logger.h>
 #include <utils.h>
 
@@ -90,7 +91,12 @@ void daemon_config_apply_defaults(DaemonConfig *cfg) {
 
     cfg->server.detach = true;
     cfg->server.container_mode = false;
+    snprintf(cfg->server.auto_shutdown, sizeof cfg->server.auto_shutdown, "%s",
+             AVAR_DAEMON_AUTO_SHUTDOWN_NEVER);
+    cfg->server.auto_shutdown_idle_seconds = AVAR_DAEMON_AUTO_SHUTDOWN_IDLE_SECONDS_DEFAULT;
     cfg->server.auth_token[0] = '\0';
+    cfg->server.cors.enabled = true;
+    snprintf(cfg->server.cors.allow_origin, sizeof cfg->server.cors.allow_origin, "%s", "*");
     default_pid_file_path(cfg->server.pid_file, sizeof cfg->server.pid_file);
 
     cfg->server.http.enabled = true;
@@ -115,6 +121,20 @@ void daemon_config_apply_defaults(DaemonConfig *cfg) {
     cfg->server.unix_socket.enabled = false;
     snprintf(cfg->server.unix_socket.path, sizeof cfg->server.unix_socket.path, "%s",
              AVAR_SOCK_DEFAULT);
+
+    if (avar_instance_configured()) {
+        avar_path_with_instance(cfg->server.pid_file, sizeof cfg->server.pid_file,
+                                cfg->server.pid_file);
+        avar_named_resource_with_instance(cfg->server.pipe.name, sizeof cfg->server.pipe.name,
+                                          cfg->server.pipe.name);
+        avar_path_with_instance(cfg->server.unix_socket.path, sizeof cfg->server.unix_socket.path,
+                                cfg->server.unix_socket.path);
+
+        const uint16_t offset = avar_instance_port_offset();
+        cfg->server.http.port = (uint16_t)(cfg->server.http.port + offset);
+        cfg->server.https.port = (uint16_t)(cfg->server.https.port + offset);
+        cfg->session.remote_port = (uint16_t)(cfg->session.remote_port + offset);
+    }
 }
 
 static void load_bool_key(stringa key, bool *out) {
@@ -144,6 +164,18 @@ static void load_uint16_key(stringa key, uint16_t *out) {
     const long parsed = strtol(value, NULL, 10);
     if (parsed > 0 && parsed <= 65535) {
         *out = (uint16_t)parsed;
+    }
+    free(value);
+}
+
+static void load_uint_key(stringa key, unsigned *out) {
+    char *value = get_config(key);
+    if (value == NULL) {
+        return;
+    }
+    const long parsed = strtol(value, NULL, 10);
+    if (parsed > 0) {
+        *out = (unsigned)parsed;
     }
     free(value);
 }
@@ -183,10 +215,18 @@ bool daemon_config_load(DaemonConfig *out) {
 
     load_bool_key(AVAR_CFG_DAEMON_SERVER_DETACH, &out->server.detach);
     load_bool_key(AVAR_CFG_DAEMON_SERVER_CONTAINER, &out->server.container_mode);
+    load_string_key(AVAR_CFG_DAEMON_SERVER_AUTO_SHUTDOWN, out->server.auto_shutdown,
+                    sizeof out->server.auto_shutdown);
+    load_uint_key(AVAR_CFG_DAEMON_SERVER_AUTO_SHUTDOWN_IDLE_SECONDS,
+                  &out->server.auto_shutdown_idle_seconds);
     load_string_key(AVAR_CFG_DAEMON_SERVER_PID_FILE, out->server.pid_file,
                     sizeof out->server.pid_file);
     load_string_key(AVAR_CFG_DAEMON_SERVER_AUTH_TOKEN, out->server.auth_token,
                     sizeof out->server.auth_token);
+
+    load_bool_key(AVAR_CFG_DAEMON_SERVER_CORS_ENABLED, &out->server.cors.enabled);
+    load_string_key(AVAR_CFG_DAEMON_SERVER_CORS_ALLOW_ORIGIN, out->server.cors.allow_origin,
+                    sizeof out->server.cors.allow_origin);
 
     load_bool_key(AVAR_CFG_DAEMON_CHANNELS_HTTP_ENABLED, &out->server.http.enabled);
     load_string_key(AVAR_CFG_DAEMON_CHANNELS_HTTP_BIND, out->server.http.bind_addr,

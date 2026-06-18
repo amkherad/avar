@@ -17,6 +17,7 @@ typedef struct QueueOptions {
     const char *description;
     uint32_t max_concurrent_downloads;
     uint32_t max_connections;
+    uint32_t max_retries;
     const char *temp_path;
     const char *download_path;
 } QueueOptions;
@@ -30,6 +31,9 @@ typedef struct QueuePatch {
 
     bool set_max_connections;
     uint32_t max_connections;
+
+    bool set_max_retries;
+    uint32_t max_retries;
 
     bool set_temp_path;
     const char *temp_path;

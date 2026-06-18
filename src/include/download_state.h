@@ -8,9 +8,15 @@
 #include <stdint.h>
 
 typedef struct {
+    uint64_t start;
+    uint64_t end; /* inclusive */
+} ByteRange;
+
+typedef struct {
     char *id;
     char *url;
     char *filename;
+    bool filename_inferred;
     char *temp_path;
     char *dest_path;
     char *status;
@@ -20,6 +26,7 @@ typedef struct {
     char *description;
     char *original_page;
     char *referer;
+    char *stream_kind;
     char *added_through;
     char *queue_id;
     char *etag;
@@ -27,8 +34,9 @@ typedef struct {
     uint64_t total_size;
     uint64_t bytes_downloaded;
     size_t chunk_size;
-    size_t chunk_count;
-    bool *chunks_done;
+    ByteRange *done_ranges;
+    size_t done_range_count;
+    size_t done_range_capacity;
 } DownloadState;
 
 void download_state_free(DownloadState *state);
@@ -44,10 +52,20 @@ DownloadState *download_state_create(const char *url, const char *filename,
                                      const char *temp_path, const char *dest_path,
                                      uint64_t total_size, size_t chunk_size);
 
-size_t download_state_completed_chunks(const DownloadState *state);
-
 uint64_t download_state_bytes_done(const DownloadState *state);
 
+/* Rebuilds segment size for total_size. Preserves completed ranges when possible. */
+int download_state_init_chunks(DownloadState *state, uint64_t total_size, size_t chunk_size);
+
 bool download_state_all_chunks_done(const DownloadState *state);
+
+/* Marks [start, end] inclusive as downloaded; merges with adjacent completed ranges. */
+int download_state_mark_range_done(DownloadState *state, uint64_t start, uint64_t end);
+
+bool download_state_is_range_done(const DownloadState *state, uint64_t start, uint64_t end);
+
+size_t download_state_segment_count(const DownloadState *state);
+
+bool download_state_is_segment_done(const DownloadState *state, size_t segment_index);
 
 #endif
