@@ -28,5 +28,11 @@
       "js": ["media.js", "content.js"],
       "run_at": "document_idle"
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["page-response-hook.js"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }

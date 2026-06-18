@@ -29,7 +29,9 @@ const HLS_URL_RE = /\.m3u8(\?|#|$)|\/[^/?#]*\.m3u8|\/hls_playlist\/|\/manifest\/
 const DASH_URL_RE = /\.mpd(\?|#|$)|\/[^/?#]*\.mpd/i;
 
 const NETWORK_STREAM_RE =
-  /videoplayback|googlevideo\.com|vkuservideo|vkuserlive|mycdn\.me|okcdn\.ru|\/hls\/|\/dash\/|\/master\.txt(\?|#|$)/i;
+  /videoplayback|\/hls\/|\/dash\/|hls_playlist|\/master\.txt(\?|#|$)/i;
+
+const PREVIEW_URL_RE = /getVideoPreview|getPreview|\/preview\//i;
 
 const MEDIA_CATEGORY_ORDER = {
   video: 0,
@@ -82,6 +84,82 @@ function classifyStreamKind(url) {
     return "dash";
   }
   return "direct";
+}
+
+function looksLikeSignedMediaUrl(url) {
+  if (!url) {
+    return false;
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has("sig") && parsed.searchParams.has("expires")) {
+      return true;
+    }
+    if (parsed.searchParams.has("type") && parsed.searchParams.has("sig")) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+function classifyMediaFilename(filename) {
+  if (!filename) {
+    return null;
+  }
+  if (HLS_URL_RE.test(filename) || /\.m3u8$/i.test(filename)) {
+    return "hls";
+  }
+  if (DASH_URL_RE.test(filename) || /\.mpd$/i.test(filename)) {
+    return "dash";
+  }
+  if (VIDEO_EXT.test(filename) || AUDIO_EXT.test(filename) || MEDIA_EXT.test(filename)) {
+    return "direct";
+  }
+  return null;
+}
+
+function classifyMediaUrl(url) {
+  if (!isFetchable(url) || PREVIEW_URL_RE.test(url)) {
+    return null;
+  }
+
+  if (HLS_URL_RE.test(url)) {
+    return { url, kind: "hls" };
+  }
+  if (DASH_URL_RE.test(url)) {
+    return { url, kind: "dash" };
+  }
+  if (looksLikeMediaUrl(url)) {
+    return { url, kind: "direct" };
+  }
+  if (looksLikeSignedMediaUrl(url)) {
+    return { url, kind: classifyStreamKind(url) };
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (/mime=video/i.test(parsed.search)) {
+      return { url, kind: "direct" };
+    }
+    if (/mime=audio/i.test(parsed.search)) {
+      return { url, kind: "direct" };
+    }
+  } catch {
+    // ignore
+  }
+
+  if (NETWORK_STREAM_RE.test(url) && !PREVIEW_URL_RE.test(url)) {
+    if (looksLikeMediaUrl(url) || HLS_URL_RE.test(url) || DASH_URL_RE.test(url)) {
+      return { url, kind: classifyStreamKind(url) };
+    }
+    if (/videoplayback|\/hls\/|hls_playlist/i.test(url)) {
+      return { url, kind: classifyStreamKind(url) };
+    }
+  }
+
+  return null;
 }
 
 function getResponseHeader(headers, name) {
@@ -296,11 +374,13 @@ function classifyCapturedRequest(url, responseHeaders) {
   }
 
   const contentType = normalizeMimeType(getResponseHeader(responseHeaders, "content-type"));
+  const dispositionFilename = extractFilenameFromHeaders(responseHeaders);
+  const dispositionKind = classifyMediaFilename(dispositionFilename);
 
-  if (HLS_URL_RE.test(url) || looksLikeHlsType(contentType)) {
+  if (HLS_URL_RE.test(url) || looksLikeHlsType(contentType) || dispositionKind === "hls") {
     return withCapturedMetadata({ url, kind: "hls" }, responseHeaders);
   }
-  if (DASH_URL_RE.test(url) || looksLikeDashType(contentType)) {
+  if (DASH_URL_RE.test(url) || looksLikeDashType(contentType) || dispositionKind === "dash") {
     return withCapturedMetadata({ url, kind: "dash" }, responseHeaders);
   }
 
@@ -316,27 +396,26 @@ function classifyCapturedRequest(url, responseHeaders) {
     return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
   }
 
-  try {
-    const parsed = new URL(url);
-    if (/googlevideo\.com$/i.test(parsed.hostname) && /videoplayback/i.test(parsed.pathname)) {
-      return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
-    }
-    if (/mime=video/i.test(parsed.search)) {
-      return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
-    }
-    if (/mime=audio/i.test(parsed.search)) {
-      return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
-    }
-  } catch {
-    // ignore
+  if (dispositionKind === "direct") {
+    return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
   }
 
-  if (NETWORK_STREAM_RE.test(url) && (looksLikeMediaUrl(url) || HLS_URL_RE.test(url) || DASH_URL_RE.test(url))) {
-    return withCapturedMetadata({ url, kind: classifyStreamKind(url) }, responseHeaders);
+  const urlClassified = classifyMediaUrl(url);
+  if (urlClassified) {
+    return withCapturedMetadata(urlClassified, responseHeaders);
   }
 
-  if (NETWORK_STREAM_RE.test(url) && /videoplayback|\/hls\/|hls_playlist/i.test(url)) {
-    return withCapturedMetadata({ url, kind: classifyStreamKind(url) }, responseHeaders);
+  if (
+    contentType === "application/octet-stream" ||
+    contentType === "binary/octet-stream"
+  ) {
+    const size = getContentLengthFromHeaders(responseHeaders);
+    if (size === null || size >= 50_000) {
+      const classified = classifyMediaUrl(url);
+      if (classified) {
+        return withCapturedMetadata(classified, responseHeaders);
+      }
+    }
   }
 
   return null;
@@ -565,6 +644,10 @@ function extractStreamUrlsFromText(text, base, map) {
   const dashRe = /https?:\/\/[^\s"'<>]+\.mpd[^\s"'<>]*/gi;
   const playlistRe =
     /https?:\/\/[^\s"'<>]+(?:hls_playlist|videoplayback|\/hls\/|\/dash\/)[^\s"'<>]*/gi;
+  const jsonEscapedUrlRe = /"(https?:(?:\\\/\\\/|\/\/)[^"]+)"/gi;
+  const jsonMediaKeyRe =
+    /"(?:url|src|source|hls|dash|stream|video|file|cache|download|media)(?:\d*)"\s*:\s*"(https?:[^"\\]+(?:\\.[^"\\]*)*)"/gi;
+
   let match;
   while ((match = hlsRe.exec(text)) !== null) {
     addMediaItem(map, resolveUrl(match[0], base), "hls");
@@ -576,6 +659,38 @@ function extractStreamUrlsFromText(text, base, map) {
     const href = resolveUrl(match[0], base);
     addMediaItem(map, href, classifyStreamKind(href));
   }
+  while ((match = jsonEscapedUrlRe.exec(text)) !== null) {
+    const raw = match[1].replace(/\\\//g, "/");
+    const href = resolveUrl(raw, base);
+    const classified = classifyMediaUrl(href);
+    if (classified) {
+      addMediaItem(map, classified.url, classified.kind);
+    }
+  }
+  while ((match = jsonMediaKeyRe.exec(text)) !== null) {
+    const raw = match[1].replace(/\\\//g, "/");
+    const href = resolveUrl(raw, base);
+    const classified = classifyMediaUrl(href);
+    if (classified) {
+      addMediaItem(map, classified.url, classified.kind);
+    }
+  }
+}
+
+function collectPerformanceMediaItems() {
+  const map = new Map();
+  if (typeof performance === "undefined" || typeof performance.getEntriesByType !== "function") {
+    return [];
+  }
+
+  for (const entry of performance.getEntriesByType("resource")) {
+    const classified = classifyMediaUrl(entry.name);
+    if (classified) {
+      addMediaItem(map, classified.url, classified.kind);
+    }
+  }
+
+  return [...map.values()];
 }
 
 function collectMediaItems(doc) {
@@ -650,6 +765,14 @@ function collectMediaItems(doc) {
     }
   });
 
+  if (doc.documentElement) {
+    extractStreamUrlsFromText(doc.documentElement.innerHTML, base, map);
+  }
+
+  for (const item of collectPerformanceMediaItems()) {
+    addMediaItem(map, item.url, item.kind, item.filename, item.size);
+  }
+
   return sortMediaItems([...map.values()]);
 }
 
@@ -662,10 +785,12 @@ if (typeof globalThis !== "undefined") {
   globalThis.AvarMedia = {
     collectMediaUrls,
     collectMediaItems,
+    collectPerformanceMediaItems,
     mergeMediaItems,
     sortMediaItems,
     sortMediaItemsByMode,
     classifyStreamKind,
+    classifyMediaUrl,
     classifyMediaCategory,
     classifyCapturedRequest,
     parseContentDispositionFilename,

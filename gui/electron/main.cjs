@@ -409,6 +409,7 @@ ipcMain.handle("notification:show", (_event, options) => {
   const notification = new Notification({
     title: options?.title ?? "Avar",
     body: options?.body,
+    tag: options?.tag,
   });
   notification.show();
   return true;

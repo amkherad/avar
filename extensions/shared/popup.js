@@ -24,6 +24,8 @@ let lastMediaItems = [];
 let knownQueues = [];
 let pageReferer = null;
 let pageTitle = "";
+let bridgeConnected = false;
+let hlsExpandGeneration = 0;
 const probedSizes = new Map();
 const probedFilenames = new Map();
 const probingUrls = new Set();
@@ -236,6 +238,9 @@ function getItemSize(item) {
 }
 
 function shouldProbeItemSize(item) {
+  if (!bridgeConnected) {
+    return false;
+  }
   if (item.kind === "hls" || item.kind === "dash") {
     return false;
   }
@@ -351,9 +356,14 @@ function createDownloadButton(item) {
   btn.type = "button";
   btn.className = "media-item__download";
   btn.setAttribute("aria-label", "Download");
-  btn.title = "Download";
+  btn.title = bridgeConnected ? "Download" : "Connect to Avar to download";
+  btn.disabled = !bridgeConnected;
   btn.innerHTML = DOWNLOAD_ICON;
   btn.addEventListener("click", async () => {
+    if (!bridgeConnected) {
+      setStatus("Cannot reach Avar bridge.");
+      return;
+    }
     const queue = queueNameForId(defaultQueueSelect.value);
     const result = await api.runtime.sendMessage({
       type: "avar-add-download",
@@ -457,10 +467,19 @@ function renderMediaList(items) {
 }
 
 async function refreshBridgeStatus() {
+  const wasConnected = bridgeConnected;
   const response = await api.runtime.sendMessage({ type: "avar-ping-bridge" });
-  setBridgeConnected(Boolean(response?.ok));
+  bridgeConnected = Boolean(response?.ok);
+  setBridgeConnected(bridgeConnected);
   if (response?.bridgeUrl && bridgeUrlInput.value !== response.bridgeUrl) {
     bridgeUrlInput.value = response.bridgeUrl;
+  }
+  if (wasConnected !== bridgeConnected && lastMediaItems.length > 0) {
+    renderMediaList(lastMediaItems);
+    if (bridgeConnected) {
+      void expandHlsInBackground(lastMediaItems);
+      queueSizeProbes(getVisibleMediaItems(lastMediaItems));
+    }
   }
   return response;
 }
@@ -494,7 +513,32 @@ async function loadConfig() {
   }
 
   await refreshBridgeStatus();
-  await loadQueues();
+}
+
+async function expandHlsInBackground(items) {
+  if (!bridgeConnected) {
+    return;
+  }
+
+  const hlsItems = items.filter((item) => item.kind === "hls");
+  if (hlsItems.length === 0) {
+    return;
+  }
+
+  const generation = ++hlsExpandGeneration;
+  const expanded = await api.runtime.sendMessage({
+    type: "avar-expand-hls-items",
+    items,
+    referer: pageReferer,
+  });
+
+  if (generation !== hlsExpandGeneration) {
+    return;
+  }
+
+  if (expanded?.ok && Array.isArray(expanded.items)) {
+    renderMediaList(expanded.items);
+  }
 }
 
 async function scanPage() {
@@ -503,6 +547,7 @@ async function scanPage() {
   downloadAllBtn.hidden = true;
   pageReferer = null;
   pageTitle = "";
+  hlsExpandGeneration += 1;
 
   const response = await api.runtime.sendMessage({ type: "avar-list-media" });
   if (!response?.ok) {
@@ -513,22 +558,18 @@ async function scanPage() {
 
   pageReferer = response.pageUrl || null;
   pageTitle = response.pageTitle || "";
-  let items = response.items || (response.urls || []).map((url) => ({
+  const items = response.items || (response.urls || []).map((url) => ({
     url,
     kind: AvarMedia.classifyStreamKind(url),
   }));
 
-  setStatus("Resolving HLS streams…");
-  const expanded = await api.runtime.sendMessage({
-    type: "avar-expand-hls-items",
-    items,
-    referer: pageReferer,
-  });
-  if (expanded?.ok && Array.isArray(expanded.items)) {
-    items = expanded.items;
-  }
-
   renderMediaList(items);
+
+  const hlsCount = items.filter((item) => item.kind === "hls").length;
+  if (hlsCount > 0 && bridgeConnected) {
+    setStatus(`${items.length} media URL(s) found. Resolving ${hlsCount} HLS stream(s)…`);
+    void expandHlsInBackground(items);
+  }
 }
 
 settingsBtn.addEventListener("click", async () => {
@@ -574,6 +615,10 @@ document.getElementById("save").addEventListener("click", async () => {
 });
 
 downloadAllBtn.addEventListener("click", async () => {
+  if (!bridgeConnected) {
+    setStatus("Cannot reach Avar bridge.");
+    return;
+  }
   const items = getVisibleMediaItems(lastMediaItems);
   if (items.length === 0) {
     return;
@@ -597,6 +642,7 @@ downloadAllBtn.addEventListener("click", async () => {
 
 void (async () => {
   await loadConfig();
+  void loadQueues();
   await scanPage();
 })();
 
