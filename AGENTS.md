@@ -42,6 +42,16 @@ When modifying the web/desktop GUI:
 - Pure SPA: no server-side code in the GUI.
 - Daemon access is HTTP JSON-RPC only (`src/api/daemon.ts`).
 
+### Browser extensions (`extensions/`)
+
+- extension-development
+
+When modifying browser extension capture, manifests, or shared helpers:
+
+- Apply **extension-development**.
+- Use only site-agnostic media detection — never add per-website extractors or hostname checks.
+- Edit `extensions/shared/` first, then sync to `chromium/` and `firefox/`.
+
 ## Daemon mode
 
 CLI and daemon share one executable. Use the **daemon-mode** skill for all daemon, IPC, and session-routing work:

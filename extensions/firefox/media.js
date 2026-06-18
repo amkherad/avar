@@ -33,6 +33,9 @@ const NETWORK_STREAM_RE =
 
 const PREVIEW_URL_RE = /getVideoPreview|getPreview|\/preview\//i;
 
+const SIGNED_MEDIA_URL_IN_TEXT_RE =
+  /https?:\/\/[^\s"'<>\\]+?\?[^\s"'<>\\]*\bsig=[^\s"'<>\\&]+/gi;
+
 const MEDIA_CATEGORY_ORDER = {
   video: 0,
   audio: 1,
@@ -216,6 +219,10 @@ function classifyMediaCategory(item) {
     return "video";
   }
 
+  if (looksLikeSignedMediaUrl(url)) {
+    return "video";
+  }
+
   return "binary";
 }
 
@@ -382,6 +389,14 @@ function classifyCapturedRequest(url, responseHeaders) {
   }
   if (DASH_URL_RE.test(url) || looksLikeDashType(contentType) || dispositionKind === "dash") {
     return withCapturedMetadata({ url, kind: "dash" }, responseHeaders);
+  }
+
+  if (
+    contentType === "video/x-matroska" ||
+    contentType === "application/x-matroska" ||
+    contentType === "video/webm"
+  ) {
+    return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
   }
 
   if (VIDEO_MIME.test(contentType)) {
@@ -588,36 +603,49 @@ function formatDisplayUrl(url, maxLen = 48) {
   return `${url.slice(0, head)}…${url.slice(-tail)}`;
 }
 
+function addClassifiedMediaItem(map, item) {
+  const href = item?.url;
+  if (!isFetchable(href)) {
+    return;
+  }
+
+  const existing = map.get(href);
+  if (!existing) {
+    map.set(href, { ...item });
+    return;
+  }
+
+  const next = { ...existing };
+  if (existing.kind === "direct" && item.kind && item.kind !== "direct") {
+    next.kind = item.kind;
+  }
+  for (const key of ["filename"]) {
+    if (item[key] && !next[key]) {
+      next[key] = item[key];
+    }
+  }
+  if (typeof item.size === "number" && item.size >= 0 && next.size == null) {
+    next.size = item.size;
+  }
+  map.set(href, next);
+}
+
 function addMediaItem(map, url, kind, filename, size) {
   const href = typeof url === "string" ? url : null;
   if (!isFetchable(href)) {
     return;
   }
-  const resolvedKind = kind || classifyStreamKind(href);
-  const existing = map.get(href);
-  if (!existing) {
-    const item = { url: href, kind: resolvedKind };
-    if (filename) {
-      item.filename = filename;
-    }
-    if (typeof size === "number" && size >= 0) {
-      item.size = size;
-    }
-    map.set(href, item);
-    return;
+  const item = {
+    url: href,
+    kind: kind || classifyStreamKind(href),
+  };
+  if (filename) {
+    item.filename = filename;
   }
-
-  const next = { ...existing };
-  if (existing.kind === "direct" && resolvedKind !== "direct") {
-    next.kind = resolvedKind;
+  if (typeof size === "number" && size >= 0) {
+    item.size = size;
   }
-  if (filename && !next.filename) {
-    next.filename = filename;
-  }
-  if (typeof size === "number" && size >= 0 && next.size == null) {
-    next.size = size;
-  }
-  map.set(href, next);
+  addClassifiedMediaItem(map, item);
 }
 
 function mergeMediaItems(...lists) {
@@ -630,7 +658,7 @@ function mergeMediaItems(...lists) {
       if (!item?.url) {
         continue;
       }
-      addMediaItem(map, item.url, item.kind, item.filename, item.size);
+      addClassifiedMediaItem(map, item);
     }
   }
   return [...map.values()];
@@ -649,6 +677,15 @@ function extractStreamUrlsFromText(text, base, map) {
     /"(?:url|src|source|hls|dash|stream|video|file|cache|download|media)(?:\d*)"\s*:\s*"(https?:[^"\\]+(?:\\.[^"\\]*)*)"/gi;
 
   let match;
+  SIGNED_MEDIA_URL_IN_TEXT_RE.lastIndex = 0;
+  while ((match = SIGNED_MEDIA_URL_IN_TEXT_RE.exec(text)) !== null) {
+    const raw = match[0].replace(/\\\//g, "/");
+    const href = resolveUrl(raw, base);
+    const classified = classifyMediaUrl(href);
+    if (classified) {
+      addClassifiedMediaItem(map, classified);
+    }
+  }
   while ((match = hlsRe.exec(text)) !== null) {
     addMediaItem(map, resolveUrl(match[0], base), "hls");
   }
@@ -664,7 +701,7 @@ function extractStreamUrlsFromText(text, base, map) {
     const href = resolveUrl(raw, base);
     const classified = classifyMediaUrl(href);
     if (classified) {
-      addMediaItem(map, classified.url, classified.kind);
+      addClassifiedMediaItem(map, classified);
     }
   }
   while ((match = jsonMediaKeyRe.exec(text)) !== null) {
@@ -672,7 +709,7 @@ function extractStreamUrlsFromText(text, base, map) {
     const href = resolveUrl(raw, base);
     const classified = classifyMediaUrl(href);
     if (classified) {
-      addMediaItem(map, classified.url, classified.kind);
+      addClassifiedMediaItem(map, classified);
     }
   }
 }
@@ -702,12 +739,17 @@ function collectMediaItems(doc) {
     if (!isFetchable(href)) {
       return;
     }
+
     let kind = classifyStreamKind(href);
     if (looksLikeHlsType(type)) {
       kind = "hls";
     } else if (looksLikeDashType(type)) {
       kind = "dash";
-    } else if (!looksLikeMediaUrl(href) && !looksLikeMediaType(type)) {
+    } else if (
+      !looksLikeMediaUrl(href) &&
+      !looksLikeMediaType(type) &&
+      !looksLikeSignedMediaUrl(href)
+    ) {
       return;
     }
     addMediaItem(map, href, kind);

@@ -36,7 +36,7 @@
       "run_at": "document_idle"
     }
   ],
-  "web_accessible_resources": ["page-response-hook.js"],
+  "web_accessible_resources": ["page-response-hook.js", "media-hook.js"],
   "browser_specific_settings": {
     "gecko": {
       "id": "avar-download-helper@avar.io",

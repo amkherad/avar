@@ -8,7 +8,7 @@
   window.__avarResponseHookInstalled = true;
 
   const MEDIA_HINT_RE =
-    /\.m3u8|\.mpd|videoplayback|mime=video|mime=audio|hls_playlist|\/hls\/|\/dash\//i;
+    /\.m3u8|\.mpd|videoplayback|mime=video|mime=audio|hls_playlist|\/hls\/|\/dash\/|["']sig["']\s*:|&sig=|&expires=/i;
 
   function postBody(text) {
     if (typeof text === "string" && MEDIA_HINT_RE.test(text)) {
