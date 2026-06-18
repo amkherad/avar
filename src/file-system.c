@@ -18,6 +18,7 @@
 #else
     #include <sys/stat.h>    /* mkdir()   */
     #include <sys/types.h>
+    #include <unistd.h>      /* rmdir()   */
     #define MKDIR(path) mkdir((path), 0755)
     #define PATH_SEP '/'
 #endif

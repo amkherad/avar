@@ -1,6 +1,7 @@
 ﻿#ifndef AVAR_UTILS_H
 #define AVAR_UTILS_H
 
+#include <stdint.h>
 #include <uchar.h>
 
 #define string      const wchar_t  *
