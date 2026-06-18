@@ -1,33 +1,39 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import type { AppPage } from "@/components/layout/Sidebar";
 import { ThemeProvider } from "@/theme/ThemeContext";
 import { PopupHost } from "@/components/ui/PopupHost";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { SettingsPage, type SettingsCategory } from "@/pages/SettingsPage";
+import { SettingsPage } from "@/pages/SettingsPage";
 import { HelpPage } from "@/pages/HelpPage";
-import { QueuesPage } from "@/pages/QueuesPage";
 import { DownloadDetailPopupPage } from "@/pages/DownloadDetailPopupPage";
-import { HELP_TOPICS } from "@/lib/helpDocs";
 import { useConfigStore } from "@/stores/configStore";
-import { useLayoutStore } from "@/stores/layoutStore";
 import { useConsoleStore } from "@/stores/consoleStore";
 import { initSyncCoordinator } from "@/sync/syncManager";
 import { initNotificationWatcher } from "@/lib/notificationWatcher";
+import { initBrowserExtensionBridge } from "@/lib/browserExtensionBridge";
+import { toggleDetailPanelWithSelection } from "@/lib/detailPanel";
+import { useElectronTrayLabels } from "@/hooks/useElectronTrayLabels";
 import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
 import { parsePopupHash } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
 import { ShortcutProvider } from "@/shortcuts/ShortcutProvider";
 import { useShortcutAction } from "@/shortcuts/useShortcutAction";
+import { useAppLocation, useAppNavigation } from "@/hooks/useAppLocation";
+import { buildAppHash, defaultAppLocation, navigateAppLocation } from "@/lib/appRouting";
 import i18n, { isRtlLocale } from "@/i18n";
 
 function AppContent() {
-  const [page, setPage] = useState<AppPage>("dashboard");
-  const [helpTopicId, setHelpTopicId] = useState(HELP_TOPICS[0].id);
-  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
+  const location = useAppLocation();
+  const { goToPage, openSettings, setHelpTopic, setSettingsCategory, setDashboardAction } =
+    useAppNavigation();
   const locale = useConfigStore((s) => s.config.locale);
   const toggleConsole = useConsoleStore((s) => s.toggleOpen);
-  const toggleDetailPanel = useLayoutStore((s) => s.toggleDetailPanel);
+
+  useEffect(() => {
+    if (!window.location.hash || window.location.hash === "#") {
+      navigateAppLocation(defaultAppLocation(), true);
+    }
+  }, []);
 
   useEffect(() => {
     void i18n.changeLanguage(locale);
@@ -47,44 +53,52 @@ function AppContent() {
 
   useEffect(() => initSyncCoordinator(), []);
   useEffect(() => initNotificationWatcher(), []);
+  useEffect(() => initBrowserExtensionBridge(), []);
+  useElectronTrayLabels();
 
   useEffect(() => {
     appLogger.gui.info("Avar GUI started");
   }, []);
 
-  function handleNavigate(next: AppPage) {
-    appLogger.gui.debug(`Navigate to ${next}`);
-    setPage(next);
-  }
+  useEffect(() => {
+    appLogger.gui.debug("Route changed", buildAppHash(location));
+  }, [location]);
 
-  useShortcutAction("nav.dashboard", () => setPage("dashboard"));
-  useShortcutAction("nav.settings", () => setPage("settings"));
-  useShortcutAction("nav.help", () => setPage("help"));
+  useShortcutAction("nav.dashboard", () => goToPage("dashboard"));
+  useShortcutAction("nav.settings", () => openSettings("general"));
+  useShortcutAction("nav.help", () => goToPage("help"));
   useShortcutAction("console.toggle", () => toggleConsole());
-  useShortcutAction("detailPanel.toggle", () => toggleDetailPanel());
+  useShortcutAction("detailPanel.toggle", () => toggleDetailPanelWithSelection());
+  useShortcutAction("download.add", () => setDashboardAction("add-download"));
 
   function renderPage() {
-    switch (page) {
+    switch (location.page) {
       case "settings":
-        return <SettingsPage category={settingsCategory} />;
+        return <SettingsPage category={location.settingsCategory} />;
       case "help":
-        return <HelpPage topicId={helpTopicId} />;
-      case "queues":
-        return <QueuesPage />;
+        return <HelpPage topicId={location.helpTopicId} />;
       default:
-        return <DashboardPage />;
+        return (
+          <DashboardPage
+            addDownloadOpen={location.dashboardAction === "add-download"}
+            onAddDownloadOpenChange={(open) =>
+              setDashboardAction(open ? "add-download" : null)
+            }
+          />
+        );
     }
   }
 
   return (
     <>
       <AppShell
-        page={page}
-        onNavigate={handleNavigate}
-        helpTopicId={helpTopicId}
-        onHelpTopicChange={setHelpTopicId}
-        settingsCategory={settingsCategory}
+        page={location.page}
+        onNavigate={goToPage}
+        helpTopicId={location.helpTopicId}
+        onHelpTopicChange={setHelpTopic}
+        settingsCategory={location.settingsCategory}
         onSettingsCategoryChange={setSettingsCategory}
+        onOpenSettings={openSettings}
       >
         {renderPage()}
       </AppShell>

@@ -14,6 +14,14 @@ function newSessionId(): string {
   return `session-${Date.now().toString(36)}`;
 }
 
+function canRemoveSession(sessions: { id: string; builtin?: boolean }[], id: string): boolean {
+  const session = sessions.find((s) => s.id === id);
+  if (!session || session.builtin) {
+    return false;
+  }
+  return sessions.filter((s) => s.id !== id).length > 0;
+}
+
 export function SessionSelector() {
   const { t } = useTranslation();
   const config = useConfigStore((s) => s.config);
@@ -136,7 +144,7 @@ export function SessionSelector() {
     }
 
     const sessions = config.sessions.filter((s) => s.id !== id);
-    if (sessions.length === 0) {
+    if (!canRemoveSession(config.sessions, id)) {
       return;
     }
 
@@ -194,7 +202,9 @@ export function SessionSelector() {
       {menuOpen ? (
         <div className="avar-session-selector__menu" role="listbox" aria-label={t("session.title")}>
           <ul className="avar-list avar-session-list">
-            {config.sessions.map((session) => (
+            {config.sessions.map((session) => {
+              const removable = canRemoveSession(config.sessions, session.id);
+              return (
               <li key={session.id}>
                 <div
                   className={`avar-list__item ${config.activeSessionId === session.id ? "avar-list__item--active" : ""}`}
@@ -224,6 +234,7 @@ export function SessionSelector() {
                             variant="ghost"
                             aria-label={t("session.remove")}
                             title={t("session.remove")}
+                            disabled={!removable}
                             onClick={() => void removeSession(session.id)}
                           >
                             <FontAwesomeIcon icon={faTrash} />
@@ -234,7 +245,8 @@ export function SessionSelector() {
                   </div>
                 </div>
               </li>
-            ))}
+            );
+            })}
           </ul>
           <Button size="sm" variant="secondary" className="avar-session-selector__add" onClick={openAdd}>
             {t("session.add")}

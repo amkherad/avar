@@ -1,16 +1,21 @@
 import { useTranslation } from "react-i18next";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 import { useConfigStore } from "@/stores/configStore";
 import type { FooterMonitorSettings, LocaleId, SyncChannelId, ThemeId } from "@/config/defaults";
 import i18n, { isRtlLocale } from "@/i18n";
 import { getBuildInfo } from "@/lib/buildInfo";
+import { usePwaInstall } from "@/hooks/usePwaInstall";
+import { isPwaSupported } from "@/lib/pwa";
+import { requestNotificationPermission } from "@/lib/notificationService";
 
 export function GeneralSettings() {
   const { t } = useTranslation();
   const config = useConfigStore((s) => s.config);
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const build = getBuildInfo();
+  const pwa = usePwaInstall();
 
   function setLocale(locale: LocaleId) {
     void i18n.changeLanguage(locale);
@@ -93,6 +98,21 @@ export function GeneralSettings() {
       <section className="avar-settings-group">
         <h3 className="avar-settings-group__heading">{t("settings.footerMonitors")}</h3>
         <p className="avar-settings-hint">{t("settings.footerMonitorsHint")}</p>
+        <Select
+          label={t("settings.footerMonitorDisplay")}
+          value={config.footerMonitors.display}
+          onChange={(e) =>
+            updateConfig({
+              footerMonitors: {
+                ...config.footerMonitors,
+                display: e.target.value as "text" | "histogram",
+              },
+            })
+          }
+        >
+          <option value="text">{t("settings.footerMonitorDisplayText")}</option>
+          <option value="histogram">{t("settings.footerMonitorDisplayHistogram")}</option>
+        </Select>
         <div className="avar-settings-checkboxes">
           {(["disk", "memory", "cpu", "network"] as const).map((key) => (
             <label key={key} className="avar-checkbox-row">
@@ -106,6 +126,29 @@ export function GeneralSettings() {
           ))}
         </div>
       </section>
+
+      {isPwaSupported() ? (
+        <section className="avar-settings-group">
+          <h3 className="avar-settings-group__heading">{t("settings.pwa.title")}</h3>
+          <p className="avar-settings-hint">{t("settings.pwa.hint")}</p>
+          {pwa.installed ? (
+            <p className="avar-settings-hint">{t("settings.pwa.installed")}</p>
+          ) : pwa.canInstall ? (
+            <Button type="button" onClick={() => void pwa.install()}>
+              {t("settings.pwa.install")}
+            </Button>
+          ) : (
+            <p className="avar-settings-hint">{t("settings.pwa.installUnavailable")}</p>
+          )}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void requestNotificationPermission()}
+          >
+            {t("settings.pwa.enableNotifications")}
+          </Button>
+        </section>
+      ) : null}
 
       <section className="avar-settings-build">
         <h3 className="avar-settings-build__heading">{t("settings.buildInfo")}</h3>

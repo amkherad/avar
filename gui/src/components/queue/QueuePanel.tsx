@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 
 import { QueueList } from "@/components/queue/QueueList";
 
+import { QueueTable } from "@/components/queue/QueueTable";
+
 import { CreateQueueModal } from "@/components/queue/CreateQueueModal";
 
 import { FontAwesomeIcon } from "@/icons";
@@ -147,88 +149,88 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
         <div className="avar-queue-panel__actions">
 
           {mode === "select" && onManageQueues ? (
-
-            <Button size="sm" variant="ghost" onClick={onManageQueues}>
-
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={t("queue.manage")}
+              title={t("queue.manage")}
+              onClick={onManageQueues}
+            >
               <FontAwesomeIcon icon={faSliders} />
-
-              {t("queue.manage")}
-
             </Button>
-
           ) : null}
-
-          <Button size="sm" onClick={() => setModalOpen(true)}>
-
+          <Button
+            size="sm"
+            aria-label={t("queue.add")}
+            title={t("queue.add")}
+            onClick={() => setModalOpen(true)}
+          >
             <FontAwesomeIcon icon={faPlus} />
-
-            {t("queue.add")}
-
           </Button>
 
         </div>
 
       </div>
 
-
-
       {error ? <p className="avar-field__error">{error}</p> : null}
 
-      {status === "loading" && queues.length === 0 && downloads.length === 0 ? <Spinner /> : null}
-
-
-
-      <QueueList
-
-        queues={displayQueues}
-
-        selectedId={selectable ? effectiveQueueId : null}
-
-        downloadCounts={downloadCounts}
-
-        showDelete={showDelete}
-
-        selectable={selectable}
-
-        showModify={mode === "select" && Boolean(onModifyQueue)}
-
-        onSelect={setSelectedQueueId}
-
-        onStart={(id) => void runQueueAction(id, () => client!.startQueue(id))}
-
-        onStop={(id) => void runQueueAction(id, () => client!.stopQueue(id))}
-
-        onModify={onModifyQueue}
-
-        onDelete={async (id) => {
-
-          const result = await showConfirmDialog({
-
-            title: t("queue.delete"),
-
-            message: t("queue.deleteConfirm"),
-
-            confirmLabel: t("queue.delete"),
-
-            cancelLabel: t("common.cancel"),
-
-          });
-
-          if (!result.confirmed) {
-
-            appLogger.gui.debug("Queue delete cancelled", id);
-
-            return;
-
-          }
-
-          void runQueueAction(id, () => client!.removeQueue(id, false));
-
-        }}
-
-        busyId={busyId}
-
-      />
+      {isManage ? (
+        <QueueTable
+          queues={displayQueues}
+          downloadCounts={downloadCounts}
+          showDelete={showDelete}
+          showModify={Boolean(onModifyQueue)}
+          onStart={(id) => void runQueueAction(id, () => client!.startQueue(id))}
+          onStop={(id) => void runQueueAction(id, () => client!.stopQueue(id))}
+          onModify={onModifyQueue}
+          onDelete={async (id) => {
+            const result = await showConfirmDialog({
+              title: t("queue.delete"),
+              message: t("queue.deleteConfirm"),
+              confirmLabel: t("queue.delete"),
+              cancelLabel: t("common.cancel"),
+            });
+            if (!result.confirmed) {
+              appLogger.gui.debug("Queue delete cancelled", id);
+              return;
+            }
+            void runQueueAction(id, () => client!.removeQueue(id, false));
+          }}
+          busyId={busyId}
+          loading={status === "loading" && queues.length === 0 && downloads.length === 0}
+        />
+      ) : (
+        <>
+          {status === "loading" && queues.length === 0 && downloads.length === 0 ? <Spinner /> : null}
+          <QueueList
+          queues={displayQueues}
+          selectedId={selectable ? effectiveQueueId : null}
+          downloadCounts={downloadCounts}
+          compact
+          showDelete={showDelete}
+          selectable={selectable}
+          showModify={mode === "select" && Boolean(onModifyQueue)}
+          onSelect={setSelectedQueueId}
+          onStart={(id) => void runQueueAction(id, () => client!.startQueue(id))}
+          onStop={(id) => void runQueueAction(id, () => client!.stopQueue(id))}
+          onModify={onModifyQueue}
+          onDelete={async (id) => {
+            const result = await showConfirmDialog({
+              title: t("queue.delete"),
+              message: t("queue.deleteConfirm"),
+              confirmLabel: t("queue.delete"),
+              cancelLabel: t("common.cancel"),
+            });
+            if (!result.confirmed) {
+              appLogger.gui.debug("Queue delete cancelled", id);
+              return;
+            }
+            void runQueueAction(id, () => client!.removeQueue(id, false));
+          }}
+          busyId={busyId}
+        />
+        </>
+      )}
 
 
 

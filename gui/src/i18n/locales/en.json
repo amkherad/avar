@@ -48,7 +48,10 @@
     "manageHint": "Create, start, stop, or remove download queues.",
     "defaultName": "Default",
     "defaultDescription": "Downloads without an assigned queue",
-    "downloads": "{{count}} download(s)"
+    "downloads": "{{count}} download(s)",
+    "tableDescription": "Description",
+    "tableStatus": "Status",
+    "tableDownloads": "Downloads"
   },
   "download": {
     "title": "Downloads",
@@ -79,9 +82,13 @@
       "paused": "Paused",
       "completed": "Completed",
       "error": "Error",
+      "failed": "Error",
+      "stopped": "Stopped",
       "cancelled": "Cancelled"
     },
     "status": "Status",
+    "statusFilter": "Status filter",
+    "statusFilterAll": "All statuses",
     "progress": "Progress",
     "filename": "File",
     "bytes": "{{done}} / {{total}}",
@@ -112,6 +119,9 @@
     "selectedCount": "{{count}} selected",
     "copyCurl": "Copy curl",
     "curlCopied": "Copied!",
+    "copyId": "Copy ID",
+    "copyUrl": "Copy URL",
+    "copyFilename": "Copy filename",
     "toggleCheckboxes": "Show selection checkboxes",
     "selectAll": "Select all downloads",
     "pageSize": "Rows",
@@ -119,7 +129,12 @@
     "prevPage": "Previous",
     "nextPage": "Next",
     "detailPanel": "Details",
-    "toggleDetailPanel": "Toggle detail panel"
+    "toggleDetailPanel": "Toggle detail panel",
+    "retries": "Retries",
+    "retriesQueueDefault": "queue default",
+    "filenameSource": "Filename source",
+    "filenameInferred": "Inferred automatically",
+    "filenameUser": "Set by user"
   },
   "console": {
     "title": "Console",
@@ -130,8 +145,8 @@
     "autoScroll": "Auto-scroll",
     "showGui": "GUI logs",
     "showDaemon": "Daemon logs",
-    "guiSeverity": "GUI min level",
-    "daemonSeverity": "Daemon min level",
+    "guiSeverity": "GUI log level",
+    "daemonSeverity": "Daemon log level",
     "daemonFetchFailed": "Failed to fetch daemon logs",
     "resize": "Resize console",
     "level": {
@@ -171,6 +186,9 @@
     "buildCommit": "Commit",
     "footerMonitors": "Footer monitors",
     "footerMonitorsHint": "Choose which system metrics appear in the footer when connected to the daemon.",
+    "footerMonitorDisplay": "Monitor display",
+    "footerMonitorDisplayText": "Text values",
+    "footerMonitorDisplayHistogram": "Histogram + values",
     "footerMonitor": {
       "disk": "Disk space",
       "memory": "Memory usage",
@@ -179,7 +197,85 @@
     },
     "categories": {
       "general": "General",
+      "downloads": "Downloads",
+      "queues": "Queues",
+      "daemon": "Daemon",
+      "browser": "Browser integration",
       "shortcuts": "Shortcuts"
+    },
+    "pwa": {
+      "title": "Install web app",
+      "hint": "Install Avar as a standalone app in your browser. Notifications require permission.",
+      "install": "Install app",
+      "installed": "Avar is installed on this device.",
+      "installUnavailable": "Install is available when your browser offers it (usually after visiting over HTTPS or localhost).",
+      "notificationsTitle": "Desktop notifications",
+      "notificationsHint": "Allow notifications for download status changes and connection alerts.",
+      "enableNotifications": "Enable notifications",
+      "notificationsGranted": "Notifications enabled.",
+      "notificationsDenied": "Notifications were blocked. Enable them in browser settings.",
+      "notificationsUnsupported": "Notifications are not supported in this browser."
+    },
+    "browser": {
+      "title": "Browser integration",
+      "hint": "Install the Avar extension to send media links from any web page through the Avar front-end.",
+      "enableListener": "Listen for browser extension connections",
+      "extensionConnected": "Extension can reach the Avar front-end",
+      "extensionDisconnected": "Extension cannot reach the Avar front-end",
+      "extensionChecking": "Checking extension connection…",
+      "extensionDisabled": "Browser extension listener is disabled",
+      "guiUrl": "Avar bridge URL (paste into the extension popup):",
+      "copyGuiUrl": "Copy bridge URL",
+      "guiUrlCopied": "Bridge URL copied to clipboard.",
+      "daemonUrl": "Active session daemon URL:",
+      "copyDaemonUrl": "Copy URL",
+      "daemonUrlCopied": "Daemon URL copied to clipboard.",
+      "daemonOffline": "Connect to the daemon first so downloads can be queued from the extension.",
+      "install": "Install",
+      "installStarted": "Download started for {{browser}}. Follow the steps below to finish installation.",
+      "stepDownload": "Download the extension package for your browser.",
+      "stepExtract": "Extract the ZIP archive to a folder on your computer.",
+      "stepLoad": "Open your browser extensions page, enable Developer mode, and choose Load unpacked (Chromium) or Load Temporary Add-on (Firefox).",
+      "stepConfigure": "Select the extracted folder. The extension auto-detects the Electron bridge; paste the bridge URL if needed.",
+      "names": {
+        "chrome": "Chrome",
+        "firefox": "Firefox",
+        "edge": "Edge",
+        "opera": "Opera"
+      }
+    },
+    "download": {
+      "tempPath": "Temporary download folder",
+      "downloadPath": "Default save folder",
+      "segmentation": "Segmentation",
+      "segmentationEnabled": "Enable parallel segments",
+      "segmentationStrategy": "Segment strategy",
+      "strategyBalanced": "Balanced",
+      "strategyLeftHeavy": "Left-heavy",
+      "concurrency": "Max concurrent segments",
+      "chunkSize": "Segment chunk size (bytes)",
+      "minFileSize": "Minimum file size for segmentation (bytes)",
+      "progress": "Progress display",
+      "sizeUnit": "Size unit",
+      "speedUnit": "Speed unit",
+      "progressStyle": "Progress bar style",
+      "progressSegmented": "Segmented",
+      "progressAggregate": "Aggregate"
+    },
+    "queues": {
+      "hint": "Manage download queues connected to the daemon.",
+      "defaults": "Queue defaults",
+      "maxConnectionsHint": "Per-queue limits are edited on each queue.",
+      "editHint": "Use the queue manager to set max connections, paths, and other per-queue options."
+    },
+    "daemon": {
+      "autoShutdown": "Auto shutdown",
+      "autoShutdownNever": "Never",
+      "autoShutdownWhenIdle": "When idle (no active downloads)",
+      "autoShutdownIdleSeconds": "Idle time before shutdown (seconds)",
+      "fileLogging": "File logging",
+      "logEnabled": "Write avar logs to file",
+      "logPath": "Log file path"
     }
   },
   "shortcuts": {
@@ -220,6 +316,31 @@
       "layout": "Layout"
     }
   },
+  "tray": {
+    "show": "Show Avar",
+    "exit": "Exit Avar",
+    "startAll": "Start All",
+    "pauseAll": "Pause All",
+    "resumeAll": "Resume All",
+    "stopAll": "Stop All"
+  },
+  "extensionPanel": {
+    "aria": "Browser extension integration",
+    "title": "Extension integration",
+    "connected": "Extension connected",
+    "disconnected": "Extension not connected",
+    "checking": "Checking extension…",
+    "disabled": "Extension listener disabled",
+    "listen": "Listen for browser extension",
+    "bridgeUrl": "Bridge URL",
+    "copyUrl": "Copy",
+    "bridgeVersion": "Bridge version",
+    "protocolVersion": "Protocol",
+    "extensionVersion": "Extension version",
+    "bundledVersion": "Bundled extension",
+    "notConnected": "—",
+    "updateAvailable": "A newer extension version is available. Reinstall from Settings → Browser integration."
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",
@@ -228,7 +349,8 @@
     "error": "Something went wrong",
     "tryAgain": "Try again",
     "staleData": "Showing last known data — not connected to the daemon",
-    "close": "Close"
+    "close": "Close",
+    "copied": "Copied!"
   },
   "proxy": {
     "title": "Proxy",

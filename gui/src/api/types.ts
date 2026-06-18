@@ -59,6 +59,8 @@ export interface DownloadInfo {
 
   filename: string;
 
+  filenameInferred?: boolean;
+
   url?: string;
 
   status: DownloadStatus;
@@ -68,6 +70,10 @@ export interface DownloadInfo {
   bytesDownloaded: number;
 
   totalBytes: number;
+
+  errorCount?: number;
+
+  maxRetries?: number | null;
 
 }
 

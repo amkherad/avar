@@ -6,7 +6,7 @@ Queues organize downloads and control scheduling.
 
 The left sidebar lists queues in a **compact** view — only the queue name is shown. Hover a queue to see its description, running/stopped status, and download count.
 
-Click a queue to filter the download list. Use **Manage** to open the full queue management page.
+Click a queue to filter the download list. Use **Manage** to open queue management in **Settings**.
 
 ## ▶️ Queue actions
 

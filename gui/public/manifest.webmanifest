@@ -1,0 +1,20 @@
+{
+  "name": "Avar Download Manager",
+  "short_name": "Avar",
+  "description": "Web GUI for the Avar download manager daemon",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#38bdf8",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

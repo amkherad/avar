@@ -1,35 +1,43 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faCheckSquare, faPlus, faTableCells, faTableList } from "@fortawesome/free-solid-svg-icons";
+import { faCheckSquare, faTableCells, faTableList } from "@fortawesome/free-solid-svg-icons";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { ShortcutButton } from "@/components/ui/ShortcutButton";
+import { Select } from "@/components/ui/Select";
 import type { DownloadInfo } from "@/api/types";
 import type { DownloadViewMode } from "@/stores/layoutStore";
+import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import type { DownloadStatusFilter } from "@/lib/downloadFilterSort";
 import { DownloadControls } from "./DownloadControls";
 import { useShortcutAction } from "@/shortcuts/useShortcutAction";
 
 export interface DownloadToolbarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  statusFilter: DownloadStatusFilter;
+  onStatusFilterChange: (filter: DownloadStatusFilter) => void;
+  availableStatuses: string[];
+  showStatusFilter?: boolean;
   viewMode: DownloadViewMode;
   onViewModeChange: (mode: DownloadViewMode) => void;
   selectedDownloads: DownloadInfo[];
   showCheckboxes: boolean;
   onToggleCheckboxes: () => void;
-  onAddDownload: () => void;
 }
 
 export function DownloadToolbar({
   searchQuery,
   onSearchChange,
+  statusFilter,
+  onStatusFilterChange,
+  availableStatuses,
+  showStatusFilter = false,
   viewMode,
   onViewModeChange,
   selectedDownloads,
   showCheckboxes,
   onToggleCheckboxes,
-  onAddDownload,
 }: DownloadToolbarProps) {
   const { t } = useTranslation();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -39,16 +47,6 @@ export function DownloadToolbar({
   return (
     <div className="avar-download-toolbar">
       <div className="avar-download-toolbar__start">
-        <ShortcutButton
-          size="sm"
-          variant="primary"
-          shortcut="download.add"
-          onClick={onAddDownload}
-        >
-          <FontAwesomeIcon icon={faPlus} />
-          {t("download.add")}
-        </ShortcutButton>
-
         {selectedDownloads.length > 0 ? (
           <div className="avar-download-toolbar__group">
             <span className="avar-download-toolbar__selection">
@@ -97,6 +95,23 @@ export function DownloadToolbar({
         placeholder={t("download.searchPlaceholder")}
         aria-label={t("download.searchPlaceholder")}
       />
+
+      {showStatusFilter ? (
+        <Select
+          compact
+          className="avar-download-toolbar__status-filter"
+          label={t("download.statusFilter")}
+          value={statusFilter}
+          onChange={(e) => onStatusFilterChange(e.target.value as DownloadStatusFilter)}
+        >
+          <option value="all">{t("download.statusFilterAll")}</option>
+          {availableStatuses.map((status) => (
+            <option key={status} value={status}>
+              {formatDownloadStatus(status, t)}
+            </option>
+          ))}
+        </Select>
+      ) : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { parseSnapshotPayload } from "@/api/snapshot";
 import type { SnapshotPayload } from "@/api/types";
 import type { DaemonClient } from "@/api/daemon";
+import type { SyncChannelId } from "@/config/defaults";
 import { appLogger } from "@/lib/appLogger";
 import { useConfigStore } from "@/stores/configStore";
 import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
@@ -30,20 +31,35 @@ function startPollSync(intervalMs: number): SyncStopFn {
   return () => window.clearInterval(timerId);
 }
 
+function resolveSyncChannel(
+  preferred: SyncChannelId,
+  session: { authToken?: string } | undefined,
+): SyncChannelId {
+  if (preferred === "sse") {
+    if (typeof EventSource === "undefined") {
+      appLogger.gui.warn("SSE unavailable in this environment; falling back to poll");
+      return "poll";
+    }
+    if (session?.authToken) {
+      appLogger.gui.warn("SSE unavailable with auth token; falling back to poll");
+      return "poll";
+    }
+    return "sse";
+  }
+  if (preferred === "websocket") {
+    if (session?.authToken) {
+      appLogger.gui.warn("WebSocket unavailable with auth token; falling back to poll");
+      return "poll";
+    }
+    return "websocket";
+  }
+  return preferred;
+}
+
 function startSseSync(client: DaemonClient): SyncStopFn {
   const url = client.getEventsUrl();
   appLogger.gui.info("SSE sync connecting", url);
   const source = new EventSource(url, { withCredentials: false });
-
-  const { config } = useConfigStore.getState();
-  const session =
-    config.sessions.find((s) => s.id === config.activeSessionId) ??
-    config.sessions[0];
-  if (session?.authToken) {
-    appLogger.gui.warn("SSE unavailable with auth token; falling back to poll");
-    source.close();
-    return startPollSync(config.refreshIntervalMs);
-  }
 
   const apply = (payload: SnapshotPayload) => {
     appLogger.gui.debug("SSE snapshot received");
@@ -82,16 +98,6 @@ function startSseSync(client: DaemonClient): SyncStopFn {
 }
 
 function startWebSocketSync(client: DaemonClient): SyncStopFn {
-  const { config } = useConfigStore.getState();
-  const session =
-    config.sessions.find((s) => s.id === config.activeSessionId) ??
-    config.sessions[0];
-
-  if (session?.authToken) {
-    appLogger.gui.warn("WebSocket unavailable with auth token; falling back to poll");
-    return startPollSync(config.refreshIntervalMs);
-  }
-
   let ws: WebSocket | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
@@ -162,9 +168,14 @@ export function restartDataSync(): void {
     return;
   }
 
-  appLogger.gui.info(`Starting data sync (${config.syncChannel})`);
+  const session =
+    config.sessions.find((s) => s.id === config.activeSessionId) ??
+    config.sessions[0];
+  const channel = resolveSyncChannel(config.syncChannel, session);
 
-  switch (config.syncChannel) {
+  appLogger.gui.info(`Starting data sync (${channel})`);
+
+  switch (channel) {
     case "sse":
       activeStop = startSseSync(client);
       break;

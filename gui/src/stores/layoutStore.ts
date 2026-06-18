@@ -52,7 +52,7 @@ export const useLayoutStore = create<LayoutState>()(
       sidebarWidth: 260,
       consoleHeight: 220,
       detailPanelWidth: 300,
-      detailPanelOpen: true,
+      detailPanelOpen: false,
       downloadViewMode: "grid",
       downloadTableColumns: defaultTableColumns,
 

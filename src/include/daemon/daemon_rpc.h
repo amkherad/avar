@@ -52,7 +52,8 @@ int daemon_rpc_delegate_argv(int argc, char **argv);
 
 void daemon_rpc_log_append(const char *line);
 
-bool daemon_rpc_logs_fetch(bool follow, unsigned max_lines, char **text_out);
+bool daemon_rpc_logs_fetch(bool follow, unsigned max_lines, uint64_t since, char **text_out,
+                           uint64_t *next_offset_out);
 
 /**
  * Builds a JSON snapshot of queues, health, and download items for streaming clients.

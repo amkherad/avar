@@ -157,8 +157,19 @@ export function AddDownloadModal({ open, onClose }: AddDownloadModalProps) {
   );
 }
 
-export function useAddDownloadModal() {
-  const [open, setOpen] = useState(false);
+export function useAddDownloadModal(
+  controlledOpen?: boolean,
+  onOpenChange?: (open: boolean) => void,
+) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+
+  function setOpen(next: boolean) {
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(next);
+    }
+    onOpenChange?.(next);
+  }
 
   return {
     open,

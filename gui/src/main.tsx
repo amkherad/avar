@@ -5,6 +5,9 @@ import "@/icons";
 import "@/theme/global.css";
 import "@/theme/components.css";
 import "@/i18n";
+import { registerServiceWorker } from "@/lib/pwa";
+
+void registerServiceWorker();
 
 const root = document.getElementById("root");
 if (!root) {

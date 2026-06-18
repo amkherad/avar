@@ -19,6 +19,7 @@ set(AVAR_CORE_SOURCES
         "${SRC_DIR}/config.c"
         "${SRC_DIR}/queue.c"
         "${SRC_DIR}/http.c"
+        "${SRC_DIR}/http_proxy.c"
         "${SRC_DIR}/download_state.c"
         "${SRC_DIR}/download_sync.c"
         "${SRC_DIR}/download_segment.c"

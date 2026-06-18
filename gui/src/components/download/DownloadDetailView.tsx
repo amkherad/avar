@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@/icons";
 import { faCopy } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { CopyButton } from "@/components/ui/CopyButton";
 import type { DownloadInfo } from "@/api/types";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
@@ -47,7 +48,12 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
   return (
     <div className={`avar-download-detail ${compact ? "avar-download-detail--compact" : ""}`}>
       <div className="avar-download-detail__header">
-        <h3 className="avar-download-detail__filename">{download.filename}</h3>
+        <div className="avar-download-detail__filename-row">
+          <h3 className="avar-download-detail__filename">{download.filename}</h3>
+          {download.filename ? (
+            <CopyButton text={download.filename} label={t("download.copyFilename")} />
+          ) : null}
+        </div>
         <Badge tone={statusTone(download.status)}>
           {formatDownloadStatus(download.status, t)}
         </Badge>
@@ -69,19 +75,49 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
         {download.url ? (
           <div className="avar-download-detail__field">
             <dt>{t("download.url")}</dt>
-            <dd className="avar-download-detail__url">{download.url}</dd>
+            <dd className="avar-download-detail__value-row">
+              <span className="avar-download-detail__url">{download.url}</span>
+              <CopyButton text={download.url} label={t("download.copyUrl")} />
+            </dd>
           </div>
         ) : null}
 
         <div className="avar-download-detail__field">
           <dt>{t("download.id")}</dt>
-          <dd className="avar-download-detail__mono">{download.id}</dd>
+          <dd className="avar-download-detail__value-row">
+            <span className="avar-download-detail__mono">{download.id}</span>
+            <CopyButton text={download.id} label={t("download.copyId")} />
+          </dd>
         </div>
 
         {download.queueId ? (
           <div className="avar-download-detail__field">
             <dt>{t("download.queue")}</dt>
             <dd>{download.queueId}</dd>
+          </div>
+        ) : null}
+
+        {download.errorCount !== undefined || download.maxRetries !== undefined ? (
+          <div className="avar-download-detail__field">
+            <dt>{t("download.retries")}</dt>
+            <dd>
+              {download.errorCount ?? 0}
+              {" / "}
+              {download.maxRetries != null && download.maxRetries > 0
+                ? download.maxRetries
+                : t("download.retriesQueueDefault")}
+            </dd>
+          </div>
+        ) : null}
+
+        {download.filenameInferred !== undefined ? (
+          <div className="avar-download-detail__field">
+            <dt>{t("download.filenameSource")}</dt>
+            <dd>
+              {download.filenameInferred
+                ? t("download.filenameInferred")
+                : t("download.filenameUser")}
+            </dd>
           </div>
         ) : null}
       </dl>

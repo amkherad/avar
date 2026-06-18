@@ -220,9 +220,15 @@ export class DaemonClient {
     }
   }
 
-  async getLogs(maxLines = 100): Promise<string> {
-    const result = await this.rpc<{ logs?: string }>("logs.get", { maxLines });
-    return result.logs ?? "";
+  async getLogs(maxLines = 100, since = 0): Promise<{ logs: string; nextOffset: number }> {
+    const result = await this.rpc<{ logs?: string; nextOffset?: number }>("logs.get", {
+      maxLines,
+      since,
+    });
+    return {
+      logs: result.logs ?? "",
+      nextOffset: result.nextOffset ?? since,
+    };
   }
 
   async addDownload(options: AddDownloadParams | string, queueName?: string): Promise<void> {
@@ -281,6 +287,26 @@ export class DaemonClient {
     const result = await this.cliExec(argv);
     if (result.exitCode !== 0) {
       throw new DaemonApiError("Failed to remove download", result.exitCode);
+    }
+  }
+
+  async getConfig(key: string, defaultValue?: string): Promise<string | null> {
+    const argv = ["avar", "config", "get", key];
+    if (defaultValue !== undefined) {
+      argv.push(`--defaultValue=${defaultValue}`);
+    }
+    const result = await this.cliExec(argv);
+    if (result.exitCode !== 0) {
+      return defaultValue ?? null;
+    }
+    const output = result.output?.trim();
+    return output && output.length > 0 ? output : (defaultValue ?? null);
+  }
+
+  async setConfig(key: string, value: string): Promise<void> {
+    const result = await this.cliExec(["avar", "config", "set", key, value]);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError(`Failed to set config ${key}`, result.exitCode);
     }
   }
 

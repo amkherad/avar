@@ -123,6 +123,18 @@
 #define AVAR_CFG_DM_SEGMENTATION_MIN_FILE_SIZE "dm.segmentation.minFileSize"
 #define AVAR_CFG_DM_SEGMENTATION_LEFT_HEAVY_RATIO "dm.segmentation.leftHeavyFrontRatio"
 
+#define AVAR_CFG_DM_PROXY "dm.proxy"
+#define AVAR_CFG_DM_PROXY_ENABLED "dm.proxy.enabled"
+#define AVAR_CFG_DM_PROXY_TYPE "dm.proxy.type"
+#define AVAR_CFG_DM_PROXY_HOST "dm.proxy.host"
+#define AVAR_CFG_DM_PROXY_PORT "dm.proxy.port"
+#define AVAR_CFG_DM_PROXY_USERNAME "dm.proxy.username"
+#define AVAR_CFG_DM_PROXY_PASSWORD "dm.proxy.password"
+
+#define AVAR_CFG_LOG_FILE "log.file"
+#define AVAR_CFG_LOG_FILE_ENABLED "log.file.enabled"
+#define AVAR_CFG_LOG_FILE_PATH "log.file.path"
+
 #define AVAR_SEGMENT_STRATEGY_BALANCED "balanced"
 #define AVAR_SEGMENT_STRATEGY_LEFT_HEAVY "left-heavy"
 
@@ -141,6 +153,7 @@
 /* Allowed segment connection failures before the whole download is abandoned,
  * expressed as a multiple of the segment count (retries are per-segment). */
 #define DL_SEGMENT_MAX_RETRY_FACTOR 4U
+#define DL_DEFAULT_MAX_RETRIES 10U
 #define DL_MAX_REDIRECTS 10
 #define DL_WRITE_CHUNK_SIZE AVAR_MIB
 #define DL_PROGRESS_BAR_WIDTH 22
@@ -164,8 +177,14 @@
 #define AVAR_DL_STATUS_DOWNLOADING "downloading"
 #define AVAR_DL_STATUS_FAILED "failed"
 #define AVAR_DL_STATUS_QUEUED "queued"
+#define AVAR_DL_STATUS_PAUSED "paused"
+#define AVAR_DL_STATUS_STOPPED "stopped"
 
 #define AVAR_DL_ADDED_DIRECT "direct"
+
+#define AVAR_PROXY_TYPE_HTTP "http"
+#define AVAR_PROXY_TYPE_HTTPS "https"
+#define AVAR_PROXY_TYPE_SOCKS5 "socks5"
 
 /* -------------------------------------------------------------------------- */
 /* JSON field names (config items and download state)                           */
@@ -175,6 +194,9 @@
 #define AVAR_FIELD_URL "url"
 #define AVAR_FIELD_STATUS "status"
 #define AVAR_FIELD_FILENAME "filename"
+#define AVAR_FIELD_FILENAME_INFERRED "filenameInferred"
+#define AVAR_FIELD_MAX_RETRIES "maxRetries"
+#define AVAR_FIELD_ERROR_COUNT "errorCount"
 #define AVAR_FIELD_PROXY "proxy"
 #define AVAR_FIELD_BYTES_DOWNLOADED "bytesDownloaded"
 #define AVAR_FIELD_TOTAL_BYTES "totalBytes"
@@ -189,6 +211,7 @@
 #define AVAR_QUEUE_FIELD_NAME "name"
 #define AVAR_QUEUE_FIELD_MAX_CONCURRENT "maxConcurrentDownloads"
 #define AVAR_QUEUE_FIELD_MAX_CONNECTIONS "maxConnections"
+#define AVAR_QUEUE_FIELD_MAX_RETRIES "maxRetries"
 #define AVAR_QUEUE_FIELD_TEMP_PATH "tempPath"
 #define AVAR_QUEUE_FIELD_DOWNLOAD_PATH "downloadPath"
 #define AVAR_QUEUE_FIELD_STARTED "started"
@@ -251,6 +274,12 @@
 #define AVAR_CFG_DAEMON_CHANNELS_UNIX "daemon.server.channels.unix"
 #define AVAR_CFG_DAEMON_CHANNELS_UNIX_ENABLED "daemon.server.channels.unix.enabled"
 #define AVAR_CFG_DAEMON_CHANNELS_UNIX_PATH "daemon.server.channels.unix.path"
+#define AVAR_CFG_DAEMON_SERVER_AUTO_SHUTDOWN "daemon.server.autoShutdown"
+#define AVAR_CFG_DAEMON_SERVER_AUTO_SHUTDOWN_IDLE_SECONDS "daemon.server.autoShutdownIdleSeconds"
+
+#define AVAR_DAEMON_AUTO_SHUTDOWN_NEVER "never"
+#define AVAR_DAEMON_AUTO_SHUTDOWN_WHEN_IDLE "whenIdle"
+#define AVAR_DAEMON_AUTO_SHUTDOWN_IDLE_SECONDS_DEFAULT 60U
 
 #define AVAR_DAEMON_SESSION_MODE_LOCAL "local"
 #define AVAR_DAEMON_SESSION_MODE_REMOTE "remote"

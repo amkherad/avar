@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
 import { useConnectionStore } from "@/stores/connectionStore";
-import { useConsoleStore, type LogEntry, type LogLevel } from "@/stores/consoleStore";
+import { useConsoleStore, logLevelMeetsMin, type LogEntry, type LogLevel } from "@/stores/consoleStore";
 import { useLayoutStore } from "@/stores/layoutStore";
 import { appLogger } from "@/lib/appLogger";
 
@@ -32,8 +32,10 @@ export function ConsolePanel() {
   const settings = useConsoleStore((s) => s.settings);
   const setOpen = useConsoleStore((s) => s.setOpen);
   const clear = useConsoleStore((s) => s.clear);
+  const daemonLogEpoch = useConsoleStore((s) => s.daemonLogEpoch);
   const updateSettings = useConsoleStore((s) => s.updateSettings);
   const appendDaemonLines = useConsoleStore((s) => s.appendDaemonLines);
+  const setDaemonLogOffset = useConsoleStore((s) => s.setDaemonLogOffset);
   const consoleHeight = useLayoutStore((s) => s.consoleHeight);
   const adjustConsoleHeight = useLayoutStore((s) => s.adjustConsoleHeight);
 
@@ -42,11 +44,17 @@ export function ConsolePanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const visibleEntries = entries.filter((entry) => {
-    if (entry.source === "gui" && !settings.showGuiLogs) {
-      return false;
+    if (entry.source === "gui") {
+      if (!settings.showGuiLogs) {
+        return false;
+      }
+      return logLevelMeetsMin(entry.level, settings.guiMinLevel);
     }
-    if (entry.source === "daemon" && !settings.showDaemonLogs) {
-      return false;
+    if (entry.source === "daemon") {
+      if (!settings.showDaemonLogs) {
+        return false;
+      }
+      return logLevelMeetsMin(entry.level, settings.daemonMinLevel);
     }
     return true;
   });
@@ -59,11 +67,16 @@ export function ConsolePanel() {
     let cancelled = false;
 
     async function poll() {
+      const epoch = useConsoleStore.getState().daemonLogEpoch;
+      const offset = useConsoleStore.getState().daemonLogOffset;
       try {
         appLogger.gui.debug("Polling daemon logs");
-        const text = await client!.getLogs(80);
-        if (!cancelled && text) {
-          appendDaemonLines(text);
+        const { logs, nextOffset } = await client!.getLogs(80, offset);
+        if (!cancelled && logs) {
+          appendDaemonLines(logs, epoch);
+        }
+        if (!cancelled && nextOffset > offset) {
+          setDaemonLogOffset(nextOffset);
         }
       } catch (err) {
         if (!cancelled) {
@@ -87,7 +100,9 @@ export function ConsolePanel() {
     client,
     settings.showDaemonLogs,
     settings.daemonPollIntervalMs,
+    daemonLogEpoch,
     appendDaemonLines,
+    setDaemonLogOffset,
     t,
   ]);
 
@@ -97,6 +112,22 @@ export function ConsolePanel() {
     }
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [open, settings.autoScroll, visibleEntries.length]);
+
+  async function handleClear() {
+    const offset = useConsoleStore.getState().daemonLogOffset;
+    clear();
+    if (connection !== "connected" || !client) {
+      return;
+    }
+    try {
+      const { nextOffset } = await client.getLogs(1, offset);
+      if (nextOffset > offset) {
+        setDaemonLogOffset(nextOffset);
+      }
+    } catch {
+      // Display is already cleared; keep the current consume offset on failure.
+    }
+  }
 
   if (!open) {
     return null;
@@ -135,20 +166,22 @@ export function ConsolePanel() {
               />
               {t("console.showGui")}
             </label>
-            <Select
-              className="avar-console__severity-select"
-              label={t("console.guiSeverity")}
-              value={settings.guiMinLevel}
-              onChange={(e) =>
-                updateSettings({ guiMinLevel: e.target.value as LogLevel })
-              }
-            >
-              {LOG_LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {t(`console.level.${level}`)}
-                </option>
-              ))}
-            </Select>
+            <div className="avar-console__severity-inline">
+              <span className="avar-console__severity-label">{t("console.guiSeverity")}</span>
+              <Select
+                className="avar-console__severity-select"
+                value={settings.guiMinLevel}
+                onChange={(e) =>
+                  updateSettings({ guiMinLevel: e.target.value as LogLevel })
+                }
+              >
+                {LOG_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {t(`console.level.${level}`)}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <label className="avar-checkbox-row avar-console__inline-setting">
               <input
                 type="checkbox"
@@ -157,23 +190,25 @@ export function ConsolePanel() {
               />
               {t("console.showDaemon")}
             </label>
-            <Select
-              className="avar-console__severity-select"
-              label={t("console.daemonSeverity")}
-              value={settings.daemonMinLevel}
-              onChange={(e) =>
-                updateSettings({ daemonMinLevel: e.target.value as LogLevel })
-              }
-            >
-              {LOG_LEVELS.map((level) => (
-                <option key={level} value={level}>
-                  {t(`console.level.${level}`)}
-                </option>
-              ))}
-            </Select>
+            <div className="avar-console__severity-inline">
+              <span className="avar-console__severity-label">{t("console.daemonSeverity")}</span>
+              <Select
+                className="avar-console__severity-select"
+                value={settings.daemonMinLevel}
+                onChange={(e) =>
+                  updateSettings({ daemonMinLevel: e.target.value as LogLevel })
+                }
+              >
+                {LOG_LEVELS.map((level) => (
+                  <option key={level} value={level}>
+                    {t(`console.level.${level}`)}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
           <div className="avar-console__header-actions">
-            <Button size="sm" variant="ghost" onClick={() => clear()}>
+            <Button size="sm" variant="ghost" onClick={() => void handleClear()}>
               {t("console.clear")}
             </Button>
             <Button

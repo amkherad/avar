@@ -3,13 +3,16 @@ import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faTableColumns, faTerminal } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/Button";
+import { StatHistogram } from "@/components/layout/StatHistogram";
 import { useDataStore } from "@/stores/dataStore";
 import { useConsoleStore } from "@/stores/consoleStore";
 import { useLayoutStore } from "@/stores/layoutStore";
 import { useConfigStore } from "@/stores/configStore";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { useStatsHistory } from "@/hooks/useStatsHistory";
 import { formatBytes, formatPercent } from "@/lib/formatBytes";
 import { appLogger } from "@/lib/appLogger";
+import { toggleDetailPanelWithSelection } from "@/lib/detailPanel";
 import type { SystemStatsInfo } from "@/api/types";
 
 function formatUptime(seconds: number): string {
@@ -26,9 +29,45 @@ function formatUptime(seconds: number): string {
   return `${s}s`;
 }
 
+interface MonitorStatProps {
+  label: string;
+  textValue: string;
+  histogramValues: number[];
+  histogramMax?: number;
+  showHistogram: boolean;
+}
+
+function MonitorStat({
+  label,
+  textValue,
+  histogramValues,
+  histogramMax,
+  showHistogram,
+}: MonitorStatProps) {
+  const showChart = showHistogram && histogramValues.length > 1;
+
+  return (
+    <div className="avar-footer__stat avar-footer__stat--monitor">
+      <span className="avar-footer__stat-label">{label}</span>
+      {showChart ? (
+        <StatHistogram
+          className="avar-footer__histogram"
+          label={label}
+          values={histogramValues}
+          max={histogramMax}
+          textValue={textValue}
+        />
+      ) : (
+        <strong>{textValue}</strong>
+      )}
+    </div>
+  );
+}
+
 export function Footer() {
   const { t } = useTranslation();
   const health = useDataStore((s) => s.health);
+  const visibleDownloadOrder = useDataStore((s) => s.visibleDownloadOrder);
   const client = useConnectionStore((s) => s.client);
   const connection = useConnectionStore((s) => s.connection);
   const footerMonitors = useConfigStore((s) => s.config.footerMonitors);
@@ -36,11 +75,12 @@ export function Footer() {
   const hasUnseenErrors = useConsoleStore((s) => s.hasUnseenErrors);
   const toggleConsole = useConsoleStore((s) => s.toggleOpen);
   const detailPanelOpen = useLayoutStore((s) => s.detailPanelOpen);
-  const toggleDetailPanel = useLayoutStore((s) => s.toggleDetailPanel);
 
   const [stats, setStats] = useState<SystemStatsInfo | null>(null);
   const monitorsEnabled =
     footerMonitors.disk || footerMonitors.memory || footerMonitors.cpu || footerMonitors.network;
+  const showHistogram = footerMonitors.display === "histogram";
+  const history = useStatsHistory(stats, monitorsEnabled && showHistogram);
 
   useEffect(() => {
     if (!client || connection !== "connected" || !monitorsEnabled) {
@@ -103,25 +143,30 @@ export function Footer() {
               </div>
             ) : null}
             {footerMonitors.memory && stats ? (
-              <div className="avar-footer__stat">
-                <span className="avar-footer__stat-label">{t("health.memory")}</span>
-                <strong>
-                  {formatBytes(stats.memoryUsedBytes)} / {formatBytes(stats.memoryTotalBytes)} (
-                  {formatPercent(stats.memoryUsedPercent)})
-                </strong>
-              </div>
+              <MonitorStat
+                label={t("health.memory")}
+                textValue={`${formatBytes(stats.memoryUsedBytes)} / ${formatBytes(stats.memoryTotalBytes)} (${formatPercent(stats.memoryUsedPercent)})`}
+                histogramValues={history.memory}
+                histogramMax={100}
+                showHistogram={showHistogram}
+              />
             ) : null}
             {footerMonitors.cpu && stats ? (
-              <div className="avar-footer__stat">
-                <span className="avar-footer__stat-label">{t("health.cpu")}</span>
-                <strong>{formatPercent(stats.cpuUsagePercent)}</strong>
-              </div>
+              <MonitorStat
+                label={t("health.cpu")}
+                textValue={formatPercent(stats.cpuUsagePercent)}
+                histogramValues={history.cpu}
+                histogramMax={100}
+                showHistogram={showHistogram}
+              />
             ) : null}
             {footerMonitors.network && stats ? (
-              <div className="avar-footer__stat">
-                <span className="avar-footer__stat-label">{t("health.network")}</span>
-                <strong>{formatBytes(stats.networkRxBytesPerSec)}/s</strong>
-              </div>
+              <MonitorStat
+                label={t("health.network")}
+                textValue={`${formatBytes(stats.networkRxBytesPerSec)}/s`}
+                histogramValues={history.network}
+                showHistogram={showHistogram}
+              />
             ) : null}
           </div>
         ) : (
@@ -136,9 +181,10 @@ export function Footer() {
           className="avar-footer__panel-toggle"
           aria-label={t("download.toggleDetailPanel")}
           aria-pressed={detailPanelOpen}
+          disabled={visibleDownloadOrder.length === 0}
           onClick={() => {
             appLogger.gui.debug("Detail panel toggled");
-            toggleDetailPanel();
+            toggleDetailPanelWithSelection();
           }}
         >
           <FontAwesomeIcon icon={faTableColumns} />

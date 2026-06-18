@@ -312,6 +312,7 @@ DownloadState *download_state_create(const char *url, const char *filename,
 
     state->url = url != NULL ? strdup(url) : NULL;
     state->filename = filename != NULL ? strdup(filename) : NULL;
+    state->filename_inferred = true;
     state->temp_path = temp_path != NULL ? strdup(temp_path) : NULL;
     state->dest_path = dest_path != NULL ? strdup(dest_path) : NULL;
     state->added_through = strdup(AVAR_DL_ADDED_DIRECT);
@@ -385,6 +386,13 @@ DownloadState *download_state_load(const char *path) {
     state->id = json_get_string(root, AVAR_FIELD_ID);
     state->url = json_get_string(root, AVAR_FIELD_URL);
     state->filename = json_get_string(root, AVAR_FIELD_FILENAME);
+    const cJSON *filename_inferred =
+        cJSON_GetObjectItemCaseSensitive(root, AVAR_FIELD_FILENAME_INFERRED);
+    if (filename_inferred != NULL && cJSON_IsBool(filename_inferred)) {
+        state->filename_inferred = cJSON_IsTrue(filename_inferred);
+    } else {
+        state->filename_inferred = true;
+    }
     state->temp_path = json_get_string(root, AVAR_STATE_FIELD_TEMP_PATH);
     state->dest_path = json_get_string(root, AVAR_STATE_FIELD_DEST_PATH);
     state->status = json_get_string(root, AVAR_FIELD_STATUS);
@@ -470,6 +478,7 @@ int download_state_save(const DownloadState *state, const char *path) {
     json_add_string_or_null(root, AVAR_FIELD_ID, state->id);
     json_add_string_or_null(root, AVAR_FIELD_URL, state->url);
     json_add_string_or_null(root, AVAR_FIELD_FILENAME, state->filename);
+    cJSON_AddBoolToObject(root, AVAR_FIELD_FILENAME_INFERRED, state->filename_inferred);
     json_add_string_or_null(root, AVAR_FIELD_STATUS, state->status);
     json_add_string_or_null(root, AVAR_FIELD_PROXY, state->proxy);
     cJSON_AddNumberToObject(root, AVAR_FIELD_BYTES_DOWNLOADED, (double)state->bytes_downloaded);

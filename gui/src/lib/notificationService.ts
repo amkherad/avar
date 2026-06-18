@@ -1,5 +1,6 @@
 import i18n from "@/i18n";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import { getServiceWorkerRegistration } from "@/lib/pwa";
 import type { DownloadInfo, QueueInfo } from "@/api/types";
 
 export type NotificationCategory = "download" | "queue" | "general";
@@ -33,6 +34,21 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   return Notification.requestPermission();
 }
 
+async function showViaServiceWorker(notification: AppNotification): Promise<boolean> {
+  const registration = await getServiceWorkerRegistration();
+  if (!registration?.showNotification) {
+    return false;
+  }
+
+  await registration.showNotification(notification.title, {
+    body: notification.body,
+    icon: "./icon.svg",
+    badge: "./icon.svg",
+    tag: `avar-${notification.category ?? "general"}`,
+  });
+  return true;
+}
+
 export async function showNotification(notification: AppNotification): Promise<void> {
   const { title, body } = notification;
 
@@ -50,6 +66,11 @@ export async function showNotification(notification: AppNotification): Promise<v
   }
 
   if (Notification.permission !== "granted") {
+    return;
+  }
+
+  const shown = await showViaServiceWorker(notification);
+  if (shown) {
     return;
   }
 

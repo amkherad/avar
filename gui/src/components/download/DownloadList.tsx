@@ -23,6 +23,7 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
     case "completed":
       return "success";
     case "error":
+    case "failed":
       return "danger";
     case "paused":
       return "warning";

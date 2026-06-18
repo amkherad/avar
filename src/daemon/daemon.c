@@ -1,6 +1,7 @@
 ﻿#include <daemon/daemon.h>
 #include <daemon/daemon_rpc.h>
 #include <daemon/daemon_transport.h>
+#include <download.h>
 #include <file-system.h>
 #include <logger.h>
 
@@ -10,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #if defined(_WIN32)
     #include <io.h>
@@ -685,12 +687,36 @@ int daemon_start(const DaemonConfig *cfg) {
     }
 
     install_ctrl_c_handler(handle_ctrl_c);
+    logger_apply_config();
     LOG_INFO("Daemon started (pid file: %s)", cfg->server.pid_file);
+
+    time_t idle_since = 0;
+    bool auto_shutdown_idle =
+            strcmp(_runtime.cfg.server.auto_shutdown, AVAR_DAEMON_AUTO_SHUTDOWN_WHEN_IDLE) == 0;
 
     while (_runtime.running) {
         if (_runtime.reload_requested) {
             _runtime.reload_requested = false;
             (void)daemon_reload_config(&_runtime.cfg);
+            logger_apply_config();
+            auto_shutdown_idle = strcmp(_runtime.cfg.server.auto_shutdown,
+                                        AVAR_DAEMON_AUTO_SHUTDOWN_WHEN_IDLE) == 0;
+        }
+
+        if (auto_shutdown_idle) {
+            if (download_active_count() == 0U) {
+                const time_t now = time(NULL);
+                if (idle_since == 0) {
+                    idle_since = now;
+                } else if (now - idle_since >=
+                           (time_t)_runtime.cfg.server.auto_shutdown_idle_seconds) {
+                    LOG_INFO("Auto-shutdown: daemon idle for %u seconds",
+                             _runtime.cfg.server.auto_shutdown_idle_seconds);
+                    _runtime.running = false;
+                }
+            } else {
+                idle_since = 0;
+            }
         }
 
         if (_runtime.http != NULL) {

@@ -11,11 +11,14 @@ export type SyncChannelId = "poll" | "sse" | "websocket";
 
 export type DetailPanelMode = "pinned" | "inline";
 
+export type FooterMonitorDisplay = "text" | "histogram";
+
 export interface FooterMonitorSettings {
   disk: boolean;
   memory: boolean;
   cpu: boolean;
   network: boolean;
+  display: FooterMonitorDisplay;
 }
 
 export interface GuiSession {
@@ -42,17 +45,19 @@ export interface GuiConfig {
   footerMonitors: FooterMonitorSettings;
   downloadPageSize: number;
   showDownloadCheckboxes: boolean;
+  browserExtensionEnabled: boolean;
 }
 
 export const GUI_CONFIG_KEY = "avar.gui.config";
 export const GUI_SECRETS_KEY = "avar.gui.secrets";
-export const GUI_CONFIG_VERSION = 5;
+export const GUI_CONFIG_VERSION = 7;
 
 export const defaultFooterMonitors = (): FooterMonitorSettings => ({
   disk: true,
   memory: true,
   cpu: false,
   network: true,
+  display: "text",
 });
 
 export const ELECTRON_SESSION_ID = "electron-tunnel";
@@ -72,7 +77,7 @@ export const defaultGuiConfig = (): GuiConfig => ({
   locale: "en",
   refreshIntervalMs: 3000,
   pingIntervalMs: 2000,
-  syncChannel: "poll",
+  syncChannel: "sse",
   activeSessionId: "default",
   sessions: [
     {
@@ -86,5 +91,6 @@ export const defaultGuiConfig = (): GuiConfig => ({
   shortcuts: defaultShortcutMap(),
   footerMonitors: defaultFooterMonitors(),
   downloadPageSize: 100,
-  showDownloadCheckboxes: false,
+  showDownloadCheckboxes: true,
+  browserExtensionEnabled: true,
 });

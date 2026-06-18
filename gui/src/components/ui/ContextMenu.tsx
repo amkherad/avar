@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { FontAwesomeIcon } from "@/icons";
+import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 
 export interface ContextMenuItem {
   id: string;
   label: string;
   onClick: () => void;
+  icon?: IconDefinition;
   disabled?: boolean;
   danger?: boolean;
 }
@@ -77,7 +80,10 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
                 }
               }}
             >
-              {item.label}
+              {item.icon ? (
+                <FontAwesomeIcon icon={item.icon} className="avar-context-menu__icon" />
+              ) : null}
+              <span className="avar-context-menu__label">{item.label}</span>
             </button>
           </li>
         ))}

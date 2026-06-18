@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { FontAwesomeIcon } from "@/icons";
+import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { ShortcutButton } from "@/components/ui/ShortcutButton";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
 import { Spinner } from "@/components/ui/Spinner";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
@@ -18,6 +21,13 @@ import { useConfigStore } from "@/stores/configStore";
 import { useLayoutStore } from "@/stores/layoutStore";
 import { createDefaultQueueInfo, withDefaultQueue } from "@/queue/defaultQueue";
 import { filterDownloadsBySearch } from "@/lib/downloadSearch";
+import {
+  collectDownloadStatuses,
+  filterDownloadsByStatus,
+  sortDownloads,
+  type DownloadSort,
+  type DownloadStatusFilter,
+} from "@/lib/downloadFilterSort";
 import { openDownloadPopup } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
@@ -37,9 +47,16 @@ import type { DownloadInfo } from "@/api/types";
 interface DownloadPanelProps {
   staleBanner?: React.ReactNode;
   errorBanner?: React.ReactNode;
+  addDownloadOpen: boolean;
+  onAddDownloadOpenChange: (open: boolean) => void;
 }
 
-function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
+function DownloadPanel({
+  staleBanner,
+  errorBanner,
+  addDownloadOpen,
+  onAddDownloadOpenChange,
+}: DownloadPanelProps) {
   const { t } = useTranslation();
   const queues = useDataStore((s) => s.queues);
   const downloads = useDataStore((s) => s.downloads);
@@ -49,17 +66,19 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
   const selectedDownloadIds = useDataStore((s) => s.selectedDownloadIds);
   const selectDownload = useDataStore((s) => s.selectDownload);
   const setSelectedDownloadId = useDataStore((s) => s.setSelectedDownloadId);
+  const setVisibleDownloadOrder = useDataStore((s) => s.setVisibleDownloadOrder);
   const detailPanelMode = useConfigStore((s) => s.config.detailPanelMode);
   const pageSize = useConfigStore((s) => s.config.downloadPageSize);
   const showCheckboxes = useConfigStore((s) => s.config.showDownloadCheckboxes);
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const setSelectedDownloadIds = useDataStore((s) => s.setSelectedDownloadIds);
   const detailPanelOpen = useLayoutStore((s) => s.detailPanelOpen);
+  const setDetailPanelOpen = useLayoutStore((s) => s.setDetailPanelOpen);
   const detailPanelWidth = useLayoutStore((s) => s.detailPanelWidth);
   const adjustDetailPanelWidth = useLayoutStore((s) => s.adjustDetailPanelWidth);
   const downloadViewMode = useLayoutStore((s) => s.downloadViewMode);
   const setDownloadViewMode = useLayoutStore((s) => s.setDownloadViewMode);
-  const { open, openModal, closeModal } = useAddDownloadModal();
+  const { open, openModal, closeModal } = useAddDownloadModal(addDownloadOpen, onAddDownloadOpenChange);
   const downloadActions = useDownloadActions();
 
   const [contextMenu, setContextMenu] = useState<{
@@ -90,17 +109,29 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
   );
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<DownloadStatusFilter>("all");
+  const [sort, setSort] = useState<DownloadSort>({ key: null, direction: "asc" });
   const [page, setPage] = useState(1);
 
-  const filteredDownloads = useMemo(
-    () => filterDownloadsBySearch(queueDownloads, searchQuery),
-    [queueDownloads, searchQuery],
+  const availableStatuses = useMemo(
+    () => collectDownloadStatuses(queueDownloads),
+    [queueDownloads],
   );
+
+  const filteredDownloads = useMemo(() => {
+    const searched = filterDownloadsBySearch(queueDownloads, searchQuery);
+    const statusFiltered = filterDownloadsByStatus(searched, statusFilter);
+    return sortDownloads(statusFiltered, sort);
+  }, [queueDownloads, searchQuery, statusFilter, sort]);
   const orderedIds = useMemo(
     () => filteredDownloads.map((item) => item.id),
     [filteredDownloads],
   );
   const totalPages = Math.max(1, Math.ceil(filteredDownloads.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, searchQuery, sort.key, sort.direction]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -113,19 +144,27 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
     return filteredDownloads.slice(start, start + pageSize);
   }, [filteredDownloads, page, pageSize]);
 
+  const visibleDownloads = downloadViewMode === "grid" ? filteredDownloads : pagedDownloads;
+
+  useEffect(() => {
+    setVisibleDownloadOrder(visibleDownloads.map((item) => item.id));
+  }, [visibleDownloads, setVisibleDownloadOrder]);
+
   useEffect(() => {
     if (queueDownloads.length === 0) {
       if (selectedDownloadId !== null) {
         setSelectedDownloadId(null);
       }
+      setDetailPanelOpen(false);
       return;
     }
 
     const stillValid = queueDownloads.some((d) => d.id === selectedDownloadId);
-    if (!selectedDownloadId || !stillValid) {
-      setSelectedDownloadId(queueDownloads[0].id);
+    if (selectedDownloadId && !stillValid) {
+      setSelectedDownloadId(null);
+      setDetailPanelOpen(false);
     }
-  }, [queueDownloads, selectedDownloadId, setSelectedDownloadId]);
+  }, [queueDownloads, selectedDownloadId, setSelectedDownloadId, setDetailPanelOpen]);
 
   const runOnSelection = useCallback(
     (handler: (items: typeof selectedDownloads) => void) => {
@@ -185,6 +224,14 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
     const additive = event?.ctrlKey || event?.metaKey;
     const range = event?.shiftKey;
     selectDownload(downloadId, { additive, range, orderedIds });
+
+    const { selectedDownloadId, selectedDownloadIds } = useDataStore.getState();
+    if (selectedDownloadIds.length > 0 && selectedDownloadId) {
+      setDetailPanelOpen(true);
+    } else {
+      setDetailPanelOpen(false);
+    }
+
     appLogger.gui.debug("Download selected", downloadId);
   }
 
@@ -204,9 +251,10 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
     setContextMenu({ download, x: event.clientX, y: event.clientY });
   }
 
-  const showPinnedPanel = detailPanelMode === "pinned" && detailPanelOpen;
+  const showPinnedPanel =
+    detailPanelMode === "pinned" && detailPanelOpen && selectedDownload !== null;
   const inlinePanel =
-    detailPanelMode === "inline" && detailPanelOpen ? (
+    detailPanelMode === "inline" && detailPanelOpen && selectedDownload ? (
       <DownloadDetailPanel download={selectedDownload} pinned={false} />
     ) : null;
 
@@ -227,6 +275,19 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
                 ? `${t("download.title")} — ${selectedQueue.name}`
                 : t("download.title")
             }
+            actions={
+              <ShortcutButton
+                size="sm"
+                variant="primary"
+                className="avar-btn--icon-only"
+                shortcut="download.add"
+                aria-label={t("download.add")}
+                title={t("download.add")}
+                onClick={openModal}
+              >
+                <FontAwesomeIcon icon={faPlus} />
+              </ShortcutButton>
+            }
           >
             {staleBanner}
             {errorBanner}
@@ -234,6 +295,10 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
             <DownloadToolbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              availableStatuses={availableStatuses}
+              showStatusFilter={downloadViewMode === "grid"}
               viewMode={downloadViewMode}
               onViewModeChange={setDownloadViewMode}
               selectedDownloads={selectedDownloads}
@@ -241,7 +306,6 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
               onToggleCheckboxes={() =>
                 updateConfig({ showDownloadCheckboxes: !showCheckboxes })
               }
-              onAddDownload={openModal}
             />
 
             <div className="avar-download-list">
@@ -270,12 +334,19 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
                   selectedIds={selectedDownloadIds}
                   loading={status === "loading" && queueDownloads.length === 0}
                   emptyMessage={
-                    searchQuery ? t("download.searchEmpty") : t("download.empty")
+                    searchQuery || statusFilter !== "all"
+                      ? t("download.searchEmpty")
+                      : t("download.empty")
                   }
                   showCheckboxes={showCheckboxes}
                   page={page}
                   pageSize={pageSize}
                   totalItems={filteredDownloads.length}
+                  statusFilter={statusFilter}
+                  onStatusFilterChange={setStatusFilter}
+                  availableStatuses={availableStatuses}
+                  sort={sort}
+                  onSortChange={setSort}
                   onPageChange={setPage}
                   onPageSizeChange={(size) => {
                     updateConfig({ downloadPageSize: size });
@@ -319,7 +390,12 @@ function DownloadPanel({ staleBanner, errorBanner }: DownloadPanelProps) {
   );
 }
 
-export function DashboardPage() {
+export interface DashboardPageProps {
+  addDownloadOpen: boolean;
+  onAddDownloadOpenChange: (open: boolean) => void;
+}
+
+export function DashboardPage({ addDownloadOpen, onAddDownloadOpenChange }: DashboardPageProps) {
   const { t } = useTranslation();
   const connection = useConnectionStore((s) => s.connection);
   const error = useDataStore((s) => s.error);
@@ -345,7 +421,12 @@ export function DashboardPage() {
 
   return (
     <ErrorBoundary name={t("download.title")} resetLabel={t("common.tryAgain")}>
-      <DownloadPanel staleBanner={staleBanner} errorBanner={errorBanner} />
+      <DownloadPanel
+        staleBanner={staleBanner}
+        errorBanner={errorBanner}
+        addDownloadOpen={addDownloadOpen}
+        onAddDownloadOpenChange={onAddDownloadOpenChange}
+      />
     </ErrorBoundary>
   );
 }

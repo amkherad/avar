@@ -48,7 +48,10 @@
     "manageHint": "ایجاد، شروع، توقف یا حذف صف‌های دانلود.",
     "defaultName": "پیش‌فرض",
     "defaultDescription": "دانلودهای بدون صف اختصاصی",
-    "downloads": "{{count}} دانلود"
+    "downloads": "{{count}} دانلود",
+    "tableDescription": "توضیحات",
+    "tableStatus": "وضعیت",
+    "tableDownloads": "دانلودها"
   },
   "download": {
     "title": "دانلودها",
@@ -79,9 +82,13 @@
       "paused": "مکث",
       "completed": "تکمیل‌شده",
       "error": "خطا",
+      "failed": "خطا",
+      "stopped": "متوقف‌شده",
       "cancelled": "لغوشده"
     },
     "status": "وضعیت",
+    "statusFilter": "فیلتر وضعیت",
+    "statusFilterAll": "همه وضعیت‌ها",
     "progress": "پیشرفت",
     "filename": "فایل",
     "bytes": "{{done}} / {{total}}",
@@ -112,6 +119,9 @@
     "selectedCount": "{{count}} انتخاب‌شده",
     "copyCurl": "کپی curl",
     "curlCopied": "کپی شد!",
+    "copyId": "کپی شناسه",
+    "copyUrl": "کپی نشانی",
+    "copyFilename": "کپی نام فایل",
     "toggleCheckboxes": "نمایش چک‌باکس انتخاب",
     "selectAll": "انتخاب همه دانلودها",
     "pageSize": "ردیف",
@@ -119,7 +129,12 @@
     "prevPage": "قبلی",
     "nextPage": "بعدی",
     "detailPanel": "جزئیات",
-    "toggleDetailPanel": "نمایش/مخفی کردن پنل جزئیات"
+    "toggleDetailPanel": "نمایش/مخفی کردن پنل جزئیات",
+    "retries": "تلاش‌ها",
+    "retriesQueueDefault": "پیش‌فرض صف",
+    "filenameSource": "منبع نام فایل",
+    "filenameInferred": "استنتاج خودکار",
+    "filenameUser": "تعیین‌شده توسط کاربر"
   },
   "console": {
     "title": "کنسول",
@@ -130,8 +145,8 @@
     "autoScroll": "اسکرول خودکار",
     "showGui": "گزارش‌های رابط",
     "showDaemon": "گزارش‌های دیمن",
-    "guiSeverity": "حداقل سطح رابط",
-    "daemonSeverity": "حداقل سطح دیمن",
+    "guiSeverity": "سطح گزارش رابط",
+    "daemonSeverity": "سطح گزارش دیمن",
     "daemonFetchFailed": "دریافت گزارش دیمن ناموفق بود",
     "resize": "تغییر اندازه کنسول",
     "level": {
@@ -171,6 +186,9 @@
     "buildCommit": "کامیت",
     "footerMonitors": "نمایشگرهای پاورقی",
     "footerMonitorsHint": "انتخاب کنید کدام معیارهای سیستم در پاورقی نمایش داده شوند.",
+    "footerMonitorDisplay": "نمایش نمودار",
+    "footerMonitorDisplayText": "مقادیر متنی",
+    "footerMonitorDisplayHistogram": "هیستوگرام + مقادیر",
     "footerMonitor": {
       "disk": "فضای دیسک",
       "memory": "مصرف حافظه",
@@ -179,7 +197,85 @@
     },
     "categories": {
       "general": "عمومی",
+      "downloads": "دانلودها",
+      "queues": "صف‌ها",
+      "daemon": "دیمن",
+      "browser": "یکپارچه‌سازی مرورگر",
       "shortcuts": "میانبرها"
+    },
+    "pwa": {
+      "title": "نصب وب‌اپ",
+      "hint": "آوار را به‌صورت برنامه مستقل در مرورگر نصب کنید. اعلان‌ها به مجوز نیاز دارند.",
+      "install": "نصب برنامه",
+      "installed": "آوار روی این دستگاه نصب شده است.",
+      "installUnavailable": "نصب وقتی در دسترس است که مرورگر آن را پیشنهاد دهد (معمولاً روی HTTPS یا localhost).",
+      "notificationsTitle": "اعلان‌های دسکتاپ",
+      "notificationsHint": "برای تغییر وضعیت دانلود و هشدار اتصال، اعلان‌ها را فعال کنید.",
+      "enableNotifications": "فعال‌سازی اعلان‌ها",
+      "notificationsGranted": "اعلان‌ها فعال شد.",
+      "notificationsDenied": "اعلان‌ها مسدود شد. آن‌ها را در تنظیمات مرورگر فعال کنید.",
+      "notificationsUnsupported": "اعلان در این مرورگر پشتیبانی نمی‌شود."
+    },
+    "browser": {
+      "title": "یکپارچه‌سازی مرورگر",
+      "hint": "افزونه آوار را نصب کنید تا لینک رسانه از صفحات وب از طریق رابط آوار ارسال شود.",
+      "enableListener": "گوش دادن به اتصال افزونه مرورگر",
+      "extensionConnected": "افزونه به رابط آوار دسترسی دارد",
+      "extensionDisconnected": "افزونه به رابط آوار دسترسی ندارد",
+      "extensionChecking": "در حال بررسی اتصال افزونه…",
+      "extensionDisabled": "گوش‌دهنده افزونه مرورگر غیرفعال است",
+      "guiUrl": "آدرس رابط آوار (در پنجره افزونه بچسبانید):",
+      "copyGuiUrl": "کپی آدرس رابط",
+      "guiUrlCopied": "آدرس رابط در کلیپ‌بورد کپی شد.",
+      "daemonUrl": "آدرس دیمن نشست فعال:",
+      "copyDaemonUrl": "کپی آدرس",
+      "daemonUrlCopied": "آدرس دیمن در کلیپ‌بورد کپی شد.",
+      "daemonOffline": "ابتدا به دیمن متصل شوید تا افزونه بتواند دانلودها را صف کند.",
+      "install": "نصب",
+      "installStarted": "دانلود برای {{browser}} آغاز شد. مراحل زیر را برای تکمیل نصب دنبال کنید.",
+      "stepDownload": "بسته افزونه را برای مرورگر خود دانلود کنید.",
+      "stepExtract": "فایل ZIP را در یک پوشه استخراج کنید.",
+      "stepLoad": "صفحه افزونه‌های مرورگر را باز کنید، حالت توسعه‌دهنده را فعال کنید و Load unpacked (کرومیوم) یا Load Temporary Add-on (فایرفاکس) را انتخاب کنید.",
+      "stepConfigure": "پوشه استخراج‌شده را انتخاب کنید و آدرس رابط آوار را در پنجره افزونه بچسبانید.",
+      "names": {
+        "chrome": "Chrome",
+        "firefox": "Firefox",
+        "edge": "Edge",
+        "opera": "Opera"
+      }
+    },
+    "download": {
+      "tempPath": "پوشه موقت دانلود",
+      "downloadPath": "پوشه پیش‌فرض ذخیره",
+      "segmentation": "تقسیم‌بندی",
+      "segmentationEnabled": "فعال‌سازی قطعات موازی",
+      "segmentationStrategy": "استراتژی تقسیم",
+      "strategyBalanced": "متعادل",
+      "strategyLeftHeavy": "سنگین از چپ",
+      "concurrency": "حداکثر قطعات همزمان",
+      "chunkSize": "اندازه قطعه (بایت)",
+      "minFileSize": "حداقل اندازه فایل برای تقسیم (بایت)",
+      "progress": "نمایش پیشرفت",
+      "sizeUnit": "واحد اندازه",
+      "speedUnit": "واحد سرعت",
+      "progressStyle": "سبک نوار پیشرفت",
+      "progressSegmented": "قطعه‌ای",
+      "progressAggregate": "تجمیعی"
+    },
+    "queues": {
+      "hint": "صف‌های دانلود متصل به دیمن را مدیریت کنید.",
+      "defaults": "پیش‌فرض‌های صف",
+      "maxConnectionsHint": "محدودیت هر صف روی خود صف تنظیم می‌شود.",
+      "editHint": "برای تنظیم حداکثر اتصال، مسیرها و سایر گزینه‌ها از مدیریت صف استفاده کنید."
+    },
+    "daemon": {
+      "autoShutdown": "خاموش شدن خودکار",
+      "autoShutdownNever": "هرگز",
+      "autoShutdownWhenIdle": "وقتی بیکار است (بدون دانلود فعال)",
+      "autoShutdownIdleSeconds": "زمان بیکاری قبل از خاموش شدن (ثانیه)",
+      "fileLogging": "ثبت لاگ در فایل",
+      "logEnabled": "نوشتن لاگ‌های avar در فایل",
+      "logPath": "مسیر فایل لاگ"
     }
   },
   "shortcuts": {
@@ -220,6 +316,14 @@
       "layout": "چیدمان"
     }
   },
+  "tray": {
+    "show": "نمایش آوار",
+    "exit": "خروج از آوار",
+    "startAll": "شروع همه",
+    "pauseAll": "توقف موقت همه",
+    "resumeAll": "ادامه همه",
+    "stopAll": "توقف همه"
+  },
   "common": {
     "save": "ذخیره",
     "cancel": "لغو",
@@ -228,7 +332,25 @@
     "error": "خطایی رخ داد",
     "tryAgain": "تلاش مجدد",
     "staleData": "نمایش آخرین داده‌های دریافت‌شده — اتصال به دیمن برقرار نیست",
-    "close": "بستن"
+    "close": "بستن",
+    "copied": "کپی شد!"
+  },
+  "extensionPanel": {
+    "aria": "یکپارچه‌سازی افزونه مرورگر",
+    "title": "یکپارچه‌سازی افزونه",
+    "connected": "افزونه متصل است",
+    "disconnected": "افزونه متصل نیست",
+    "checking": "در حال بررسی افزونه…",
+    "disabled": "شنونده افزونه غیرفعال است",
+    "listen": "شنیدن افزونه مرورگر",
+    "bridgeUrl": "نشانی پل",
+    "copyUrl": "کپی",
+    "bridgeVersion": "نسخه پل",
+    "protocolVersion": "پروتکل",
+    "extensionVersion": "نسخه افزونه",
+    "bundledVersion": "افزونه همراه",
+    "notConnected": "—",
+    "updateAvailable": "نسخه جدیدتری از افزونه موجود است. از تنظیمات → یکپارچه‌سازی مرورگر دوباره نصب کنید."
   },
   "proxy": {
     "title": "پروکسی",

@@ -91,6 +91,9 @@ void daemon_config_apply_defaults(DaemonConfig *cfg) {
 
     cfg->server.detach = true;
     cfg->server.container_mode = false;
+    snprintf(cfg->server.auto_shutdown, sizeof cfg->server.auto_shutdown, "%s",
+             AVAR_DAEMON_AUTO_SHUTDOWN_NEVER);
+    cfg->server.auto_shutdown_idle_seconds = AVAR_DAEMON_AUTO_SHUTDOWN_IDLE_SECONDS_DEFAULT;
     cfg->server.auth_token[0] = '\0';
     cfg->server.cors.enabled = true;
     snprintf(cfg->server.cors.allow_origin, sizeof cfg->server.cors.allow_origin, "%s", "*");
@@ -165,6 +168,18 @@ static void load_uint16_key(stringa key, uint16_t *out) {
     free(value);
 }
 
+static void load_uint_key(stringa key, unsigned *out) {
+    char *value = get_config(key);
+    if (value == NULL) {
+        return;
+    }
+    const long parsed = strtol(value, NULL, 10);
+    if (parsed > 0) {
+        *out = (unsigned)parsed;
+    }
+    free(value);
+}
+
 bool daemon_config_load(DaemonConfig *out) {
     if (out == NULL) {
         return false;
@@ -200,6 +215,10 @@ bool daemon_config_load(DaemonConfig *out) {
 
     load_bool_key(AVAR_CFG_DAEMON_SERVER_DETACH, &out->server.detach);
     load_bool_key(AVAR_CFG_DAEMON_SERVER_CONTAINER, &out->server.container_mode);
+    load_string_key(AVAR_CFG_DAEMON_SERVER_AUTO_SHUTDOWN, out->server.auto_shutdown,
+                    sizeof out->server.auto_shutdown);
+    load_uint_key(AVAR_CFG_DAEMON_SERVER_AUTO_SHUTDOWN_IDLE_SECONDS,
+                  &out->server.auto_shutdown_idle_seconds);
     load_string_key(AVAR_CFG_DAEMON_SERVER_PID_FILE, out->server.pid_file,
                     sizeof out->server.pid_file);
     load_string_key(AVAR_CFG_DAEMON_SERVER_AUTH_TOKEN, out->server.auth_token,

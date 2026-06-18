@@ -1,7 +1,14 @@
 import { useTranslation } from "react-i18next";
 import type { SettingsCategory } from "@/pages/SettingsPage";
 
-const CATEGORIES: SettingsCategory[] = ["general", "shortcuts"];
+const CATEGORIES: SettingsCategory[] = [
+  "general",
+  "downloads",
+  "queues",
+  "daemon",
+  "browser",
+  "shortcuts",
+];
 
 export interface SettingsSidebarNavProps {
   category: SettingsCategory;

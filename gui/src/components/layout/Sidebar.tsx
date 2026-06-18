@@ -4,7 +4,7 @@ import { HelpSidebarNav } from "./HelpSidebarNav";
 import { SettingsSidebarNav } from "./SettingsSidebarNav";
 import type { SettingsCategory } from "@/pages/SettingsPage";
 
-export type AppPage = "dashboard" | "settings" | "help" | "queues";
+export type AppPage = "dashboard" | "settings" | "help";
 
 export interface SidebarProps {
   page: AppPage;
@@ -13,6 +13,7 @@ export interface SidebarProps {
   settingsCategory: SettingsCategory;
   onSettingsCategoryChange: (category: SettingsCategory) => void;
   onNavigate?: (page: AppPage) => void;
+  onOpenSettings?: (category: SettingsCategory) => void;
 }
 
 export function Sidebar({
@@ -22,7 +23,17 @@ export function Sidebar({
   settingsCategory,
   onSettingsCategoryChange,
   onNavigate,
+  onOpenSettings,
 }: SidebarProps) {
+  function openSettingsCategory(category: SettingsCategory) {
+    if (onOpenSettings) {
+      onOpenSettings(category);
+      return;
+    }
+    onSettingsCategoryChange(category);
+    onNavigate?.("settings");
+  }
+
   function renderBody() {
     switch (page) {
       case "help":
@@ -36,14 +47,12 @@ export function Sidebar({
             onCategoryChange={onSettingsCategoryChange}
           />
         );
-      case "queues":
-        return null;
       default:
         return (
           <QueuePanel
             mode="select"
-            onManageQueues={onNavigate ? () => onNavigate("queues") : undefined}
-            onModifyQueue={onNavigate ? () => onNavigate("queues") : undefined}
+            onManageQueues={() => openSettingsCategory("queues")}
+            onModifyQueue={() => openSettingsCategory("queues")}
           />
         );
     }

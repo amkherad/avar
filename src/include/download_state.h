@@ -16,6 +16,7 @@ typedef struct {
     char *id;
     char *url;
     char *filename;
+    bool filename_inferred;
     char *temp_path;
     char *dest_path;
     char *status;

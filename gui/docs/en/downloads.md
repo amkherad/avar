@@ -6,9 +6,13 @@ The downloads panel shows all items in the currently selected queue.
 
 Click **Add download** next to the search field (or press **Ctrl+N**). Enter a URL and confirm. The download is added to the active queue.
 
-## 🔍 Search
+## 🔍 Search and filters
 
 The search box is on the right side of the toolbar (no label — placeholder text only). It filters by filename, URL, status, and other fields. Press **Ctrl+F** to focus search.
+
+In **card view**, use the **Status filter** dropdown beside the search box.
+
+In **table view**, use the status dropdown in the **Status** column header. Click **Status** or **Progress** column titles to sort (click again to reverse, third click clears sorting).
 
 ## 👁️ View modes
 
@@ -63,3 +67,7 @@ When there are more rows than the page size (default **100**), paging controls a
 Toggle the right panel from the footer. Use the thumbtack control in the panel header to switch between **pinned** (side column) and **inline** (below the list) layouts.
 
 Use **Copy curl** in the detail panel to generate an equivalent `curl` command and copy it to the clipboard.
+
+Small copy buttons beside **filename**, **URL**, and **ID** copy those values individually.
+
+The detail panel also shows **Retries** (errors vs. max retry limit) and whether the filename was **set by you** or **inferred automatically** from the download.

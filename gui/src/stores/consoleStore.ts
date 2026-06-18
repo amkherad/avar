@@ -28,12 +28,15 @@ interface ConsoleState {
   open: boolean;
   entries: LogEntry[];
   hasUnseenErrors: boolean;
+  daemonLogOffset: number;
+  daemonLogEpoch: number;
   settings: ConsoleSettings;
   setOpen: (open: boolean) => void;
   toggleOpen: () => void;
   append: (entry: Omit<LogEntry, "id">) => void;
-  appendDaemonLines: (text: string) => void;
-  clear: () => void;
+  appendDaemonLines: (text: string, epoch: number) => void;
+  setDaemonLogOffset: (offset: number) => void;
+  clear: () => number;
   markErrorsSeen: () => void;
   updateSettings: (patch: Partial<ConsoleSettings>) => void;
 }
@@ -57,10 +60,19 @@ export function logLevelMeetsMin(level: LogLevel, min: LogLevel): boolean {
 }
 
 function inferLevel(line: string): LogLevel {
-  const lower = line.toLowerCase();
-  if (lower.includes("error") || lower.includes("fatal") || lower.includes("fail")) {
+  if (/\[(DBG|DEBUG)\]/i.test(line)) {
+    return "debug";
+  }
+  if (/\[(WAR|WARN)\]/i.test(line)) {
+    return "warn";
+  }
+  if (/\[(ERR|FTL|FATAL)\]/i.test(line) || /\berror\b/i.test(line) || /\bfail/i.test(line)) {
     return "error";
   }
+  if (/\[(INF|INFO)\]/i.test(line)) {
+    return "info";
+  }
+  const lower = line.toLowerCase();
   if (lower.includes("warn")) {
     return "warn";
   }
@@ -114,6 +126,8 @@ export const useConsoleStore = create<ConsoleState>()(
       open: false,
       entries: [],
       hasUnseenErrors: false,
+      daemonLogOffset: 0,
+      daemonLogEpoch: 0,
       settings: defaultSettings,
 
       setOpen: (open) => {
@@ -153,9 +167,9 @@ export const useConsoleStore = create<ConsoleState>()(
         });
       },
 
-      appendDaemonLines: (text) => {
-        const { open, settings } = get();
-        if (!settings.showDaemonLogs) {
+      appendDaemonLines: (text, epoch) => {
+        const { open, settings, daemonLogEpoch } = get();
+        if (!settings.showDaemonLogs || epoch !== daemonLogEpoch) {
           return;
         }
 
@@ -184,6 +198,9 @@ export const useConsoleStore = create<ConsoleState>()(
         }
 
         set((state) => {
+          if (state.daemonLogEpoch !== epoch) {
+            return state;
+          }
           const max = state.settings.maxEntries;
           const next = [...state.entries, ...additions];
           const entries = next.length > max ? next.slice(next.length - max) : next;
@@ -193,7 +210,13 @@ export const useConsoleStore = create<ConsoleState>()(
         });
       },
 
-      clear: () => set({ entries: [] }),
+      clear: () => {
+        const nextEpoch = get().daemonLogEpoch + 1;
+        set({ entries: [], hasUnseenErrors: false, daemonLogEpoch: nextEpoch });
+        return nextEpoch;
+      },
+
+      setDaemonLogOffset: (offset) => set({ daemonLogOffset: offset }),
 
       updateSettings: (patch) =>
         set((state) => {
@@ -216,15 +239,24 @@ export const useConsoleStore = create<ConsoleState>()(
       name: `${GUI_CONFIG_KEY}.console`,
       partialize: (state) => ({
         settings: state.settings,
+        daemonLogOffset: state.daemonLogOffset,
       }),
       merge: (persisted, current) => {
-        const stored = persisted as Partial<{ settings: Partial<ConsoleSettings> }> | undefined;
-        if (!stored?.settings) {
+        const stored = persisted as
+          | Partial<{ settings: Partial<ConsoleSettings>; daemonLogOffset?: number }>
+          | undefined;
+        if (!stored) {
           return current;
         }
         return {
           ...current,
-          settings: { ...defaultSettings, ...stored.settings },
+          settings: stored.settings
+            ? { ...defaultSettings, ...stored.settings }
+            : current.settings,
+          daemonLogOffset:
+            typeof stored.daemonLogOffset === "number" && stored.daemonLogOffset >= 0
+              ? stored.daemonLogOffset
+              : current.daemonLogOffset,
         };
       },
     },

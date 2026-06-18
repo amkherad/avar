@@ -11,7 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:desktop": "npm run build && electron-builder --mac --win --linux",
-    "build:desktop:current": "npm run build && electron-builder"
+    "build:desktop:current": "npm run build && electron-builder",
+    "icons": "node scripts/generate-icons.cjs"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
@@ -41,6 +42,7 @@
   "build": {
     "appId": "io.avar.gui",
     "productName": "Avar",
+    "icon": "build/icon.png",
     "directories": {
       "output": "release"
     },

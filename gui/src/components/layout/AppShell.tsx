@@ -14,6 +14,7 @@ export interface AppShellProps {
   onHelpTopicChange: (id: string) => void;
   settingsCategory: SettingsCategory;
   onSettingsCategoryChange: (category: SettingsCategory) => void;
+  onOpenSettings: (category: SettingsCategory) => void;
   children: ReactNode;
 }
 
@@ -24,6 +25,7 @@ export function AppShell({
   onHelpTopicChange,
   settingsCategory,
   onSettingsCategoryChange,
+  onOpenSettings,
   children,
 }: AppShellProps) {
   const { t } = useTranslation();
@@ -33,7 +35,7 @@ export function AppShell({
 
   return (
     <div className="avar-shell">
-      <Header page={page} onNavigate={onNavigate} />
+      <Header page={page} onNavigate={onNavigate} onOpenSettings={onOpenSettings} />
       <div className="avar-shell__body">
         <aside className="avar-shell__sidebar" style={{ width: sidebarWidth }}>
           <ErrorBoundary name="Sidebar">
@@ -44,6 +46,7 @@ export function AppShell({
               settingsCategory={settingsCategory}
               onSettingsCategoryChange={onSettingsCategoryChange}
               onNavigate={onNavigate}
+              onOpenSettings={onOpenSettings}
             />
           </ErrorBoundary>
         </aside>

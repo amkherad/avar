@@ -7,7 +7,9 @@ const KNOWN_STATUSES = new Set<string>([
   "paused",
   "completed",
   "error",
+  "failed",
   "cancelled",
+  "stopped",
 ]);
 
 export function formatDownloadStatus(status: DownloadStatus, t: TFunction): string {

@@ -1,0 +1,230 @@
+<!doctype html>
+
+<html lang="en">
+
+  <head>
+
+    <meta charset="UTF-8" />
+
+    <title>Avar</title>
+
+    <style>
+
+      body {
+
+        font-family: system-ui, sans-serif;
+
+        margin: 0;
+
+        padding: 12px;
+
+        width: 320px;
+
+        background: #0f172a;
+
+        color: #e2e8f0;
+
+      }
+
+      .header {
+
+        display: flex;
+
+        align-items: center;
+
+        gap: 8px;
+
+        margin-bottom: 8px;
+
+      }
+
+      .header img {
+
+        width: 24px;
+
+        height: 24px;
+
+      }
+
+      h1 {
+
+        font-size: 1rem;
+
+        margin: 0;
+
+        flex: 1;
+
+      }
+
+      .status-dot {
+
+        width: 10px;
+
+        height: 10px;
+
+        border-radius: 50%;
+
+        background: #ef4444;
+
+        flex-shrink: 0;
+
+      }
+
+      .status-dot--ok {
+
+        background: #22c55e;
+
+      }
+
+      label {
+
+        display: block;
+
+        font-size: 0.75rem;
+
+        margin-top: 8px;
+
+        color: #94a3b8;
+
+      }
+
+      input {
+
+        width: 100%;
+
+        box-sizing: border-box;
+
+        margin-top: 4px;
+
+        padding: 6px 8px;
+
+        border-radius: 6px;
+
+        border: 1px solid #334155;
+
+        background: #1e293b;
+
+        color: inherit;
+
+      }
+
+      button {
+
+        margin-top: 10px;
+
+        width: 100%;
+
+        padding: 8px;
+
+        border: none;
+
+        border-radius: 6px;
+
+        background: #38bdf8;
+
+        color: #0f172a;
+
+        font-weight: 600;
+
+        cursor: pointer;
+
+      }
+
+      button.secondary {
+
+        background: #334155;
+
+        color: #e2e8f0;
+
+      }
+
+      #status {
+
+        margin-top: 8px;
+
+        font-size: 0.75rem;
+
+        color: #94a3b8;
+
+        min-height: 1rem;
+
+      }
+
+      ul {
+
+        margin: 8px 0 0;
+
+        padding: 0;
+
+        list-style: none;
+
+        max-height: 160px;
+
+        overflow: auto;
+
+      }
+
+      li {
+
+        font-size: 0.75rem;
+
+        padding: 4px 0;
+
+        border-bottom: 1px solid #334155;
+
+        word-break: break-all;
+
+      }
+
+      li button {
+
+        margin-top: 4px;
+
+        width: auto;
+
+        padding: 4px 8px;
+
+        font-size: 0.7rem;
+
+      }
+
+    </style>
+
+  </head>
+
+  <body>
+
+    <div class="header">
+
+      <img src="icons/icon-48.png" alt="" />
+
+      <h1>Avar Download Helper</h1>
+
+      <span id="bridgeStatus" class="status-dot" title="Avar bridge connection"></span>
+
+    </div>
+
+    <label>
+
+      Avar bridge URL
+
+      <input id="bridgeUrl" type="url" placeholder="http://127.0.0.1:18766" />
+
+    </label>
+
+    <button id="save" type="button">Save settings</button>
+
+    <button id="scan" class="secondary" type="button">Scan page media</button>
+
+    <button id="downloadAll" class="secondary" type="button">Download all on page</button>
+
+    <p id="status"></p>
+
+    <ul id="mediaList"></ul>
+
+    <script src="popup.js"></script>
+
+  </body>
+
+</html>
+

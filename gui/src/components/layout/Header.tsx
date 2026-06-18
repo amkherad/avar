@@ -3,14 +3,17 @@ import { FontAwesomeIcon } from "@/icons";
 import { faArrowLeft, faCircleQuestion, faGear } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "./ThemeToggle";
+import { ExtensionIntegrationButton } from "./ExtensionIntegrationButton";
 import type { AppPage } from "./Sidebar";
+import type { SettingsCategory } from "@/pages/SettingsPage";
 
 export interface HeaderProps {
   page: AppPage;
   onNavigate: (page: AppPage) => void;
+  onOpenSettings: (category: SettingsCategory) => void;
 }
 
-export function Header({ page, onNavigate }: HeaderProps) {
+export function Header({ page, onNavigate, onOpenSettings }: HeaderProps) {
   const { t } = useTranslation();
   const isDashboard = page === "dashboard";
 
@@ -35,6 +38,8 @@ export function Header({ page, onNavigate }: HeaderProps) {
         </h1>
       </div>
       <div className="avar-header__actions">
+        <ExtensionIntegrationButton />
+        <span className="avar-header__separator" aria-hidden />
         <ThemeToggle />
         <Button
           variant="ghost"
@@ -52,7 +57,9 @@ export function Header({ page, onNavigate }: HeaderProps) {
           className={`avar-header__nav-btn ${page === "settings" ? "avar-header__nav-btn--active" : ""}`}
           aria-label={t("nav.settingsAria")}
           aria-current={page === "settings" ? "page" : undefined}
-          onClick={() => onNavigate(page === "settings" ? "dashboard" : "settings")}
+          onClick={() =>
+            page === "settings" ? onNavigate("dashboard") : onOpenSettings("general")
+          }
         >
           <FontAwesomeIcon icon={faGear} />
         </Button>

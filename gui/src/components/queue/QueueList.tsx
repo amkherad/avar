@@ -1,15 +1,23 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { QueueInfo } from "@/api/types";
-import { FontAwesomeIcon } from "@/icons";
-import { faPenToSquare, faPlay, faStop, faTrash } from "@fortawesome/free-solid-svg-icons";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
+import { QueueContextMenu } from "@/components/queue/QueueContextMenu";
+
+const SIDEBAR_DESCRIPTION_MAX = 72;
+
+function truncateDescription(text: string, maxLength: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
 
 export interface QueueListProps {
   queues: QueueInfo[];
   selectedId: string | null;
   downloadCounts: Record<string, number>;
+  compact?: boolean;
   showDelete?: boolean;
   selectable?: boolean;
   showModify?: boolean;
@@ -24,7 +32,7 @@ export interface QueueListProps {
 export function QueueList({
   queues,
   selectedId,
-  downloadCounts,
+  compact = false,
   showDelete = false,
   selectable = true,
   showModify = false,
@@ -36,105 +44,105 @@ export function QueueList({
   busyId,
 }: QueueListProps) {
   const { t } = useTranslation();
+  const [contextMenu, setContextMenu] = useState<{
+    queue: QueueInfo;
+    x: number;
+    y: number;
+  } | null>(null);
 
   if (queues.length === 0) {
     return <p className="avar-empty">{t("queue.empty")}</p>;
   }
 
+  if (compact) {
+    return (
+      <>
+        <ul className="avar-list avar-striped-list avar-queue-sidebar-list">
+          {queues.map((queue) => {
+            const isActive = selectable && selectedId === queue.id;
+            const description = queue.description
+              ? truncateDescription(queue.description, SIDEBAR_DESCRIPTION_MAX)
+              : null;
+
+            return (
+              <li key={queue.id}>
+                <button
+                  type="button"
+                  className={`avar-queue-sidebar-list__item ${isActive ? "avar-queue-sidebar-list__item--active" : ""}`}
+                  onClick={() => {
+                    if (selectable) {
+                      onSelect(queue.id);
+                    }
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setContextMenu({
+                      queue,
+                      x: event.clientX,
+                      y: event.clientY,
+                    });
+                  }}
+                >
+                  <span className="avar-queue-sidebar-list__title">{queue.name}</span>
+                  {description ? (
+                    <span className="avar-queue-sidebar-list__description" title={queue.description}>
+                      {description}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        <QueueContextMenu
+          queue={contextMenu?.queue ?? null}
+          position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
+          showDelete={showDelete}
+          showModify={showModify}
+          busy={contextMenu ? busyId === contextMenu.queue.id : false}
+          onClose={() => setContextMenu(null)}
+          onStart={onStart}
+          onStop={onStop}
+          onDelete={onDelete}
+          onModify={onModify}
+        />
+      </>
+    );
+  }
+
   return (
-    <ul className="avar-list avar-striped-list avar-queue-list--compact">
+    <ul className="avar-list avar-striped-list avar-queue-list--verbose">
       {queues.map((queue) => {
-        const busy = busyId === queue.id;
         const isActive = selectable && selectedId === queue.id;
         const count = downloadCounts[queue.id] ?? 0;
-        const statusLabel = queue.running ? t("queue.running") : t("queue.stopped");
 
         return (
           <li key={queue.id} className="avar-queue-list__item">
             <div
               className={`avar-list__item avar-queue-list__row ${isActive ? "avar-list__item--active" : ""}`}
               style={{ cursor: selectable ? "pointer" : "default" }}
+              role={selectable ? "button" : undefined}
+              tabIndex={selectable ? 0 : undefined}
+              onClick={() => {
+                if (selectable) {
+                  onSelect(queue.id);
+                }
+              }}
+              onKeyDown={(event) => {
+                if (selectable && (event.key === "Enter" || event.key === " ")) {
+                  event.preventDefault();
+                  onSelect(queue.id);
+                }
+              }}
             >
-              <button
-                type="button"
-                className="avar-list__item-select avar-queue-list__select"
-                disabled={!selectable}
-                onClick={() => {
-                  if (selectable) {
-                    onSelect(queue.id);
-                  }
-                }}
-              >
-                <TruncateWithTooltip text={queue.name} className="avar-list__title" />
-              </button>
-
-              <div className="avar-queue-list__hover" role="tooltip">
-                <p className="avar-queue-list__hover-title">{queue.name}</p>
+              <div className="avar-queue-list__select">
+                <span className="avar-list__title">{queue.name}</span>
                 {queue.description ? (
-                  <p className="avar-queue-list__hover-meta">{queue.description}</p>
+                  <p className="avar-list__meta avar-queue-list__description">{queue.description}</p>
                 ) : null}
-                <div className="avar-queue-list__hover-badges">
-                  {!queue.readonly ? (
-                    <Badge tone={queue.running ? "success" : "default"}>{statusLabel}</Badge>
-                  ) : null}
-                  <Badge tone="info">{t("queue.downloads", { count })}</Badge>
-                </div>
+                <p className="avar-list__meta">{t("queue.downloads", { count })}</p>
               </div>
-
-              {!queue.readonly ? (
-                <div className="avar-queue-actions avar-queue-actions--compact">
-                  {queue.running ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="avar-btn--icon-only"
-                      loading={busy}
-                      aria-label={t("queue.stop")}
-                      title={t("queue.stop")}
-                      onClick={() => onStop(queue.id)}
-                    >
-                      <FontAwesomeIcon icon={faStop} />
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="avar-btn--icon-only"
-                      loading={busy}
-                      aria-label={t("queue.start")}
-                      title={t("queue.start")}
-                      onClick={() => onStart(queue.id)}
-                    >
-                      <FontAwesomeIcon icon={faPlay} />
-                    </Button>
-                  )}
-                  {showModify && onModify ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="avar-btn--icon-only"
-                      aria-label={t("queue.modify")}
-                      title={t("queue.modify")}
-                      onClick={() => onModify(queue.id)}
-                    >
-                      <FontAwesomeIcon icon={faPenToSquare} />
-                    </Button>
-                  ) : null}
-                  {showDelete ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="avar-btn--icon-only"
-                      loading={busy}
-                      aria-label={t("queue.delete")}
-                      title={t("queue.delete")}
-                      onClick={() => onDelete(queue.id)}
-                    >
-                      <FontAwesomeIcon icon={faTrash} />
-                    </Button>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
           </li>
         );

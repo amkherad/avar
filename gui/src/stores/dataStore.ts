@@ -23,9 +23,11 @@ interface DataStoreState {
   selectedDownloadId: string | null;
   selectedDownloadIds: string[];
   selectionAnchorId: string | null;
+  visibleDownloadOrder: string[];
   setSelectedQueueId: (id: string | null) => void;
   setSelectedDownloadId: (id: string | null) => void;
   setSelectedDownloadIds: (ids: string[]) => void;
+  setVisibleDownloadOrder: (ids: string[]) => void;
   selectDownload: (id: string, options?: { additive?: boolean; range?: boolean; orderedIds?: string[] }) => void;
   clearDownloadSelection: () => void;
   applySnapshot: (snapshot: SnapshotPayload) => void;
@@ -43,6 +45,7 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
   selectedDownloadId: null,
   selectedDownloadIds: [],
   selectionAnchorId: null,
+  visibleDownloadOrder: [],
 
   setSelectedQueueId: (id) => {
     appLogger.gui.debug("Queue selected", id ?? "default");
@@ -67,6 +70,8 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
       selectedDownloadId: ids[ids.length - 1] ?? null,
       selectionAnchorId: ids[ids.length - 1] ?? null,
     }),
+
+  setVisibleDownloadOrder: (ids) => set({ visibleDownloadOrder: ids }),
 
   selectDownload: (id, options = {}) => {
     const { additive = false, range = false, orderedIds = [] } = options;

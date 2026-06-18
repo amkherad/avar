@@ -12,14 +12,30 @@ function parseQueueRecord(item: unknown): QueueInfo {
 
 function parseDownloadItem(item: unknown): DownloadInfo {
   const record = (item ?? {}) as Record<string, unknown>;
+  const rawStatus = String(record.status ?? "unknown");
+  const status = rawStatus === "failed" ? "error" : rawStatus;
+  const maxRetriesRaw = record.maxRetries;
+  let maxRetries: number | null | undefined;
+  if (maxRetriesRaw === null) {
+    maxRetries = null;
+  } else if (maxRetriesRaw !== undefined) {
+    maxRetries = toNumber(maxRetriesRaw);
+  }
+
   return {
     id: String(record.id ?? ""),
     filename: String(record.filename ?? record.url ?? "—"),
+    filenameInferred:
+      record.filenameInferred === undefined
+        ? undefined
+        : Boolean(record.filenameInferred),
     url: record.url ? String(record.url) : undefined,
-    status: String(record.status ?? "unknown"),
+    status,
     queueId: record.queueId ? String(record.queueId) : undefined,
     bytesDownloaded: toNumber(record.bytesDownloaded),
     totalBytes: toNumber(record.totalBytes),
+    errorCount: record.errorCount !== undefined ? toNumber(record.errorCount) : undefined,
+    maxRetries,
   };
 }
 

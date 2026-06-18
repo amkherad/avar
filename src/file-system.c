@@ -329,3 +329,90 @@ int move_file_atomic(const char *src, const char *dest) {
     return 0;
 #endif
 }
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <dirent.h>
+#endif
+
+int remove_directory_recursive(const char *path) {
+    if (path == NULL || path[0] == '\0') {
+        return -1;
+    }
+
+#if defined(_WIN32)
+    char pattern[AVAR_CONFIG_PATH_MAX];
+    snprintf(pattern, sizeof pattern, "%s\\*", path);
+
+    WIN32_FIND_DATAA entry;
+    HANDLE handle = FindFirstFileA(pattern, &entry);
+    if (handle == INVALID_HANDLE_VALUE) {
+        return _rmdir(path) == 0 ? 0 : -1;
+    }
+
+    do {
+        if (strcmp(entry.cFileName, ".") == 0 || strcmp(entry.cFileName, "..") == 0) {
+            continue;
+        }
+
+        char child[AVAR_CONFIG_PATH_MAX];
+        snprintf(child, sizeof child, "%s\\%s", path, entry.cFileName);
+
+        if (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (remove_directory_recursive(child) != 0) {
+                FindClose(handle);
+                return -1;
+            }
+        } else if (DeleteFileA(child) == 0) {
+            FindClose(handle);
+            return -1;
+        }
+    } while (FindNextFileA(handle, &entry));
+
+    FindClose(handle);
+    return _rmdir(path) == 0 ? 0 : -1;
+#else
+    DIR *dir = opendir(path);
+    if (dir == NULL) {
+        return remove(path) == 0 ? 0 : -1;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        char *child = path_join(path, entry->d_name);
+        if (child == NULL) {
+            closedir(dir);
+            return -1;
+        }
+
+        struct stat st;
+        if (stat(child, &st) != 0) {
+            free(child);
+            closedir(dir);
+            return -1;
+        }
+
+        if (S_ISDIR(st.st_mode)) {
+            if (remove_directory_recursive(child) != 0) {
+                free(child);
+                closedir(dir);
+                return -1;
+            }
+        } else if (remove(child) != 0) {
+            free(child);
+            closedir(dir);
+            return -1;
+        }
+
+        free(child);
+    }
+
+    closedir(dir);
+    return rmdir(path) == 0 ? 0 : -1;
+#endif
+}

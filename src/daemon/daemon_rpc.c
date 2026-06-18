@@ -7,6 +7,8 @@
 #include <daemon/daemon_session.h>
 #include <daemon/daemon_transport.h>
 #include <download.h>
+#include <http_proxy.h>
+#include <queue.h>
 #include <system_stats.h>
 #include <logger.h>
 #include <mongoose.h>
@@ -30,8 +32,10 @@
 
 typedef struct {
     char lines[AVAR_DAEMON_LOG_RING_CAP][AVAR_DAEMON_LOG_LINE_MAX];
+    uint64_t seq[AVAR_DAEMON_LOG_RING_CAP];
     size_t head;
     size_t count;
+    uint64_t next_seq;
 } DaemonLogRing;
 
 static DaemonLogRing _log_ring = {0};
@@ -95,6 +99,7 @@ void daemon_rpc_log_append(const char *line) {
         return;
     }
 
+    _log_ring.seq[_log_ring.head] = _log_ring.next_seq++;
     snprintf(_log_ring.lines[_log_ring.head], AVAR_DAEMON_LOG_LINE_MAX, "%s", line);
     _log_ring.head = (_log_ring.head + 1U) % AVAR_DAEMON_LOG_RING_CAP;
     if (_log_ring.count < AVAR_DAEMON_LOG_RING_CAP) {
@@ -102,7 +107,8 @@ void daemon_rpc_log_append(const char *line) {
     }
 }
 
-bool daemon_rpc_logs_fetch(const bool follow, const unsigned max_lines, char **text_out) {
+bool daemon_rpc_logs_fetch(const bool follow, const unsigned max_lines, const uint64_t since,
+                           char **text_out, uint64_t *next_offset_out) {
     (void)follow;
 
     if (text_out == NULL) {
@@ -111,10 +117,18 @@ bool daemon_rpc_logs_fetch(const bool follow, const unsigned max_lines, char **t
 
     const unsigned limit = max_lines == 0U ? 50U : max_lines;
     size_t total = 0;
-    for (size_t i = 0; i < _log_ring.count && i < limit; ++i) {
+    size_t matched = 0;
+    for (size_t i = 0; i < _log_ring.count; ++i) {
         const size_t idx =
             (_log_ring.head + AVAR_DAEMON_LOG_RING_CAP - _log_ring.count + i) % AVAR_DAEMON_LOG_RING_CAP;
+        if (_log_ring.seq[idx] <= since) {
+            continue;
+        }
         total += strlen(_log_ring.lines[idx]) + 1U;
+        matched++;
+        if (matched >= limit) {
+            break;
+        }
     }
 
     char *buf = calloc(total + 1U, 1U);
@@ -123,17 +137,29 @@ bool daemon_rpc_logs_fetch(const bool follow, const unsigned max_lines, char **t
     }
 
     size_t offset = 0;
-    const size_t start = _log_ring.count > limit ? _log_ring.count - limit : 0U;
-    for (size_t i = start; i < _log_ring.count; ++i) {
+    matched = 0;
+    uint64_t last_seq = since;
+    for (size_t i = 0; i < _log_ring.count; ++i) {
         const size_t idx =
             (_log_ring.head + AVAR_DAEMON_LOG_RING_CAP - _log_ring.count + i) % AVAR_DAEMON_LOG_RING_CAP;
+        if (_log_ring.seq[idx] <= since) {
+            continue;
+        }
         const size_t len = strlen(_log_ring.lines[idx]);
         memcpy(buf + offset, _log_ring.lines[idx], len);
         offset += len;
         buf[offset++] = '\n';
+        last_seq = _log_ring.seq[idx];
+        matched++;
+        if (matched >= limit) {
+            break;
+        }
     }
 
     *text_out = buf;
+    if (next_offset_out != NULL) {
+        *next_offset_out = last_seq;
+    }
     return true;
 }
 
@@ -384,19 +410,26 @@ static cJSON *handle_download_add(cJSON *params) {
         cJSON_IsString(queue) && queue->valuestring != NULL ? queue->valuestring : NULL;
     const char *dl_name = cJSON_IsString(name) && name->valuestring != NULL ? name->valuestring : NULL;
 
+    const cJSON *proxy = cJSON_GetObjectItemCaseSensitive(params, "proxy");
+    char *proxy_url = proxy_url_from_json(proxy);
+
     cJSON *result = cJSON_CreateObject();
     if (result == NULL) {
+        free(proxy_url);
         return NULL;
     }
 
     if (is_attached) {
         const int rc = transient_download(url->valuestring, queue_name, dl_name, true);
         cJSON_AddNumberToObject(result, "exitCode", rc);
+        free(proxy_url);
         return result;
     }
 
     char *id = NULL;
-    const int rc = download_start_background(url->valuestring, queue_name, dl_name, &id);
+    const int rc =
+            download_start_background_with_proxy(url->valuestring, queue_name, dl_name, proxy_url, &id);
+    free(proxy_url);
     cJSON_AddNumberToObject(result, "exitCode", rc);
     if (id != NULL) {
         cJSON_AddStringToObject(result, "id", id);
@@ -462,19 +495,27 @@ static cJSON *handle_cli_exec(cJSON *params, char **stdout_out) {
 static cJSON *handle_logs_get(cJSON *params) {
     const cJSON *max_lines = cJSON_GetObjectItemCaseSensitive(params, "maxLines");
     const cJSON *follow = cJSON_GetObjectItemCaseSensitive(params, "follow");
+    const cJSON *since_json = cJSON_GetObjectItemCaseSensitive(params, "since");
     unsigned limit = 50U;
     if (cJSON_IsNumber(max_lines) && max_lines->valuedouble > 0) {
         limit = (unsigned)max_lines->valuedouble;
     }
 
+    uint64_t since = 0U;
+    if (cJSON_IsNumber(since_json) && since_json->valuedouble >= 0) {
+        since = (uint64_t)since_json->valuedouble;
+    }
+
     char *text = NULL;
-    if (!daemon_rpc_logs_fetch(cJSON_IsTrue(follow), limit, &text)) {
+    uint64_t next_offset = since;
+    if (!daemon_rpc_logs_fetch(cJSON_IsTrue(follow), limit, since, &text, &next_offset)) {
         return NULL;
     }
 
     cJSON *result = cJSON_CreateObject();
     if (result != NULL) {
         cJSON_AddStringToObject(result, "logs", text != NULL ? text : "");
+        cJSON_AddNumberToObject(result, "nextOffset", (double)next_offset);
     }
     free(text);
     return result;

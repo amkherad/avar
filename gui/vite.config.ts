@@ -1,13 +1,15 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import { extensionsPlugin } from "./vite-extensions";
+import { extensionBridgePlugin } from "./vite-extension-bridge";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const buildDate = env.VITE_BUILD_DATE || new Date().toISOString();
 
   return {
-    plugins: [react()],
+    plugins: [react(), extensionBridgePlugin(), extensionsPlugin()],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "src"),

@@ -23,6 +23,9 @@ int transient_download(const char *url, const char *queue, const char *name, boo
 /** Starts a background download in the daemon. Writes optional id to id_out. */
 int download_start_background(const char *url, const char *queue, const char *name, char **id_out);
 
+int download_start_background_with_proxy(const char *url, const char *queue, const char *name,
+                                         const char *proxy_url, char **id_out);
+
 size_t download_active_count(void);
 
 /**
@@ -39,5 +42,10 @@ bool download_wait_idle(unsigned timeout_ms);
  * When purge_files is true, deletes on-disk partial and completed files.
  */
 int download_remove(const char *target, bool by_id, bool purge_files, bool force);
+
+int download_pause(const char *id);
+int download_resume(const char *id);
+int download_start(const char *id);
+int download_stop(const char *id);
 
 #endif
