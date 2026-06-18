@@ -104,6 +104,23 @@ static void platform_enable_ansi_terminal(void) {
 
 static atomic_uint g_active_downloads = 0;
 
+#define DL_SNOWFLAKE_EPOCH_MS 1704067200000ULL
+#define DL_SNOWFLAKE_MACHINE_BITS 10U
+#define DL_SNOWFLAKE_SEQUENCE_BITS 12U
+#define DL_SNOWFLAKE_MACHINE_MASK ((1U << DL_SNOWFLAKE_MACHINE_BITS) - 1U)
+#define DL_SNOWFLAKE_SEQUENCE_MASK ((1U << DL_SNOWFLAKE_SEQUENCE_BITS) - 1U)
+#define DL_SNOWFLAKE_MACHINE_SHIFT DL_SNOWFLAKE_SEQUENCE_BITS
+#define DL_SNOWFLAKE_TIMESTAMP_SHIFT (DL_SNOWFLAKE_MACHINE_BITS + DL_SNOWFLAKE_SEQUENCE_BITS)
+
+typedef struct {
+    AvarMutex *mutex;
+    uint64_t last_ms;
+    uint32_t sequence;
+    uint32_t machine_id;
+} DownloadSnowflakeState;
+
+static DownloadSnowflakeState g_download_snowflake = {0};
+
 typedef struct {
     char *url;
     char *queue;
@@ -295,6 +312,12 @@ static char *format_datetime_iso(void);
 
 static char *find_resumable_item_id(const char *url);
 
+static int find_download_item_index(const char *target, bool by_id);
+
+static char *download_generate_id(void);
+
+static uint64_t download_snowflake_next(void);
+
 static uint64_t job_bytes_done(const DownloadJob *job);
 
 static void sync_state_metadata(DownloadJob *job, const char *status);
@@ -314,8 +337,6 @@ static bool record_recoverable_error(DownloadJob *job);
 static void reset_retry_count_on_success(DownloadJob *job);
 
 static void load_job_retry_state(DownloadJob *job);
-
-static int find_download_item_index(const char *target, bool by_id);
 
 static char *build_item_json(const DownloadJob *job, const char *status);
 
@@ -2561,8 +2582,8 @@ static void job_free(DownloadJob *job) {
 
 static int run_transient_download_ex(const char *url, const char *queue, const char *name,
                                      const char *proxy_override, const bool start_immediately,
-                                     char **id_out, const char *stream_kind,
-                                     const char *referer) {
+                                     char **id_out, const char *stream_kind, const char *referer,
+                                     const char *preset_item_id) {
     char *normalized_url = url != NULL ? strdup(url) : NULL;
     if (normalized_url == NULL) {
         LOG_ERROR("Out of memory");
@@ -2598,10 +2619,11 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
 
     char *item_id = find_resumable_item_id(url);
     if (item_id == NULL) {
-        char generated[AVAR_DL_ID_BUF_SIZE];
-        snprintf(generated, sizeof generated, "%s%llu", AVAR_DL_ID_PREFIX,
-                 (unsigned long long) time(NULL));
-        item_id = strdup(generated);
+        if (preset_item_id != NULL && preset_item_id[0] != '\0') {
+            item_id = strdup(preset_item_id);
+        } else {
+            item_id = download_generate_id();
+        }
     }
 
     if (item_id == NULL) {
@@ -2787,8 +2809,9 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
 }
 
 static int run_transient_download(const char *url, const char *queue, const char *name,
-                                  const char *proxy_override) {
-    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL, NULL, NULL);
+                                  const char *proxy_override, const char *preset_item_id) {
+    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL, NULL, NULL,
+                                     preset_item_id);
 }
 
 int download_enqueue_with_proxy(const char *url, const char *queue, const char *name,
@@ -2800,7 +2823,7 @@ int download_enqueue_ex(const char *url, const char *queue, const char *name,
                         const char *proxy_url, const char *stream_kind, const char *referer,
                         char **id_out) {
     return run_transient_download_ex(url, queue, name, proxy_url, false, id_out, stream_kind,
-                                     referer);
+                                     referer, NULL);
 }
 
 int transient_download(const char *url, const char *queue, const char *name, const bool attached) {
@@ -2808,7 +2831,7 @@ int transient_download(const char *url, const char *queue, const char *name, con
         LOG_ERROR("Only --attached downloads are supported in local CLI mode");
         return EXIT_FAILURE;
     }
-    return run_transient_download(url, queue, name, NULL);
+    return run_transient_download(url, queue, name, NULL, NULL);
 }
 
 #if defined(_WIN32)
@@ -2826,11 +2849,7 @@ static void *background_download_thread(void *arg) {
     }
 
     atomic_fetch_add(&g_active_downloads, 1U);
-    if (args->item_id != NULL) {
-        (void)run_download_for_item_id(args->item_id, args->proxy);
-    } else {
-        (void)run_transient_download(args->url, args->queue, args->name, args->proxy);
-    }
+    (void)run_transient_download(args->url, args->queue, args->name, args->proxy, args->item_id);
     atomic_fetch_sub(&g_active_downloads, 1U);
 
     background_args_free(args);
@@ -2880,10 +2899,16 @@ int download_start_background_with_proxy(const char *url, const char *queue, con
     }
 
     if (id_out != NULL) {
-        char generated[AVAR_DL_ID_BUF_SIZE];
-        snprintf(generated, sizeof generated, "%s%llu", AVAR_DL_ID_PREFIX,
-                 (unsigned long long)time(NULL));
-        *id_out = strdup(generated);
+        args->item_id = download_generate_id();
+        if (args->item_id == NULL) {
+            background_args_free(args);
+            return EXIT_FAILURE;
+        }
+        *id_out = strdup(args->item_id);
+        if (*id_out == NULL) {
+            background_args_free(args);
+            return EXIT_FAILURE;
+        }
     }
 
     ThreadPool *pool = thread_pool_global();
@@ -2927,6 +2952,87 @@ static int find_download_item_index(const char *target, const bool by_id) {
     }
 
     return -1;
+}
+
+static uint32_t download_snowflake_machine_id(void) {
+#if defined(_WIN32)
+    const unsigned long pid = (unsigned long)GetCurrentProcessId();
+#else
+    const unsigned long pid = (unsigned long)getpid();
+#endif
+    return (uint32_t)(pid & DL_SNOWFLAKE_MACHINE_MASK);
+}
+
+static uint64_t download_snowflake_mix(const uint64_t value) {
+    uint64_t mixed = value;
+
+    mixed ^= mixed >> 30;
+    mixed *= 0xbf58476d1ce4e5b9ULL;
+    mixed ^= mixed >> 27;
+    mixed *= 0x94d049bb133111ebULL;
+    mixed ^= mixed >> 31;
+    return mixed;
+}
+
+static uint64_t download_snowflake_wait_next_ms(const uint64_t last_ms) {
+    uint64_t now = (uint64_t)mg_millis();
+    while (now <= last_ms) {
+        platform_sleep_ms(1U);
+        now = (uint64_t)mg_millis();
+    }
+    return now;
+}
+
+static uint64_t download_snowflake_next(void) {
+    if (g_download_snowflake.mutex == NULL) {
+        g_download_snowflake.mutex = avar_mutex_create();
+        g_download_snowflake.machine_id = download_snowflake_machine_id();
+    }
+
+    avar_mutex_lock(g_download_snowflake.mutex);
+
+    uint64_t now = (uint64_t)mg_millis();
+    if (now < g_download_snowflake.last_ms) {
+        now = g_download_snowflake.last_ms;
+    }
+
+    if (now == g_download_snowflake.last_ms) {
+        g_download_snowflake.sequence++;
+        if (g_download_snowflake.sequence > DL_SNOWFLAKE_SEQUENCE_MASK) {
+            now = download_snowflake_wait_next_ms(g_download_snowflake.last_ms);
+            g_download_snowflake.sequence = 0U;
+        }
+    } else {
+        g_download_snowflake.sequence = 0U;
+    }
+
+    g_download_snowflake.last_ms = now;
+
+    const uint64_t timestamp = now - DL_SNOWFLAKE_EPOCH_MS;
+    const uint64_t raw =
+        (timestamp << DL_SNOWFLAKE_TIMESTAMP_SHIFT)
+        | ((uint64_t)g_download_snowflake.machine_id << DL_SNOWFLAKE_MACHINE_SHIFT)
+        | (uint64_t)g_download_snowflake.sequence;
+
+    avar_mutex_unlock(g_download_snowflake.mutex);
+    return raw;
+}
+
+static char *download_generate_id(void) {
+    char generated[AVAR_DL_ID_BUF_SIZE];
+
+    for (unsigned attempt = 0U; attempt < 32U; ++attempt) {
+        const uint64_t mixed = download_snowflake_mix(download_snowflake_next());
+        snprintf(generated, sizeof generated, "%s%016llx", AVAR_DL_ID_PREFIX,
+                 (unsigned long long)mixed);
+
+        if (find_download_item_index(generated, true) < 0) {
+            return strdup(generated);
+        }
+    }
+
+    LOG_ERROR("Failed to generate unique download id");
+    return NULL;
 }
 
 static int update_download_item_status(const char *item_id, const char *status) {

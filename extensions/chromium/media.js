@@ -730,6 +730,81 @@ function collectPerformanceMediaItems() {
   return [...map.values()];
 }
 
+function forEachDomVideoElement(doc, callback) {
+  function walk(root) {
+    if (!root || typeof root.querySelectorAll !== "function") {
+      return;
+    }
+    for (const video of root.querySelectorAll("video")) {
+      callback(video);
+    }
+    for (const el of root.querySelectorAll("*")) {
+      if (el.shadowRoot) {
+        walk(el.shadowRoot);
+      }
+    }
+  }
+  walk(doc);
+}
+
+/**
+ * DOM video-element scan: discover media from <video> nodes.
+ * Separate from collectMediaItems so player-assigned sources are accepted even
+ * when the URL lacks extensions or other generic media hints.
+ */
+function collectDomVideoItems(doc) {
+  const base = doc.baseURI || (typeof location !== "undefined" ? location.href : "");
+  const map = new Map();
+
+  function addVideoSource(raw, type) {
+    const href = resolveUrl(raw, base);
+    if (!isFetchable(href)) {
+      return;
+    }
+
+    let kind = classifyStreamKind(href);
+    if (looksLikeHlsType(type)) {
+      kind = "hls";
+    } else if (looksLikeDashType(type)) {
+      kind = "dash";
+    }
+
+    const classified = classifyMediaUrl(href);
+    if (classified) {
+      addMediaItem(map, href, classified.kind);
+      return;
+    }
+    if (looksLikeMediaType(type) || NETWORK_STREAM_RE.test(href) || looksLikeSignedMediaUrl(href)) {
+      addMediaItem(map, href, kind);
+      return;
+    }
+
+    addMediaItem(map, href, kind);
+  }
+
+  forEachDomVideoElement(doc, (video) => {
+    const elementType = video.type || "";
+    if (video.currentSrc) {
+      addVideoSource(video.currentSrc, elementType);
+    }
+    const srcAttr = video.getAttribute("src");
+    if (srcAttr) {
+      addVideoSource(srcAttr, elementType);
+    }
+    if (video.src && video.src !== video.currentSrc) {
+      addVideoSource(video.src, elementType);
+    }
+    for (const source of video.querySelectorAll("source")) {
+      const raw = source.getAttribute("src") || source.src;
+      if (raw) {
+        addVideoSource(raw, source.type || "");
+      }
+    }
+  });
+
+  return sortMediaItems([...map.values()]);
+}
+
 function collectMediaItems(doc) {
   const base = doc.baseURI || location.href;
   const map = new Map();
@@ -827,6 +902,7 @@ if (typeof globalThis !== "undefined") {
   globalThis.AvarMedia = {
     collectMediaUrls,
     collectMediaItems,
+    collectDomVideoItems,
     collectPerformanceMediaItems,
     mergeMediaItems,
     sortMediaItems,

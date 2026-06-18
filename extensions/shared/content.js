@@ -74,6 +74,7 @@ function installPageHooks() {
 function collectPageMedia() {
   return AvarMedia.mergeMediaItems(
     AvarMedia.collectMediaItems(document),
+    AvarMedia.collectDomVideoItems(document),
     [...hookedMediaItems.values()],
   );
 }
