@@ -56,6 +56,19 @@ function recordPing(extensionVersion) {
   if (extensionVersion) {
     bridgeState.lastExtensionVersion = extensionVersion;
   }
+  void keepDaemonAlive();
+}
+
+async function keepDaemonAlive() {
+  try {
+    const headers = {};
+    if (bridgeConfig.authToken) {
+      headers.Authorization = `Bearer ${bridgeConfig.authToken}`;
+    }
+    await fetch(`${bridgeConfig.daemonUrl}/api/ping`, { headers });
+  } catch {
+    // Daemon may be stopped while the bridge is still running.
+  }
 }
 
 function corsHeaders(origin) {
@@ -108,8 +121,15 @@ async function daemonRpc(method, params) {
   return payload.result;
 }
 
-async function handleDownloadAdd(url) {
-  const result = await daemonRpc("download.add", { url: url.trim(), attached: false });
+async function handleDownloadAdd(payload) {
+  const params = { url: payload.url.trim(), attached: false };
+  if (typeof payload.streamKind === "string" && payload.streamKind) {
+    params.streamKind = payload.streamKind;
+  }
+  if (typeof payload.referer === "string" && payload.referer) {
+    params.referer = payload.referer;
+  }
+  const result = await daemonRpc("download.add", params);
   const exitCode = result?.exitCode;
   if (exitCode !== undefined && exitCode !== 0) {
     throw new Error("download.add failed");
@@ -146,7 +166,7 @@ async function handleProtocolMessage(message, origin, res) {
         sendJson(res, 400, createErrorResponse("download.add", id, "Missing url"), origin);
         return;
       }
-      await handleDownloadAdd(url);
+      await handleDownloadAdd(payload);
       sendJson(res, 200, createResponse("download.add", id, {}), origin);
     } catch (error) {
       sendJson(
@@ -270,7 +290,7 @@ async function handleExtensionBridgeRequest(req, res) {
         sendJson(res, 400, { ok: false, error: "Missing url" }, origin);
         return true;
       }
-      await handleDownloadAdd(body.url);
+      await handleDownloadAdd({ url: body.url });
       sendJson(res, 200, { ok: true }, origin);
     } catch (error) {
       sendJson(

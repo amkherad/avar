@@ -26,6 +26,7 @@ set(AVAR_CORE_SOURCES
         "${SRC_DIR}/download_config.c"
         "${SRC_DIR}/thread_pool.c"
         "${SRC_DIR}/download.c"
+        "${SRC_DIR}/stream_hls.c"
         "${SRC_DIR}/transport.c"
         "${SRC_DIR}/torrent.c"
         "${SRC_DIR}/system_stats.c"

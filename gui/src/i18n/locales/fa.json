@@ -273,7 +273,7 @@
     "daemon": {
       "autoShutdown": "خاموش شدن خودکار",
       "autoShutdownNever": "هرگز",
-      "autoShutdownWhenIdle": "وقتی بیکار است (بدون دانلود فعال)",
+      "autoShutdownWhenIdle": "وقتی بیکار است (بدون دانلود فعال یا کلاینت متصل)",
       "autoShutdownIdleSeconds": "زمان بیکاری قبل از خاموش شدن (ثانیه)",
       "fileLogging": "ثبت لاگ در فایل",
       "logEnabled": "نوشتن لاگ‌های avar در فایل",

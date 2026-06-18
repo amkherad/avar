@@ -30,6 +30,10 @@ int download_start_background_with_proxy(const char *url, const char *queue, con
 int download_enqueue_with_proxy(const char *url, const char *queue, const char *name,
                                 const char *proxy_url, char **id_out);
 
+int download_enqueue_ex(const char *url, const char *queue, const char *name,
+                        const char *proxy_url, const char *stream_kind, const char *referer,
+                        char **id_out);
+
 size_t download_active_count(void);
 
 /**

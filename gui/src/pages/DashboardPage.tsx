@@ -312,7 +312,9 @@ function DownloadPanel({
               }
             />
 
-            <div className="avar-download-list">
+            <div
+              className={`avar-download-list${downloadViewMode === "grid" ? " avar-download-list--cards" : ""}`}
+            >
               {status === "loading" && queueDownloads.length === 0 ? <Spinner /> : null}
 
               {downloadViewMode === "grid" ? (

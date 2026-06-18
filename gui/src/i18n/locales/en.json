@@ -273,7 +273,7 @@
     "daemon": {
       "autoShutdown": "Auto shutdown",
       "autoShutdownNever": "Never",
-      "autoShutdownWhenIdle": "When idle (no active downloads)",
+      "autoShutdownWhenIdle": "When idle (no active downloads or connected clients)",
       "autoShutdownIdleSeconds": "Idle time before shutdown (seconds)",
       "fileLogging": "File logging",
       "logEnabled": "Write avar logs to file",

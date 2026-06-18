@@ -19,6 +19,7 @@ const {
   EXTENSION_BRIDGE_HOST,
   EXTENSION_BRIDGE_PORT,
 } = require("./extension-bridge.cjs");
+const { trayMenuIcon } = require("./tray-menu-icons.cjs");
 
 const isDev = !app.isPackaged;
 
@@ -182,9 +183,14 @@ function showMainWindow() {
 }
 
 function buildTrayMenu() {
+  const showIcon = loadAppIcon().resize({ width: 16, height: 16 });
   /** @type {import('electron').MenuItemConstructorOptions[]} */
   const template = [
-    { label: trayLabels.show, click: () => showMainWindow() },
+    {
+      label: trayLabels.show,
+      icon: showIcon.isEmpty() ? trayMenuIcon("show") : showIcon,
+      click: () => showMainWindow(),
+    },
     { type: "separator" },
   ];
 
@@ -195,6 +201,7 @@ function buildTrayMenu() {
         item.filename.length > 48 ? `${item.filename.slice(0, 47)}…` : item.filename;
       template.push({
         label: `${label} (${item.percent}%)`,
+        icon: trayMenuIcon("download"),
         enabled: false,
       });
     }
@@ -202,13 +209,30 @@ function buildTrayMenu() {
   }
 
   template.push(
-    { label: trayLabels.startAll, click: () => void runBulkAction("start") },
-    { label: trayLabels.pauseAll, click: () => void runBulkAction("pause") },
-    { label: trayLabels.resumeAll, click: () => void runBulkAction("resume") },
-    { label: trayLabels.stopAll, click: () => void runBulkAction("stop") },
+    {
+      label: trayLabels.startAll,
+      icon: trayMenuIcon("play"),
+      click: () => void runBulkAction("start"),
+    },
+    {
+      label: trayLabels.pauseAll,
+      icon: trayMenuIcon("pause"),
+      click: () => void runBulkAction("pause"),
+    },
+    {
+      label: trayLabels.resumeAll,
+      icon: trayMenuIcon("resume"),
+      click: () => void runBulkAction("resume"),
+    },
+    {
+      label: trayLabels.stopAll,
+      icon: trayMenuIcon("stop"),
+      click: () => void runBulkAction("stop"),
+    },
     { type: "separator" },
     {
       label: trayLabels.exit,
+      icon: trayMenuIcon("exit"),
       click: () => {
         appIsQuitting = true;
         app.quit();

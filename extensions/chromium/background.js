@@ -32,17 +32,30 @@ async function pingBridgeEndpoint() {
   }
 }
 
-async function addDownload(url) {
+async function addDownload(payload) {
   const bridgeUrl = await resolveBridgeUrl();
-  await sendMessage(bridgeUrl, "download.add", { url });
+  const body =
+    typeof payload === "string"
+      ? { url: payload }
+      : {
+          url: payload.url,
+          streamKind: payload.streamKind,
+          referer: payload.referer,
+        };
+  await sendMessage(bridgeUrl, "download.add", body);
 }
 
 async function collectFromTab(tabId) {
-  const [{ result }] = await chrome.scripting.executeScript({
-    target: { tabId },
-    func: () => (typeof AvarMedia !== "undefined" ? AvarMedia.collectMediaUrls(document) : []),
-  });
-  return result || [];
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, { type: "avar-get-page-media" });
+    return {
+      urls: response?.urls || [],
+      items: response?.items || [],
+      pageUrl: null,
+    };
+  } catch {
+    return { urls: [], items: [], pageUrl: null };
+  }
 }
 
 async function listMediaFromActiveTab() {
@@ -50,7 +63,9 @@ async function listMediaFromActiveTab() {
   if (!tab?.id) {
     throw new Error("No active tab.");
   }
-  return collectFromTab(tab.id);
+  const result = await collectFromTab(tab.id);
+  result.pageUrl = tab.url || null;
+  return result;
 }
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -78,9 +93,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 
     if (info.menuItemId === "avar-download-page-media") {
-      const urls = await collectFromTab(tab.id);
-      for (const url of urls) {
-        await addDownload(url);
+      const { items, urls } = await collectFromTab(tab.id);
+      const media = items.length > 0 ? items : urls.map((url) => ({ url, kind: "direct" }));
+      for (const item of media) {
+        await addDownload({ url: item.url, streamKind: item.kind, referer: tab.url });
       }
     }
   } catch (error) {
@@ -88,9 +104,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "avar-add-download" && message.url) {
-    addDownload(message.url)
+    const referer = message.referer || sender.tab?.url || null;
+    addDownload({
+      url: message.url,
+      streamKind: message.streamKind,
+      referer,
+    })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
@@ -98,7 +119,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "avar-list-media") {
     listMediaFromActiveTab()
-      .then((urls) => sendResponse({ ok: true, urls }))
+      .then((result) =>
+        sendResponse({
+          ok: true,
+          urls: result.urls,
+          items: result.items,
+        }),
+      )
       .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
   }

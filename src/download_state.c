@@ -294,6 +294,7 @@ void download_state_free(DownloadState *state) {
     free(state->description);
     free(state->original_page);
     free(state->referer);
+    free(state->stream_kind);
     free(state->added_through);
     free(state->queue_id);
     free(state->etag);
@@ -402,6 +403,7 @@ DownloadState *download_state_load(const char *path) {
     state->description = json_get_string(root, AVAR_FIELD_DESCRIPTION);
     state->original_page = json_get_string(root, AVAR_FIELD_ORIGINAL_PAGE);
     state->referer = json_get_string(root, AVAR_FIELD_REFERER);
+    state->stream_kind = json_get_string(root, AVAR_FIELD_STREAM_KIND);
     state->added_through = json_get_string(root, AVAR_FIELD_ADDED_THROUGH);
     state->queue_id = json_get_string(root, AVAR_FIELD_QUEUE_ID);
     state->etag = json_get_string(root, AVAR_FIELD_ETAG);
@@ -488,6 +490,7 @@ int download_state_save(const DownloadState *state, const char *path) {
     json_add_string_or_null(root, AVAR_FIELD_DESCRIPTION, state->description);
     json_add_string_or_null(root, AVAR_FIELD_ORIGINAL_PAGE, state->original_page);
     json_add_string_or_null(root, AVAR_FIELD_REFERER, state->referer);
+    json_add_string_or_null(root, AVAR_FIELD_STREAM_KIND, state->stream_kind);
     json_add_string_or_null(root, AVAR_FIELD_ADDED_THROUGH,
                             state->added_through != NULL ? state->added_through
                                                          : AVAR_DL_ADDED_DIRECT);

@@ -420,6 +420,17 @@ static cJSON *handle_download_add(cJSON *params) {
     const cJSON *proxy = cJSON_GetObjectItemCaseSensitive(params, "proxy");
     char *proxy_url = proxy_url_from_json(proxy);
 
+    const cJSON *stream_kind_json = cJSON_GetObjectItemCaseSensitive(params, "streamKind");
+    const cJSON *referer_json = cJSON_GetObjectItemCaseSensitive(params, "referer");
+    const char *stream_kind =
+        cJSON_IsString(stream_kind_json) && stream_kind_json->valuestring != NULL
+            ? stream_kind_json->valuestring
+            : NULL;
+    const char *referer =
+        cJSON_IsString(referer_json) && referer_json->valuestring != NULL
+            ? referer_json->valuestring
+            : NULL;
+
     cJSON *result = cJSON_CreateObject();
     if (result == NULL) {
         free(normalized_url);
@@ -438,7 +449,8 @@ static cJSON *handle_download_add(cJSON *params) {
     const bool should_start = cJSON_IsTrue(start_now);
 
     char *id = NULL;
-    int rc = download_enqueue_with_proxy(normalized_url, queue_name, dl_name, proxy_url, &id);
+    int rc = download_enqueue_ex(normalized_url, queue_name, dl_name, proxy_url, stream_kind,
+                                 referer, &id);
     if (rc == EXIT_SUCCESS && should_start && id != NULL) {
         rc = download_start(id);
     }

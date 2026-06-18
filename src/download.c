@@ -13,6 +13,7 @@
 #include <http_proxy.h>
 #include <queue.h>
 #include <http.h>
+#include <stream_hls.h>
 #include <mongoose.h>
 
 #include <errno.h>
@@ -309,6 +310,8 @@ static uint32_t read_queue_max_retries(const char *queue_id);
 static uint32_t resolve_max_retries(const DownloadJob *job);
 
 static bool record_recoverable_error(DownloadJob *job);
+
+static void reset_retry_count_on_success(DownloadJob *job);
 
 static void load_job_retry_state(DownloadJob *job);
 
@@ -658,6 +661,14 @@ static bool record_recoverable_error(DownloadJob *job) {
     return false;
 }
 
+static void reset_retry_count_on_success(DownloadJob *job) {
+    if (job == NULL || job->error_count == 0U) {
+        return;
+    }
+
+    job->error_count = 0U;
+}
+
 static char *build_item_json(const DownloadJob *job, const char *status) {
     const uint64_t total = job->state != NULL ? job->state->total_size : 0;
     const uint64_t done_bytes = job_bytes_done(job);
@@ -713,6 +724,11 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         cJSON_AddStringToObject(obj, AVAR_FIELD_REFERER, job->state->referer);
     } else {
         cJSON_AddNullToObject(obj, AVAR_FIELD_REFERER);
+    }
+    if (job->state != NULL && job->state->stream_kind != NULL) {
+        cJSON_AddStringToObject(obj, AVAR_FIELD_STREAM_KIND, job->state->stream_kind);
+    } else {
+        cJSON_AddNullToObject(obj, AVAR_FIELD_STREAM_KIND);
     }
     cJSON_AddStringToObject(obj, AVAR_FIELD_ADDED_THROUGH,
                             job->state != NULL && job->state->added_through != NULL
@@ -1677,7 +1693,10 @@ static bool apply_filename_from_headers(DownloadJob *job, struct mg_http_message
         job->state->filename = strdup(job->filename);
         job->state->temp_path = job->temp_path != NULL ? strdup(job->temp_path) : NULL;
         job->state->dest_path = job->dest_path != NULL ? strdup(job->dest_path) : NULL;
+        job->state->filename_inferred = false;
     }
+
+    job->filename_inferred = false;
 
     return job->temp_path != NULL && job->dest_path != NULL && job->state_path != NULL;
 }
@@ -2096,6 +2115,8 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
         return;
     }
 
+    reset_retry_count_on_success(job);
+
     if (!apply_filename_from_headers(job, hm)) {
         set_error(job, "Failed to apply download filename");
         request_close(job, c, false);
@@ -2390,7 +2411,63 @@ static bool prepare_chunk_download(DownloadJob *job) {
     return true;
 }
 
+static char *hls_output_filename(const char *filename) {
+    if (filename == NULL) {
+        return NULL;
+    }
+
+    const char *ext = strrchr(filename, '.');
+    if (ext != NULL && strcasecmp(ext, ".m3u8") == 0) {
+        const size_t prefix = (size_t)(ext - filename);
+        char *out = malloc(prefix + 4U);
+        if (out == NULL) {
+            return NULL;
+        }
+        snprintf(out, prefix + 4U, "%.*s.ts", (int)prefix, filename);
+        return out;
+    }
+
+    char *out = malloc(strlen(filename) + 4U);
+    if (out == NULL) {
+        return NULL;
+    }
+    snprintf(out, strlen(filename) + 4U, "%s.ts", filename);
+    return out;
+}
+
+static int run_hls_download(DownloadJob *job) {
+    if (job == NULL || job->url == NULL || job->temp_path == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    job->failed = false;
+    job->done = false;
+    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+
+    const char *referer = job->state != NULL ? job->state->referer : NULL;
+    if (stream_hls_download(job->url, job->temp_path, referer) != 0) {
+        set_error(job, "HLS download failed");
+        (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+        job->failed = true;
+        job->done = true;
+        return EXIT_FAILURE;
+    }
+
+    if (!finalize_download(job)) {
+        job->failed = true;
+        return EXIT_FAILURE;
+    }
+
+    fputc('\n', stderr);
+    report_cli(job);
+    return EXIT_SUCCESS;
+}
+
 static int run_download(DownloadJob *job) {
+    if (stream_url_is_hls(job->url, job->state != NULL ? job->state->stream_kind : NULL)) {
+        return run_hls_download(job);
+    }
+
     mg_mgr_init(&job->mgr);
     mg_log_set(MG_LL_ERROR);
 
@@ -2483,8 +2560,9 @@ static void job_free(DownloadJob *job) {
 }
 
 static int run_transient_download_ex(const char *url, const char *queue, const char *name,
-                                   const char *proxy_override, const bool start_immediately,
-                                   char **id_out) {
+                                     const char *proxy_override, const bool start_immediately,
+                                     char **id_out, const char *stream_kind,
+                                     const char *referer) {
     char *normalized_url = url != NULL ? strdup(url) : NULL;
     if (normalized_url == NULL) {
         LOG_ERROR("Out of memory");
@@ -2583,6 +2661,13 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
         } else {
             filename = choose_filename(url, NULL, 0);
         }
+        if (stream_url_is_hls(url, stream_kind) && filename != NULL) {
+            char *ts_name = hls_output_filename(filename);
+            if (ts_name != NULL) {
+                free(filename);
+                filename = ts_name;
+            }
+        }
         if (filename == NULL) {
             free(normalized_url);
             free(item_id);
@@ -2608,6 +2693,17 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
                 }
                 free(state->queue_id);
                 state->queue_id = resolved != NULL ? resolved : strdup(queue);
+            }
+            if (stream_kind != NULL && stream_kind[0] != '\0') {
+                free(state->stream_kind);
+                state->stream_kind = strdup(stream_kind);
+            } else if (stream_url_is_hls(url, NULL)) {
+                free(state->stream_kind);
+                state->stream_kind = strdup("hls");
+            }
+            if (referer != NULL && referer[0] != '\0') {
+                free(state->referer);
+                state->referer = strdup(referer);
             }
         }
     }
@@ -2692,12 +2788,19 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
 
 static int run_transient_download(const char *url, const char *queue, const char *name,
                                   const char *proxy_override) {
-    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL);
+    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL, NULL, NULL);
 }
 
 int download_enqueue_with_proxy(const char *url, const char *queue, const char *name,
                                 const char *proxy_url, char **id_out) {
-    return run_transient_download_ex(url, queue, name, proxy_url, false, id_out);
+    return download_enqueue_ex(url, queue, name, proxy_url, NULL, NULL, id_out);
+}
+
+int download_enqueue_ex(const char *url, const char *queue, const char *name,
+                        const char *proxy_url, const char *stream_kind, const char *referer,
+                        char **id_out) {
+    return run_transient_download_ex(url, queue, name, proxy_url, false, id_out, stream_kind,
+                                     referer);
 }
 
 int transient_download(const char *url, const char *queue, const char *name, const bool attached) {
@@ -3021,6 +3124,15 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
         if (filename == NULL) {
             filename = choose_filename(url, NULL, 0);
         }
+        char *stream_kind =
+                get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_STREAM_KIND);
+        if (stream_url_is_hls(url, stream_kind) && filename != NULL) {
+            char *ts_name = hls_output_filename(filename);
+            if (ts_name != NULL) {
+                free(filename);
+                filename = ts_name;
+            }
+        }
         temp_path = path_join(job_dir, filename);
         dest_path = path_join(download_dir, filename);
         state = download_state_create(url, filename, temp_path, dest_path, 0, DL_CHUNK_SIZE);
@@ -3036,7 +3148,20 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
             if (queue_id != NULL) {
                 state->queue_id = strdup(queue_id);
             }
+            if (stream_kind != NULL && stream_kind[0] != '\0') {
+                state->stream_kind = stream_kind;
+                stream_kind = NULL;
+            } else if (stream_url_is_hls(url, NULL)) {
+                state->stream_kind = strdup("hls");
+            }
+            char *referer =
+                    get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_REFERER);
+            if (referer != NULL && referer[0] != '\0') {
+                state->referer = referer;
+                referer = NULL;
+            }
         }
+        free(stream_kind);
     }
 
     apply_proxy_to_state(state, proxy_override);

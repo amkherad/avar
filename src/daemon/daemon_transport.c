@@ -602,8 +602,9 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
     if (ev == MG_EV_WS_MSG) {
         struct mg_ws_message *wm = (struct mg_ws_message *)ev_data;
-        if (wm != NULL && wm->data.len >= 6U &&
+        if (wm != NULL && wm->data.len >= 4U &&
             memcmp(wm->data.buf, "ping", 4) == 0) {
+            daemon_rpc_note_frontend_activity();
             mg_ws_send(c, "pong", 4, WEBSOCKET_OP_TEXT);
         }
         return;

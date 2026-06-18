@@ -26,6 +26,7 @@ typedef struct {
     char *description;
     char *original_page;
     char *referer;
+    char *stream_kind;
     char *added_through;
     char *queue_id;
     char *etag;

@@ -162,6 +162,19 @@ char *http_parse_content_disposition_filename(const char *value, const size_t le
                 return NULL;
             }
             trim_quotes(filename);
+
+            if (rfc5987) {
+                char decoded[AVAR_HTTP_DECODE_BUFFER];
+                if (mg_url_decode(filename, strlen(filename), decoded, sizeof decoded, 0) > 0) {
+                    char *decoded_copy = strdup(decoded);
+                    free(filename);
+                    filename = decoded_copy;
+                    if (filename == NULL) {
+                        return NULL;
+                    }
+                }
+            }
+
             return filename;
         }
     }
