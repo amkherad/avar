@@ -1,0 +1,52 @@
+title: Avar
+lang: [en, fa]
+description: A cross-platform download manager with CLI, daemon, GUI, and browser extensions.
+
+remote_theme: Appdynamics/jekyll-rtd-theme
+
+# Site URLs — update these placeholders when you host the documentation.
+url: ''
+baseurl: '/avar'
+repository: 'https://github.com/placeholder/avar'
+repo_url: 'https://github.com/placeholder/avar'
+download_url: 'https://github.com/placeholder/avar/releases'
+issues_url: 'https://github.com/placeholder/avar/issues'
+
+nav_version: true
+edit: false
+addons_branch: true
+
+author: Ali Kherad
+
+addons:
+  - github
+  - i18n
+  - plugins
+  - analytics
+
+sass:
+  style: compressed
+
+copyright:
+  revision: true
+
+readme_index:
+  with_frontmatter: true
+
+plugins:
+  - jemoji
+  - jekyll-avatar
+  - jekyll-mentions
+  - jekyll-github-metadata
+
+exclude:
+  - Makefile
+  - CNAME
+  - Gemfile
+  - Gemfile.lock
+  - LICENSE
+  - requirements.txt
+  - node_modules
+  - package.json
+  - package-lock.json
+  - jekyll-rtd-theme.gemspec
