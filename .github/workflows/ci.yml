@@ -19,13 +19,25 @@ jobs:
           cmakeVersion: "~4.1.0"
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -G Ninja
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DAVAR_ENABLE_COVERAGE=ON -G Ninja
 
       - name: Build avar
         run: cmake --build build --parallel
 
       - name: Run tests
         run: ctest --test-dir build --output-on-failure
+
+      - name: Install gcovr
+        run: pip install gcovr
+
+      - name: Coverage report (Cobertura)
+        run: python scripts/coverage_report.py --build-dir build --output coverage.xml --skip-configure --skip-build --skip-tests
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-coverage-${{ github.sha }}
+          path: coverage.xml
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -206,7 +206,7 @@ static int handle_download_control(int argc, char *argv[], int (*action)(const c
 static int handle_download_ls(int argc, char *argv[]) {
     int sub_argc = 0;
     char **sub_argv = NULL;
-    if (cli_make_subargv(argc, argv, 2, "avar dl ls", &sub_argc, &sub_argv) != EXIT_SUCCESS) {
+    if (cli_make_subargv(argc, argv, 3, "avar dl ls", &sub_argc, &sub_argv) != EXIT_SUCCESS) {
         return EXIT_FAILURE;
     }
 

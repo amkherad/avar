@@ -1,188 +1,133 @@
 enable_testing()
 
 set(AVAR_TEST_GUARD_SOURCES test_guard.c)
-set(AVAR_INSTANCE_SOURCE "${SRC_DIR}/instance.c")
 
 function(avar_add_test test_name)
-    add_executable(${test_name} ${ARGN})
-    target_include_directories(${test_name} PRIVATE
-            "${CMAKE_SOURCE_DIR}/tests"
-            "${SRC_DIR}"
-            "${SRC_DIR}/include"
-            "${THIRD_PARTY_DIR}"
-            "${THIRD_PARTY_DIR}/argtable3"
-            "${THIRD_PARTY_DIR}/mongoose"
-            "${THIRD_PARTY_DIR}/cJSON"
-            "${THIRD_PARTY_DIR}/mbedtls/include"
-    )
-    target_compile_definitions(${test_name} PRIVATE
-            MG_TLS=MG_TLS_MBED
-            AVAR_TESTING=1
-    )
+    add_executable(${test_name} test_support.c ${ARGN})
+    target_include_directories(${test_name} PRIVATE "${CMAKE_SOURCE_DIR}/tests")
     set_target_properties(${test_name} PROPERTIES
             C_STANDARD 23
             C_STANDARD_REQUIRED ON
     )
-    if (WIN32)
-        target_link_libraries(${test_name} PRIVATE ws2_32 mbedtls_vendor)
-    else()
-        target_link_libraries(${test_name} PRIVATE m pthread mbedtls_vendor)
-    endif()
+    avar_apply_coverage(${test_name})
     add_test(NAME ${test_name} COMMAND ${test_name})
 endfunction()
 
-avar_add_test(test_utils
-        test_utils.c
-        "${SRC_DIR}/utils.c"
-)
+function(avar_link_core_test test_name)
+    if(AVAR_ENABLE_COVERAGE)
+        # daemon_rpc.c references CLI handlers; link the full backend when using objects.
+        target_sources(${test_name} PRIVATE
+                $<TARGET_OBJECTS:avar_core_obj>
+                $<TARGET_OBJECTS:avar_cli_obj>
+        )
+        target_link_libraries(${test_name} PRIVATE avar_cli_testing)
+    else()
+        target_link_libraries(${test_name} PRIVATE avar_core_testing)
+    endif()
+endfunction()
+
+function(avar_link_cli_test test_name)
+    if(AVAR_ENABLE_COVERAGE)
+        target_sources(${test_name} PRIVATE
+                $<TARGET_OBJECTS:avar_core_obj>
+                $<TARGET_OBJECTS:avar_cli_obj>
+        )
+        target_link_libraries(${test_name} PRIVATE avar_cli_testing)
+    elseif(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+        target_link_libraries(${test_name} PRIVATE -Wl,--start-group avar_cli_testing avar_core_testing -Wl,--end-group)
+    else()
+        target_link_libraries(${test_name} PRIVATE avar_cli_testing avar_core_testing)
+    endif()
+endfunction()
+
+avar_add_test(test_utils test_utils.c)
+avar_link_core_test(test_utils)
 target_compile_definitions(test_utils PRIVATE VERSION_STR=\"0.0.1\")
 
-avar_add_test(test_http
-        test_http.c
-        "${SRC_DIR}/http.c"
-        "${SRC_DIR}/third_party/mongoose/mongoose.c"
-)
+avar_add_test(test_http test_http.c)
+avar_link_core_test(test_http)
 
-avar_add_test(test_download_state
-        test_download_state.c
-        ${AVAR_TEST_GUARD_SOURCES}
-        "${SRC_DIR}/download_state.c"
-        "${SRC_DIR}/third_party/cJSON/cJSON.c"
-)
+avar_add_test(test_download_state test_download_state.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_download_state)
 
-avar_add_test(test_config_array
-        test_config_array.c
-        ${AVAR_TEST_GUARD_SOURCES}
-        ${AVAR_INSTANCE_SOURCE}
-        "${SRC_DIR}/config.c"
-        "${SRC_DIR}/file-system.c"
-        "${SRC_DIR}/logger.c"
-        "${SRC_DIR}/utils.c"
-        "${SRC_DIR}/third_party/cJSON/cJSON.c"
-)
+avar_add_test(test_config_array test_config_array.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_config_array)
 
-avar_add_test(test_config_env
-        test_config_env.c
-        ${AVAR_TEST_GUARD_SOURCES}
-        ${AVAR_INSTANCE_SOURCE}
-        "${SRC_DIR}/config.c"
-        "${SRC_DIR}/file-system.c"
-        "${SRC_DIR}/logger.c"
-        "${SRC_DIR}/utils.c"
-        "${SRC_DIR}/third_party/cJSON/cJSON.c"
-)
+avar_add_test(test_config_env test_config_env.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_config_env)
 
-avar_add_test(test_queue
-        test_queue.c
-        ${AVAR_TEST_GUARD_SOURCES}
-        ${AVAR_INSTANCE_SOURCE}
-        "${SRC_DIR}/queue.c"
-        "${SRC_DIR}/config.c"
-        "${SRC_DIR}/file-system.c"
-        "${SRC_DIR}/logger.c"
-        "${SRC_DIR}/utils.c"
-        "${SRC_DIR}/third_party/cJSON/cJSON.c"
-)
+avar_add_test(test_config_persist test_config_persist.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_config_persist)
 
-avar_add_test(test_download_segment
-        test_download_segment.c
-        "${SRC_DIR}/download_state.c"
-        "${SRC_DIR}/download_segment.c"
-        "${SRC_DIR}/third_party/cJSON/cJSON.c"
-)
+avar_add_test(test_queue test_queue.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_queue)
 
-avar_add_test(test_thread_pool
-        test_thread_pool.c
-        "${SRC_DIR}/thread_pool.c"
-)
+avar_add_test(test_download_segment test_download_segment.c)
+avar_link_core_test(test_download_segment)
 
-avar_add_test(test_instance
-        test_instance.c
-        ${AVAR_INSTANCE_SOURCE}
-)
+avar_add_test(test_thread_pool test_thread_pool.c)
+avar_link_core_test(test_thread_pool)
 
-set(AVAR_DOWNLOAD_TEST_SOURCES
-        "${SRC_DIR}/logger.c"
-        "${SRC_DIR}/utils.c"
-        ${AVAR_INSTANCE_SOURCE}
-        "${SRC_DIR}/file-system.c"
-        "${SRC_DIR}/config.c"
-        "${SRC_DIR}/queue.c"
-        "${SRC_DIR}/http.c"
-        "${SRC_DIR}/http_proxy.c"
-        "${SRC_DIR}/download_state.c"
-        "${SRC_DIR}/download_sync.c"
-        "${SRC_DIR}/download_segment.c"
-        "${SRC_DIR}/download_config.c"
-        "${SRC_DIR}/thread_pool.c"
-        "${SRC_DIR}/download.c"
-        "${SRC_DIR}/stream_hls.c"
-        "${SRC_DIR}/system_stats.c"
-        "${SRC_DIR}/third_party/mongoose/mongoose.c"
-        "${SRC_DIR}/third_party/cJSON/cJSON.c"
-)
+avar_add_test(test_instance test_instance.c)
+avar_link_core_test(test_instance)
 
-avar_add_test(test_http_proxy
-        test_http_proxy.c
-        ${AVAR_TEST_GUARD_SOURCES}
-        ${AVAR_INSTANCE_SOURCE}
-        "${SRC_DIR}/http_proxy.c"
-        "${SRC_DIR}/config.c"
-        "${SRC_DIR}/file-system.c"
-        "${SRC_DIR}/logger.c"
-        "${SRC_DIR}/utils.c"
-        "${SRC_DIR}/third_party/cJSON/cJSON.c"
-        "${SRC_DIR}/third_party/mongoose/mongoose.c"
-)
+avar_add_test(test_http_proxy test_http_proxy.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_http_proxy)
 
-avar_add_test(test_download_integration
-        test_download_integration.c
-        ${AVAR_TEST_GUARD_SOURCES}
-        ${AVAR_DOWNLOAD_TEST_SOURCES}
-)
+avar_add_test(test_file_system test_file_system.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_file_system)
+
+avar_add_test(test_logger test_logger.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_logger)
+
+avar_add_test(test_download_config test_download_config.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_download_config)
+
+avar_add_test(test_download_sync test_download_sync.c)
+avar_link_core_test(test_download_sync)
+
+avar_add_test(test_system_stats test_system_stats.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_system_stats)
+
+avar_add_test(test_stream_hls test_stream_hls.c)
+avar_link_core_test(test_stream_hls)
+
+avar_add_test(test_download_integration test_download_integration.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_download_integration)
 target_compile_definitions(test_download_integration PRIVATE AVAR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
-set(AVAR_DAEMON_TEST_SOURCES
-        "${SRC_DIR}/logger.c"
-        "${SRC_DIR}/utils.c"
-        ${AVAR_INSTANCE_SOURCE}
-        "${SRC_DIR}/file-system.c"
-        "${SRC_DIR}/config.c"
-        "${SRC_DIR}/queue.c"
-        "${SRC_DIR}/http.c"
-        "${SRC_DIR}/http_proxy.c"
-        "${SRC_DIR}/download_state.c"
-        "${SRC_DIR}/download_sync.c"
-        "${SRC_DIR}/download_segment.c"
-        "${SRC_DIR}/download_config.c"
-        "${SRC_DIR}/thread_pool.c"
-        "${SRC_DIR}/download.c"
-        "${SRC_DIR}/stream_hls.c"
-        "${SRC_DIR}/system_stats.c"
-        "${SRC_DIR}/transport.c"
-        "${SRC_DIR}/torrent.c"
-        "${SRC_DIR}/daemon/daemon.c"
-        "${SRC_DIR}/daemon/daemon_config.c"
-        "${SRC_DIR}/daemon/daemon_session.c"
-        "${SRC_DIR}/daemon/daemon_transport.c"
-        "${SRC_DIR}/daemon/daemon_rpc.c"
-        "${SRC_DIR}/daemon/daemon_install.c"
-        "${SRC_DIR}/third_party/mongoose/mongoose.c"
-        "${SRC_DIR}/third_party/cJSON/cJSON.c"
-        "${SRC_DIR}/cli/cli.c"
-        "${SRC_DIR}/cli/dispatch.c"
-        "${SRC_DIR}/cli/download_cli.c"
-        "${SRC_DIR}/cli/queue_cli.c"
-        "${SRC_DIR}/cli/config_cli.c"
-        "${SRC_DIR}/cli/profile_cli.c"
-        "${SRC_DIR}/cli/scheduler_cli.c"
-        "${SRC_DIR}/daemon/daemon_cli.c"
-        "${SRC_DIR}/third_party/argtable3/argtable3.c"
-)
+avar_add_test(test_download_lifecycle test_download_lifecycle.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_download_lifecycle)
+target_compile_definitions(test_download_lifecycle PRIVATE AVAR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
-avar_add_test(test_daemon
-        test_daemon.c
-        ${AVAR_TEST_GUARD_SOURCES}
-        ${AVAR_DAEMON_TEST_SOURCES}
-)
+avar_add_test(test_download_internals test_download_internals.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_download_internals)
+
+avar_add_test(test_cli test_cli.c)
+avar_link_cli_test(test_cli)
+target_compile_definitions(test_cli PRIVATE VERSION_STR=\"0.0.1\")
+
+avar_add_test(test_cli_handlers test_cli_handlers.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_cli_test(test_cli_handlers)
+target_compile_definitions(test_cli_handlers PRIVATE VERSION_STR=\"0.0.1\" AVAR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+avar_add_test(test_daemon test_daemon.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_cli_test(test_daemon)
 target_compile_definitions(test_daemon PRIVATE VERSION_STR=\"0.0.1\")
+
+avar_add_test(test_daemon_session test_daemon_session.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_cli_test(test_daemon_session)
+
+avar_add_test(test_daemon_rpc test_daemon_rpc.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_cli_test(test_daemon_rpc)
+
+avar_add_test(test_stream_hls_integration test_stream_hls_integration.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_stream_hls_integration)
+target_compile_definitions(test_stream_hls_integration PRIVATE AVAR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+avar_add_test(test_daemon_config test_daemon_config.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_cli_test(test_daemon_config)
+
+avar_add_test(test_daemon_transport test_daemon_transport.c ${AVAR_TEST_GUARD_SOURCES})
+avar_link_cli_test(test_daemon_transport)
+target_compile_definitions(test_daemon_transport PRIVATE VERSION_STR=\"0.0.1\")

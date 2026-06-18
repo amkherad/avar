@@ -57,4 +57,14 @@ int download_resume(const char *id);
 int download_start(const char *id);
 int download_stop(const char *id);
 
+#if defined(AVAR_TESTING)
+char *download_test_choose_filename(const char *url, const char *header_value, size_t header_len);
+
+bool download_test_parse_content_range_total(const char *header, uint64_t *total_out);
+
+uint64_t download_test_existing_file_size(const char *path);
+
+char *download_test_generate_id(void);
+#endif
+
 #endif

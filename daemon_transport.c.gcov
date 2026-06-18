@@ -1,0 +1,1217 @@
+        -:    0:Source:D:/Projects/clang/avar/src/daemon/daemon_transport.c
+        -:    0:Graph:build-coverage-test/CMakeFiles/avar_core_testing.dir/src/daemon/daemon_transport.c.gcno
+        -:    0:Data:build-coverage-test/CMakeFiles/avar_core_testing.dir/src/daemon/daemon_transport.c.gcda
+        -:    0:Runs:3
+        -:    1:#include <daemon/daemon_rpc.h>
+        -:    2:#include <daemon/daemon_transport.h>
+        -:    3:#include <gui_embed.h>
+        -:    4:#include <logger.h>
+        -:    5:
+        -:    6:#include <mongoose.h>
+        -:    7:
+        -:    8:#include <errno.h>
+        -:    9:#include <stdio.h>
+        -:   10:#include <stdlib.h>
+        -:   11:#include <string.h>
+        -:   12:#include <time.h>
+        -:   13:
+        -:   14:#if defined(_WIN32)
+        -:   15:    #include <windows.h>
+        -:   16:#else
+        -:   17:    #include <fcntl.h>
+        -:   18:    #include <pthread.h>
+        -:   19:    #include <sys/socket.h>
+        -:   20:    #include <sys/stat.h>
+        -:   21:    #include <sys/un.h>
+        -:   22:    #include <unistd.h>
+        -:   23:#endif
+        -:   24:
+        -:   25:typedef struct {
+        -:   26:    struct mg_mgr mgr;
+        -:   27:    bool started;
+        -:   28:    bool https;
+        -:   29:    const DaemonConfig *cfg;
+        -:   30:} HttpTransportContext;
+        -:   31:
+        -:   32:typedef struct {
+        -:   33:    char endpoint[AVAR_CONFIG_PATH_MAX];
+        -:   34:    bool started;
+        -:   35:#if defined(_WIN32)
+        -:   36:    HANDLE thread;
+        -:   37:    volatile bool stop;
+        -:   38:#else
+        -:   39:    pthread_t thread;
+        -:   40:    volatile bool stop;
+        -:   41:    int listen_fd;
+        -:   42:#endif
+        -:   43:} IpcTransportContext;
+        -:   44:
+        -:   45:static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data);
+        -:   46:static bool ipc_write_frame(int fd, const char *json);
+        -:   47:static bool ipc_read_frame(int fd, char **json_out);
+        -:   48:static bool ipc_rpc_exchange(const char *endpoint, bool is_pipe, const char *request_json,
+        -:   49:                             char **response_json_out, unsigned timeout_ms);
+        -:   50:
+        -:   51:#if defined(_WIN32)
+        -:   52:static DWORD WINAPI pipe_server_thread(LPVOID arg);
+        -:   53:static bool win_pipe_configure(HANDLE pipe);
+        -:   54:static HANDLE win_pipe_connect_client(const char *endpoint, unsigned timeout_ms);
+        -:   55:#else
+        -:   56:static void *ipc_server_thread(void *arg);
+        -:   57:#endif
+        -:   58:
+    #####:   59:static bool http_start(DaemonTransport *self, const DaemonConfig *cfg) {
+    #####:   60:    HttpTransportContext *ctx = self->context;
+    #####:   61:    if (ctx == NULL || cfg == NULL) {
+    #####:   62:        return false;
+        -:   63:    }
+        -:   64:
+        -:   65:    char url[AVAR_DAEMON_URL_BUF_SIZE];
+    #####:   66:    const char *bind_addr =
+    #####:   67:        ctx->https ? cfg->server.https.bind_addr : cfg->server.http.bind_addr;
+    #####:   68:    const uint16_t port = ctx->https ? cfg->server.https.port : cfg->server.http.port;
+    #####:   69:    snprintf(url, sizeof url, "%s://%s:%u", ctx->https ? "https" : "http", bind_addr,
+        -:   70:             (unsigned)port);
+        -:   71:
+    #####:   72:    mg_mgr_init(&ctx->mgr);
+    #####:   73:    struct mg_connection *listener = mg_http_listen(&ctx->mgr, url, http_ev_handler, (void *)cfg);
+    #####:   74:    if (listener == NULL) {
+    #####:   75:        LOG_ERROR("Failed to start HTTP daemon channel at %s", url);
+    #####:   76:        mg_mgr_free(&ctx->mgr);
+    #####:   77:        return false;
+        -:   78:    }
+        -:   79:
+        -:   80:#if defined(MG_TLS)
+    #####:   81:    if (ctx->https) {
+    #####:   82:        const DaemonHttpsChannel *tls = &cfg->server.https;
+    #####:   83:        if (tls->cert_file[0] != '\0' && tls->key_file[0] != '\0') {
+    #####:   84:            struct mg_tls_opts opts = {
+    #####:   85:                .cert = tls->cert_file,
+    #####:   86:                .key = tls->key_file,
+        -:   87:            };
+    #####:   88:            mg_tls_init(listener, &opts);
+        -:   89:        }
+        -:   90:    }
+        -:   91:#else
+        -:   92:    (void)ctx;
+        -:   93:#endif
+        -:   94:
+    #####:   95:    ctx->started = true;
+    #####:   96:    ctx->cfg = cfg;
+    #####:   97:    LOG_INFO("HTTP daemon channel listening at %s", url);
+    #####:   98:    return true;
+        -:   99:}
+        -:  100:
+    #####:  101:static void http_stop(DaemonTransport *self) {
+    #####:  102:    HttpTransportContext *ctx = self->context;
+    #####:  103:    if (ctx == NULL || !ctx->started) {
+    #####:  104:        return;
+        -:  105:    }
+    #####:  106:    mg_mgr_free(&ctx->mgr);
+    #####:  107:    ctx->started = false;
+        -:  108:}
+        -:  109:
+    #####:  110:static bool http_ping(DaemonTransport *self) {
+        -:  111:    (void)self;
+    #####:  112:    return true;
+        -:  113:}
+        -:  114:
+    #####:  115:static void http_destroy(DaemonTransport *self) {
+    #####:  116:    http_stop(self);
+    #####:  117:    free(self->context);
+    #####:  118:    free(self);
+    #####:  119:}
+        -:  120:
+        -:  121:static const DaemonTransportVTable http_vtable = {
+        -:  122:    .start = http_start,
+        -:  123:    .stop = http_stop,
+        -:  124:    .ping = http_ping,
+        -:  125:    .destroy = http_destroy,
+        -:  126:};
+        -:  127:
+    #####:  128:static bool https_start(DaemonTransport *self, const DaemonConfig *cfg) {
+    #####:  129:    HttpTransportContext *ctx = self->context;
+    #####:  130:    if (ctx == NULL) {
+    #####:  131:        return false;
+        -:  132:    }
+    #####:  133:    ctx->https = true;
+    #####:  134:    return http_start(self, cfg);
+        -:  135:}
+        -:  136:
+        -:  137:static const DaemonTransportVTable https_vtable = {
+        -:  138:    .start = https_start,
+        -:  139:    .stop = http_stop,
+        -:  140:    .ping = http_ping,
+        -:  141:    .destroy = http_destroy,
+        -:  142:};
+        -:  143:
+        -:  144:#if defined(_WIN32)
+    #####:  145:static bool pipe_start(DaemonTransport *self, const DaemonConfig *cfg) {
+    #####:  146:    IpcTransportContext *ctx = self->context;
+    #####:  147:    if (ctx == NULL || cfg == NULL) {
+    #####:  148:        return false;
+        -:  149:    }
+        -:  150:
+    #####:  151:    snprintf(ctx->endpoint, sizeof ctx->endpoint, "%s", cfg->server.pipe.name);
+    #####:  152:    ctx->stop = false;
+    #####:  153:    ctx->thread = CreateThread(NULL, 0, pipe_server_thread, ctx, 0, NULL);
+    #####:  154:    if (ctx->thread == NULL) {
+    #####:  155:        LOG_ERROR("Failed to start named-pipe listener");
+    #####:  156:        return false;
+        -:  157:    }
+        -:  158:
+    #####:  159:    ctx->started = true;
+    #####:  160:    LOG_INFO("Named-pipe daemon channel listening at '%s'", ctx->endpoint);
+    #####:  161:    return true;
+        -:  162:}
+        -:  163:
+    #####:  164:static void pipe_stop(DaemonTransport *self) {
+    #####:  165:    IpcTransportContext *ctx = self->context;
+    #####:  166:    if (ctx == NULL || !ctx->started) {
+    #####:  167:        return;
+        -:  168:    }
+    #####:  169:    ctx->stop = true;
+    #####:  170:    HANDLE probe = CreateFileA(ctx->endpoint, GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    #####:  171:    if (probe != INVALID_HANDLE_VALUE) {
+    #####:  172:        CloseHandle(probe);
+        -:  173:    }
+    #####:  174:    WaitForSingleObject(ctx->thread, 5000);
+    #####:  175:    CloseHandle(ctx->thread);
+    #####:  176:    ctx->started = false;
+        -:  177:}
+        -:  178:
+    #####:  179:static bool win_pipe_configure(const HANDLE pipe) {
+    #####:  180:    if (pipe == INVALID_HANDLE_VALUE) {
+    #####:  181:        return false;
+        -:  182:    }
+        -:  183:
+    #####:  184:    DWORD mode = PIPE_READMODE_BYTE;
+    #####:  185:    return SetNamedPipeHandleState(pipe, &mode, NULL, NULL) != 0;
+        -:  186:}
+        -:  187:
+    #####:  188:static HANDLE win_pipe_connect_client(const char *endpoint, const unsigned timeout_ms) {
+    #####:  189:    if (endpoint == NULL) {
+    #####:  190:        return INVALID_HANDLE_VALUE;
+        -:  191:    }
+        -:  192:
+    #####:  193:    const DWORD wait_ms = timeout_ms == 0U ? 5000U : timeout_ms;
+    #####:  194:    const uint64_t deadline = GetTickCount64() + (uint64_t)wait_ms;
+    #####:  195:    bool pipe_ready = false;
+    #####:  196:    while (GetTickCount64() < deadline) {
+    #####:  197:        if (WaitNamedPipeA(endpoint, 50)) {
+    #####:  198:            pipe_ready = true;
+    #####:  199:            break;
+        -:  200:        }
+    #####:  201:        const DWORD err = GetLastError();
+    #####:  202:        if (err != ERROR_FILE_NOT_FOUND && err != ERROR_PIPE_BUSY) {
+    #####:  203:            LOG_DEBUG("WaitNamedPipe failed for '%s' (error %lu)", endpoint, err);
+    #####:  204:            return INVALID_HANDLE_VALUE;
+        -:  205:        }
+    #####:  206:        Sleep(10);
+        -:  207:    }
+    #####:  208:    if (!pipe_ready) {
+    #####:  209:        LOG_DEBUG("WaitNamedPipe timed out for '%s'", endpoint);
+    #####:  210:        return INVALID_HANDLE_VALUE;
+        -:  211:    }
+        -:  212:
+    #####:  213:    HANDLE pipe = CreateFileA(endpoint, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0,
+        -:  214:                              NULL);
+    #####:  215:    if (pipe == INVALID_HANDLE_VALUE) {
+    #####:  216:        LOG_DEBUG("CreateFile failed for pipe '%s' (error %lu)", endpoint, GetLastError());
+    #####:  217:        return INVALID_HANDLE_VALUE;
+        -:  218:    }
+        -:  219:
+    #####:  220:    if (!win_pipe_configure(pipe)) {
+    #####:  221:        CloseHandle(pipe);
+    #####:  222:        return INVALID_HANDLE_VALUE;
+        -:  223:    }
+        -:  224:
+    #####:  225:    return pipe;
+        -:  226:}
+        -:  227:
+    #####:  228:static DWORD WINAPI pipe_server_thread(LPVOID arg) {
+    #####:  229:    IpcTransportContext *ctx = (IpcTransportContext *)arg;
+        -:  230:    SECURITY_DESCRIPTOR sd;
+    #####:  231:    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), &sd, FALSE};
+        -:  232:
+    #####:  233:    if (!InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION) ||
+    #####:  234:        !SetSecurityDescriptorDacl(&sd, TRUE, NULL, FALSE)) {
+    #####:  235:        LOG_ERROR("Failed to configure named-pipe security");
+    #####:  236:        return 1;
+        -:  237:    }
+        -:  238:
+    #####:  239:    HANDLE pipe = CreateNamedPipeA(
+    #####:  240:        ctx->endpoint, PIPE_ACCESS_DUPLEX,
+        -:  241:        PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, PIPE_UNLIMITED_INSTANCES, 65536, 65536, 0,
+        -:  242:        &sa);
+    #####:  243:    while (!ctx->stop) {
+    #####:  244:        if (pipe == INVALID_HANDLE_VALUE) {
+    #####:  245:            LOG_WARNING("CreateNamedPipe failed for '%s' (error %lu)", ctx->endpoint,
+        -:  246:                        GetLastError());
+    #####:  247:            Sleep(100);
+    #####:  248:            pipe = CreateNamedPipeA(
+    #####:  249:                ctx->endpoint, PIPE_ACCESS_DUPLEX,
+        -:  250:                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, PIPE_UNLIMITED_INSTANCES, 65536,
+        -:  251:                65536, 0, &sa);
+    #####:  252:            continue;
+        -:  253:        }
+        -:  254:
+    #####:  255:        (void)win_pipe_configure(pipe);
+        -:  256:
+    #####:  257:        const BOOL connected = ConnectNamedPipe(pipe, NULL)
+        -:  258:                                   ? TRUE
+    #####:  259:                                   : (GetLastError() == ERROR_PIPE_CONNECTED);
+    #####:  260:        if (!connected) {
+    #####:  261:            LOG_DEBUG("ConnectNamedPipe failed (error %lu)", GetLastError());
+    #####:  262:            CloseHandle(pipe);
+    #####:  263:            pipe = INVALID_HANDLE_VALUE;
+    #####:  264:            continue;
+        -:  265:        }
+        -:  266:
+    #####:  267:        char *request = NULL;
+    #####:  268:        if (ipc_read_frame((int)(intptr_t)pipe, &request) && request != NULL) {
+    #####:  269:            char *response = NULL;
+    #####:  270:            if (daemon_rpc_handle(request, &response) && response != NULL) {
+    #####:  271:                if (!ipc_write_frame((int)(intptr_t)pipe, response)) {
+    #####:  272:                    LOG_DEBUG("Pipe RPC response write failed");
+        -:  273:                }
+    #####:  274:                free(response);
+        -:  275:            } else {
+    #####:  276:                LOG_DEBUG("Pipe RPC request handling failed");
+        -:  277:            }
+    #####:  278:            free(request);
+        -:  279:        } else {
+    #####:  280:            LOG_DEBUG("Pipe RPC request read failed");
+        -:  281:        }
+        -:  282:
+    #####:  283:        FlushFileBuffers(pipe);
+    #####:  284:        DisconnectNamedPipe(pipe);
+    #####:  285:        CloseHandle(pipe);
+        -:  286:
+    #####:  287:        pipe = CreateNamedPipeA(
+    #####:  288:            ctx->endpoint, PIPE_ACCESS_DUPLEX,
+        -:  289:            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, PIPE_UNLIMITED_INSTANCES, 65536, 65536,
+        -:  290:            0, &sa);
+        -:  291:    }
+        -:  292:
+    #####:  293:    return 0;
+        -:  294:}
+        -:  295:
+    #####:  296:static bool pipe_ping(DaemonTransport *self) {
+    #####:  297:    IpcTransportContext *ctx = self->context;
+    #####:  298:    if (ctx == NULL) {
+    #####:  299:        return false;
+        -:  300:    }
+        -:  301:
+    #####:  302:    const char *req = "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":1}";
+    #####:  303:    char *resp = NULL;
+    #####:  304:    const bool ok = ipc_rpc_exchange(ctx->endpoint, true, req, &resp, 5000U);
+    #####:  305:    free(resp);
+    #####:  306:    return ok;
+        -:  307:}
+        -:  308:
+    #####:  309:static void pipe_destroy(DaemonTransport *self) {
+    #####:  310:    pipe_stop(self);
+    #####:  311:    free(self->context);
+    #####:  312:    free(self);
+    #####:  313:}
+        -:  314:
+        -:  315:static const DaemonTransportVTable pipe_vtable = {
+        -:  316:    .start = pipe_start,
+        -:  317:    .stop = pipe_stop,
+        -:  318:    .ping = pipe_ping,
+        -:  319:    .destroy = pipe_destroy,
+        -:  320:};
+        -:  321:
+    #####:  322:static bool unix_start_stub(DaemonTransport *self, const DaemonConfig *cfg) {
+        -:  323:    (void)self;
+        -:  324:    (void)cfg;
+    #####:  325:    LOG_ERROR("Unix-socket daemon channel is not supported on Windows");
+    #####:  326:    return false;
+        -:  327:}
+        -:  328:
+    #####:  329:static void unix_stop_stub(DaemonTransport *self) {
+        -:  330:    (void)self;
+    #####:  331:}
+        -:  332:
+    #####:  333:static bool unix_ping_stub(DaemonTransport *self) {
+        -:  334:    (void)self;
+    #####:  335:    return false;
+        -:  336:}
+        -:  337:
+    #####:  338:static void unix_destroy_stub(DaemonTransport *self) {
+    #####:  339:    free(self->context);
+    #####:  340:    free(self);
+    #####:  341:}
+        -:  342:
+        -:  343:static const DaemonTransportVTable unix_vtable = {
+        -:  344:    .start = unix_start_stub,
+        -:  345:    .stop = unix_stop_stub,
+        -:  346:    .ping = unix_ping_stub,
+        -:  347:    .destroy = unix_destroy_stub,
+        -:  348:};
+        -:  349:
+        -:  350:#else
+        -:  351:
+        -:  352:static bool ipc_server_loop(IpcTransportContext *ctx, bool is_pipe) {
+        -:  353:    while (!ctx->stop) {
+        -:  354:        int client_fd = -1;
+        -:  355:        if (is_pipe) {
+        -:  356:            client_fd = open(ctx->endpoint, O_RDWR);
+        -:  357:        } else {
+        -:  358:            client_fd = accept(ctx->listen_fd, NULL, NULL);
+        -:  359:        }
+        -:  360:
+        -:  361:        if (client_fd < 0) {
+        -:  362:            if (ctx->stop) {
+        -:  363:                break;
+        -:  364:            }
+        -:  365:            usleep(100000);
+        -:  366:            continue;
+        -:  367:        }
+        -:  368:
+        -:  369:        char *request = NULL;
+        -:  370:        if (ipc_read_frame(client_fd, &request) && request != NULL) {
+        -:  371:            char *response = NULL;
+        -:  372:            if (daemon_rpc_handle(request, &response) && response != NULL) {
+        -:  373:                (void)ipc_write_frame(client_fd, response);
+        -:  374:                free(response);
+        -:  375:            }
+        -:  376:            free(request);
+        -:  377:        }
+        -:  378:
+        -:  379:        close(client_fd);
+        -:  380:    }
+        -:  381:    return true;
+        -:  382:}
+        -:  383:
+        -:  384:static void *ipc_server_thread(void *arg) {
+        -:  385:    IpcTransportContext *ctx = (IpcTransportContext *)arg;
+        -:  386:    const bool is_pipe = ctx->listen_fd < 0;
+        -:  387:    (void)ipc_server_loop(ctx, is_pipe);
+        -:  388:    return NULL;
+        -:  389:}
+        -:  390:
+        -:  391:static bool pipe_start(DaemonTransport *self, const DaemonConfig *cfg) {
+        -:  392:    IpcTransportContext *ctx = self->context;
+        -:  393:    if (ctx == NULL || cfg == NULL) {
+        -:  394:        return false;
+        -:  395:    }
+        -:  396:
+        -:  397:    snprintf(ctx->endpoint, sizeof ctx->endpoint, "%s", cfg->server.pipe.name);
+        -:  398:    (void)unlink(ctx->endpoint);
+        -:  399:    if (mkfifo(ctx->endpoint, 0600) != 0 && errno != EEXIST) {
+        -:  400:        LOG_ERROR("Failed to create FIFO '%s'", ctx->endpoint);
+        -:  401:        return false;
+        -:  402:    }
+        -:  403:
+        -:  404:    ctx->listen_fd = -1;
+        -:  405:    ctx->stop = false;
+        -:  406:    if (pthread_create(&ctx->thread, NULL, ipc_server_thread, ctx) != 0) {
+        -:  407:        LOG_ERROR("Failed to start FIFO listener thread");
+        -:  408:        return false;
+        -:  409:    }
+        -:  410:
+        -:  411:    ctx->started = true;
+        -:  412:    LOG_INFO("FIFO daemon channel listening at '%s'", ctx->endpoint);
+        -:  413:    return true;
+        -:  414:}
+        -:  415:
+        -:  416:static void pipe_stop(DaemonTransport *self) {
+        -:  417:    IpcTransportContext *ctx = self->context;
+        -:  418:    if (ctx == NULL || !ctx->started) {
+        -:  419:        return;
+        -:  420:    }
+        -:  421:    ctx->stop = true;
+        -:  422:    int probe = open(ctx->endpoint, O_WRONLY | O_NONBLOCK);
+        -:  423:    if (probe >= 0) {
+        -:  424:        close(probe);
+        -:  425:    }
+        -:  426:    pthread_join(ctx->thread, NULL);
+        -:  427:    unlink(ctx->endpoint);
+        -:  428:    ctx->started = false;
+        -:  429:}
+        -:  430:
+        -:  431:static bool pipe_ping(DaemonTransport *self) {
+        -:  432:    IpcTransportContext *ctx = self->context;
+        -:  433:    if (ctx == NULL) {
+        -:  434:        return false;
+        -:  435:    }
+        -:  436:
+        -:  437:    const char *req = "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":1}";
+        -:  438:    char *resp = NULL;
+        -:  439:    const bool ok = ipc_rpc_exchange(ctx->endpoint, true, req, &resp, 5000U);
+        -:  440:    free(resp);
+        -:  441:    return ok;
+        -:  442:}
+        -:  443:
+        -:  444:static void pipe_destroy(DaemonTransport *self) {
+        -:  445:    pipe_stop(self);
+        -:  446:    free(self->context);
+        -:  447:    free(self);
+        -:  448:}
+        -:  449:
+        -:  450:static const DaemonTransportVTable pipe_vtable = {
+        -:  451:    .start = pipe_start,
+        -:  452:    .stop = pipe_stop,
+        -:  453:    .ping = pipe_ping,
+        -:  454:    .destroy = pipe_destroy,
+        -:  455:};
+        -:  456:
+        -:  457:static bool unix_start(DaemonTransport *self, const DaemonConfig *cfg) {
+        -:  458:    IpcTransportContext *ctx = self->context;
+        -:  459:    if (ctx == NULL || cfg == NULL) {
+        -:  460:        return false;
+        -:  461:    }
+        -:  462:
+        -:  463:    snprintf(ctx->endpoint, sizeof ctx->endpoint, "%s", cfg->server.unix_socket.path);
+        -:  464:    (void)unlink(ctx->endpoint);
+        -:  465:
+        -:  466:    ctx->listen_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        -:  467:    if (ctx->listen_fd < 0) {
+        -:  468:        LOG_ERROR("Failed to create unix socket");
+        -:  469:        return false;
+        -:  470:    }
+        -:  471:
+        -:  472:    struct sockaddr_un addr = {0};
+        -:  473:    addr.sun_family = AF_UNIX;
+        -:  474:    snprintf(addr.sun_path, sizeof addr.sun_path, "%s", ctx->endpoint);
+        -:  475:    if (bind(ctx->listen_fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
+        -:  476:        LOG_ERROR("Failed to bind unix socket '%s'", ctx->endpoint);
+        -:  477:        close(ctx->listen_fd);
+        -:  478:        return false;
+        -:  479:    }
+        -:  480:
+        -:  481:    if (listen(ctx->listen_fd, 8) != 0) {
+        -:  482:        LOG_ERROR("Failed to listen on unix socket");
+        -:  483:        close(ctx->listen_fd);
+        -:  484:        return false;
+        -:  485:    }
+        -:  486:
+        -:  487:    ctx->stop = false;
+        -:  488:    if (pthread_create(&ctx->thread, NULL, ipc_server_thread, ctx) != 0) {
+        -:  489:        LOG_ERROR("Failed to start unix socket listener thread");
+        -:  490:        close(ctx->listen_fd);
+        -:  491:        return false;
+        -:  492:    }
+        -:  493:
+        -:  494:    ctx->started = true;
+        -:  495:    LOG_INFO("Unix-socket daemon channel listening at '%s'", ctx->endpoint);
+        -:  496:    return true;
+        -:  497:}
+        -:  498:
+        -:  499:static void unix_stop(DaemonTransport *self) {
+        -:  500:    IpcTransportContext *ctx = self->context;
+        -:  501:    if (ctx == NULL || !ctx->started) {
+        -:  502:        return;
+        -:  503:    }
+        -:  504:    ctx->stop = true;
+        -:  505:    shutdown(ctx->listen_fd, SHUT_RDWR);
+        -:  506:    pthread_join(ctx->thread, NULL);
+        -:  507:    close(ctx->listen_fd);
+        -:  508:    unlink(ctx->endpoint);
+        -:  509:    ctx->started = false;
+        -:  510:}
+        -:  511:
+        -:  512:static bool unix_ping(DaemonTransport *self) {
+        -:  513:    IpcTransportContext *ctx = self->context;
+        -:  514:    if (ctx == NULL) {
+        -:  515:        return false;
+        -:  516:    }
+        -:  517:
+        -:  518:    const char *req = "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":1}";
+        -:  519:    char *resp = NULL;
+        -:  520:    const bool ok = ipc_rpc_exchange(ctx->endpoint, false, req, &resp, 5000U);
+        -:  521:    free(resp);
+        -:  522:    return ok;
+        -:  523:}
+        -:  524:
+        -:  525:static void unix_destroy(DaemonTransport *self) {
+        -:  526:    unix_stop(self);
+        -:  527:    free(self->context);
+        -:  528:    free(self);
+        -:  529:}
+        -:  530:
+        -:  531:static const DaemonTransportVTable unix_vtable = {
+        -:  532:    .start = unix_start,
+        -:  533:    .stop = unix_stop,
+        -:  534:    .ping = unix_ping,
+        -:  535:    .destroy = unix_destroy,
+        -:  536:};
+        -:  537:
+        -:  538:#endif
+        -:  539:
+    #####:  540:static bool http_uri_is_api(const struct mg_http_message *hm) {
+    #####:  541:    if (hm == NULL || hm->uri.len < 4) {
+    #####:  542:        return false;
+        -:  543:    }
+    #####:  544:    if (memcmp(hm->uri.buf, "/api", 4) != 0) {
+    #####:  545:        return false;
+        -:  546:    }
+    #####:  547:    return hm->uri.len == 4 || hm->uri.buf[4] == '/' || hm->uri.buf[4] == '?';
+        -:  548:}
+        -:  549:
+    #####:  550:static const char *http_cors_allow_origin(const DaemonCorsConfig *cors,
+        -:  551:                                          struct mg_http_message *hm) {
+    #####:  552:    if (cors == NULL || cors->allow_origin[0] == '\0') {
+    #####:  553:        return "*";
+        -:  554:    }
+    #####:  555:    if (strcmp(cors->allow_origin, "*") == 0) {
+    #####:  556:        return "*";
+        -:  557:    }
+        -:  558:
+    #####:  559:    if (hm != NULL) {
+    #####:  560:        struct mg_str *origin = mg_http_get_header(hm, "Origin");
+    #####:  561:        if (origin != NULL && mg_strcmp(*origin, mg_str(cors->allow_origin)) == 0) {
+    #####:  562:            return cors->allow_origin;
+        -:  563:        }
+        -:  564:    }
+        -:  565:
+    #####:  566:    return cors->allow_origin;
+        -:  567:}
+        -:  568:
+    #####:  569:static size_t http_write_cors_headers(char *buf, size_t buflen, const DaemonCorsConfig *cors,
+        -:  570:                                      struct mg_http_message *hm) {
+    #####:  571:    if (cors == NULL || !cors->enabled) {
+    #####:  572:        return 0;
+        -:  573:    }
+        -:  574:
+    #####:  575:    return (size_t)snprintf(buf, buflen,
+        -:  576:                            "Access-Control-Allow-Origin: %s\r\n"
+        -:  577:                            "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+        -:  578:                            "Access-Control-Allow-Headers: Content-Type, Authorization\r\n"
+        -:  579:                            "Access-Control-Expose-Headers: Content-Type\r\n",
+        -:  580:                            http_cors_allow_origin(cors, hm));
+        -:  581:}
+        -:  582:
+    #####:  583:static void http_reply_json(struct mg_connection *c, int status, const char *body,
+        -:  584:                            const DaemonCorsConfig *cors, struct mg_http_message *hm) {
+        -:  585:    char headers[512];
+    #####:  586:    size_t off = (size_t)snprintf(headers, sizeof headers,
+        -:  587:                                  "Content-Type: application/json; charset=utf-8\r\n");
+    #####:  588:    off += http_write_cors_headers(headers + off, sizeof headers - off, cors, hm);
+    #####:  589:    mg_http_reply(c, status, headers, "%s", body);
+    #####:  590:}
+        -:  591:
+    #####:  592:static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
+    #####:  593:    if (ev == MG_EV_CLOSE) {
+    #####:  594:        daemon_rpc_stream_detach(c);
+    #####:  595:        return;
+        -:  596:    }
+        -:  597:
+    #####:  598:    if (ev == MG_EV_WS_OPEN) {
+    #####:  599:        daemon_rpc_stream_attach_ws(c);
+    #####:  600:        return;
+        -:  601:    }
+        -:  602:
+    #####:  603:    if (ev == MG_EV_WS_MSG) {
+    #####:  604:        struct mg_ws_message *wm = (struct mg_ws_message *)ev_data;
+    #####:  605:        if (wm != NULL && wm->data.len >= 4U &&
+    #####:  606:            memcmp(wm->data.buf, "ping", 4) == 0) {
+    #####:  607:            daemon_rpc_note_frontend_activity();
+    #####:  608:            mg_ws_send(c, "pong", 4, WEBSOCKET_OP_TEXT);
+        -:  609:        }
+    #####:  610:        return;
+        -:  611:    }
+        -:  612:
+    #####:  613:    if (ev != MG_EV_HTTP_MSG) {
+    #####:  614:        return;
+        -:  615:    }
+        -:  616:
+    #####:  617:    struct mg_http_message *hm = (struct mg_http_message *)ev_data;
+    #####:  618:    const DaemonConfig *cfg = (const DaemonConfig *)c->fn_data;
+    #####:  619:    const DaemonCorsConfig *cors = cfg != NULL ? &cfg->server.cors : NULL;
+        -:  620:
+    #####:  621:    if (cors != NULL && cors->enabled && http_uri_is_api(hm) &&
+    #####:  622:        mg_strcasecmp(hm->method, mg_str("OPTIONS")) == 0) {
+        -:  623:        char headers[512];
+    #####:  624:        size_t off = http_write_cors_headers(headers, sizeof headers, cors, hm);
+    #####:  625:        snprintf(headers + off, sizeof headers - off, "Access-Control-Max-Age: 86400\r\n");
+    #####:  626:        mg_http_reply(c, 204, headers, "");
+    #####:  627:        return;
+        -:  628:    }
+        -:  629:
+    #####:  630:    if (!daemon_rpc_check_http_auth(hm)) {
+    #####:  631:        http_reply_json(c, 401, "{\"error\":\"unauthorized\"}\n", cors, hm);
+    #####:  632:        return;
+        -:  633:    }
+        -:  634:
+        -:  635:#if defined(AVAR_EMBED_GUI)
+        -:  636:    if (!http_uri_is_api(hm) && gui_embed_available()) {
+        -:  637:        char uri[512];
+        -:  638:        snprintf(uri, sizeof uri, "%.*s", (int)hm->uri.len, hm->uri.buf);
+        -:  639:        if (gui_embed_serve(c, uri)) {
+        -:  640:            return;
+        -:  641:        }
+        -:  642:    }
+        -:  643:#endif
+        -:  644:
+    #####:  645:    if (mg_match(hm->uri, mg_str("/api/events"), NULL)) {
+        -:  646:        char headers[512];
+    #####:  647:        size_t off = (size_t)snprintf(headers, sizeof headers,
+        -:  648:                                      "Content-Type: text/event-stream\r\n"
+        -:  649:                                      "Cache-Control: no-cache\r\n"
+        -:  650:                                      "Connection: keep-alive\r\n");
+    #####:  651:        off += http_write_cors_headers(headers + off, sizeof headers - off, cors, hm);
+    #####:  652:        mg_printf(c, "HTTP/1.1 200 OK\r\n%s\r\n", headers);
+    #####:  653:        daemon_rpc_stream_attach_sse(c);
+    #####:  654:        return;
+        -:  655:    }
+        -:  656:
+    #####:  657:    if (mg_match(hm->uri, mg_str("/api/ws"), NULL)) {
+    #####:  658:        mg_ws_upgrade(c, hm, NULL);
+    #####:  659:        return;
+        -:  660:    }
+        -:  661:
+        -:  662:    char uri[256];
+    #####:  663:    snprintf(uri, sizeof uri, "%.*s", (int)hm->uri.len, hm->uri.buf);
+        -:  664:
+    #####:  665:    char *body = NULL;
+    #####:  666:    int status = 500;
+    #####:  667:    if (!daemon_rpc_handle_http(uri, hm->body.buf, hm->body.len, &body, &status)) {
+    #####:  668:        http_reply_json(c, 500, "{\"error\":\"internal\"}\n", cors, hm);
+    #####:  669:        return;
+        -:  670:    }
+        -:  671:
+    #####:  672:    http_reply_json(c, status, body, cors, hm);
+    #####:  673:    free(body);
+        -:  674:}
+        -:  675:
+    #####:  676:static bool ipc_write_frame(const int fd, const char *json) {
+    #####:  677:    if (json == NULL) {
+    #####:  678:        return false;
+        -:  679:    }
+        -:  680:
+    #####:  681:    const uint32_t len = (uint32_t)strlen(json);
+    #####:  682:    const uint8_t header[4] = {(uint8_t)(len >> 24), (uint8_t)(len >> 16), (uint8_t)(len >> 8),
+    #####:  683:                               (uint8_t)len};
+        -:  684:
+        -:  685:#if defined(_WIN32)
+    #####:  686:    DWORD written = 0;
+    #####:  687:    if (!WriteFile((HANDLE)(intptr_t)fd, header, 4, &written, NULL) || written != 4) {
+    #####:  688:        return false;
+        -:  689:    }
+    #####:  690:    if (!WriteFile((HANDLE)(intptr_t)fd, json, len, &written, NULL) || written != len) {
+    #####:  691:        return false;
+        -:  692:    }
+    #####:  693:    (void)FlushFileBuffers((HANDLE)(intptr_t)fd);
+    #####:  694:    return true;
+        -:  695:#else
+        -:  696:    if (write(fd, header, 4) != 4) {
+        -:  697:        return false;
+        -:  698:    }
+        -:  699:    if (write(fd, json, len) != (ssize_t)len) {
+        -:  700:        return false;
+        -:  701:    }
+        -:  702:    return true;
+        -:  703:#endif
+        -:  704:}
+        -:  705:
+    #####:  706:static bool ipc_read_frame(const int fd, char **json_out) {
+    #####:  707:    if (json_out != NULL) {
+    #####:  708:        *json_out = NULL;
+        -:  709:    }
+        -:  710:
+        -:  711:    uint8_t header[4];
+        -:  712:#if defined(_WIN32)
+    #####:  713:    DWORD read_count = 0;
+    #####:  714:    if (!ReadFile((HANDLE)(intptr_t)fd, header, 4, &read_count, NULL) || read_count != 4) {
+    #####:  715:        return false;
+        -:  716:    }
+        -:  717:#else
+        -:  718:    if (read(fd, header, 4) != 4) {
+        -:  719:        return false;
+        -:  720:    }
+        -:  721:#endif
+        -:  722:
+    #####:  723:    const uint32_t len =
+    #####:  724:        ((uint32_t)header[0] << 24) | ((uint32_t)header[1] << 16) | ((uint32_t)header[2] << 8) |
+    #####:  725:        (uint32_t)header[3];
+    #####:  726:    if (len == 0U || len >= AVAR_DAEMON_RPC_FRAME_MAX) {
+    #####:  727:        return false;
+        -:  728:    }
+        -:  729:
+    #####:  730:    char *buf = calloc((size_t)len + 1U, 1U);
+    #####:  731:    if (buf == NULL) {
+    #####:  732:        return false;
+        -:  733:    }
+        -:  734:
+        -:  735:#if defined(_WIN32)
+    #####:  736:    if (!ReadFile((HANDLE)(intptr_t)fd, buf, len, &read_count, NULL) || read_count != len) {
+    #####:  737:        free(buf);
+    #####:  738:        return false;
+        -:  739:    }
+        -:  740:#else
+        -:  741:    size_t total = 0U;
+        -:  742:    while (total < len) {
+        -:  743:        const ssize_t n = read(fd, buf + total, (size_t)len - total);
+        -:  744:        if (n <= 0) {
+        -:  745:            free(buf);
+        -:  746:            return false;
+        -:  747:        }
+        -:  748:        total += (size_t)n;
+        -:  749:    }
+        -:  750:#endif
+        -:  751:
+    #####:  752:    if (json_out != NULL) {
+    #####:  753:        *json_out = buf;
+        -:  754:    } else {
+    #####:  755:        free(buf);
+        -:  756:    }
+    #####:  757:    return true;
+        -:  758:}
+        -:  759:
+        -:  760:#if defined(_WIN32)
+    #####:  761:static bool ipc_rpc_exchange(const char *endpoint, const bool is_pipe, const char *request_json,
+        -:  762:                             char **response_json_out, const unsigned timeout_ms) {
+        -:  763:    (void)is_pipe;
+        -:  764:
+    #####:  765:    if (endpoint == NULL || request_json == NULL || response_json_out == NULL) {
+    #####:  766:        return false;
+        -:  767:    }
+    #####:  768:    *response_json_out = NULL;
+        -:  769:
+    #####:  770:    HANDLE pipe = win_pipe_connect_client(endpoint, timeout_ms);
+    #####:  771:    if (pipe == INVALID_HANDLE_VALUE) {
+    #####:  772:        LOG_DEBUG("Pipe RPC connect failed for '%s'", endpoint);
+    #####:  773:        return false;
+        -:  774:    }
+        -:  775:
+    #####:  776:    if (!ipc_write_frame((int)(intptr_t)pipe, request_json)) {
+    #####:  777:        LOG_DEBUG("Pipe RPC write failed for '%s'", endpoint);
+    #####:  778:        CloseHandle(pipe);
+    #####:  779:        return false;
+        -:  780:    }
+        -:  781:
+    #####:  782:    if (!ipc_read_frame((int)(intptr_t)pipe, response_json_out)) {
+    #####:  783:        LOG_DEBUG("Pipe RPC read failed for '%s'", endpoint);
+    #####:  784:        CloseHandle(pipe);
+    #####:  785:        return false;
+        -:  786:    }
+        -:  787:
+    #####:  788:    CloseHandle(pipe);
+    #####:  789:    return true;
+        -:  790:}
+        -:  791:#else
+        -:  792:static bool ipc_rpc_exchange(const char *endpoint, const bool is_pipe, const char *request_json,
+        -:  793:                             char **response_json_out, const unsigned timeout_ms) {
+        -:  794:    (void)timeout_ms;
+        -:  795:    if (endpoint == NULL || request_json == NULL || response_json_out == NULL) {
+        -:  796:        return false;
+        -:  797:    }
+        -:  798:    *response_json_out = NULL;
+        -:  799:
+        -:  800:    int fd = -1;
+        -:  801:    if (is_pipe) {
+        -:  802:        fd = open(endpoint, O_WRONLY);
+        -:  803:    } else {
+        -:  804:        fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        -:  805:        if (fd >= 0) {
+        -:  806:            struct sockaddr_un addr = {0};
+        -:  807:            addr.sun_family = AF_UNIX;
+        -:  808:            snprintf(addr.sun_path, sizeof addr.sun_path, "%s", endpoint);
+        -:  809:            if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
+        -:  810:                close(fd);
+        -:  811:                return false;
+        -:  812:            }
+        -:  813:        }
+        -:  814:    }
+        -:  815:
+        -:  816:    if (fd < 0) {
+        -:  817:        return false;
+        -:  818:    }
+        -:  819:
+        -:  820:    const bool ok = ipc_write_frame(fd, request_json) && ipc_read_frame(fd, response_json_out);
+        -:  821:    close(fd);
+        -:  822:    return ok;
+        -:  823:}
+        -:  824:#endif
+        -:  825:
+        -:  826:typedef struct {
+        -:  827:    struct mg_mgr mgr;
+        -:  828:    bool done;
+        -:  829:    bool ok;
+        -:  830:    bool request_sent;
+        -:  831:    char *response;
+        -:  832:    const char *request;
+        -:  833:    const char *auth_token;
+        -:  834:    char url[AVAR_DAEMON_URL_BUF_SIZE];
+        -:  835:} HttpClientContext;
+        -:  836:
+    #####:  837:static void http_client_capture_response(HttpClientContext *ctx, struct mg_http_message *hm) {
+    #####:  838:    if (ctx == NULL || hm == NULL || ctx->ok) {
+    #####:  839:        return;
+        -:  840:    }
+        -:  841:
+    #####:  842:    if (hm->body.len > 0U) {
+    #####:  843:        free(ctx->response);
+    #####:  844:        ctx->response = calloc(hm->body.len + 1U, 1U);
+    #####:  845:        if (ctx->response != NULL) {
+    #####:  846:            memcpy(ctx->response, hm->body.buf, hm->body.len);
+        -:  847:        }
+        -:  848:    }
+        -:  849:
+    #####:  850:    ctx->ok = true;
+    #####:  851:    ctx->done = true;
+        -:  852:}
+        -:  853:
+    #####:  854:static void http_client_send_request(struct mg_connection *c, HttpClientContext *ctx) {
+    #####:  855:    if (ctx == NULL || ctx->request_sent) {
+    #####:  856:        return;
+        -:  857:    }
+        -:  858:
+    #####:  859:    ctx->request_sent = true;
+        -:  860:
+    #####:  861:    const struct mg_str host = mg_url_host(ctx->url);
+    #####:  862:    const char *uri = mg_url_uri(ctx->url);
+    #####:  863:    const size_t body_len = ctx->request != NULL ? strlen(ctx->request) : 0U;
+        -:  864:
+    #####:  865:    if (ctx->auth_token != NULL && ctx->auth_token[0] != '\0') {
+    #####:  866:        mg_printf(c,
+        -:  867:                  "POST %s HTTP/1.1\r\n"
+        -:  868:                  "Host: %.*s\r\n"
+        -:  869:                  "Content-Type: application/json\r\n"
+        -:  870:                  "Authorization: Bearer %s\r\n"
+        -:  871:                  "Connection: close\r\n"
+        -:  872:                  "Content-Length: %zu\r\n"
+        -:  873:                  "\r\n",
+    #####:  874:                  uri, (int)host.len, host.buf, ctx->auth_token, body_len);
+        -:  875:    } else {
+    #####:  876:        mg_printf(c,
+        -:  877:                  "POST %s HTTP/1.1\r\n"
+        -:  878:                  "Host: %.*s\r\n"
+        -:  879:                  "Content-Type: application/json\r\n"
+        -:  880:                  "Connection: close\r\n"
+        -:  881:                  "Content-Length: %zu\r\n"
+        -:  882:                  "\r\n",
+    #####:  883:                  uri, (int)host.len, host.buf, body_len);
+        -:  884:    }
+        -:  885:
+    #####:  886:    if (ctx->request != NULL && body_len > 0U) {
+    #####:  887:        mg_send(c, ctx->request, body_len);
+        -:  888:    }
+        -:  889:}
+        -:  890:
+    #####:  891:static void http_client_handler(struct mg_connection *c, int ev, void *ev_data) {
+    #####:  892:    HttpClientContext *ctx = (HttpClientContext *)c->fn_data;
+    #####:  893:    if (ctx == NULL) {
+    #####:  894:        return;
+        -:  895:    }
+        -:  896:
+    #####:  897:    if (ev == MG_EV_CONNECT) {
+    #####:  898:        if (ev_data != NULL && *(int *)ev_data != 0) {
+    #####:  899:            ctx->done = true;
+    #####:  900:            c->is_closing = 1;
+    #####:  901:            return;
+        -:  902:        }
+    #####:  903:        http_client_send_request(c, ctx);
+    #####:  904:        return;
+        -:  905:    }
+        -:  906:
+    #####:  907:    if (ev == MG_EV_WRITE) {
+    #####:  908:        if (!ctx->request_sent && !c->is_connecting && !c->is_tls_hs) {
+    #####:  909:            http_client_send_request(c, ctx);
+        -:  910:        }
+    #####:  911:        return;
+        -:  912:    }
+        -:  913:
+    #####:  914:    if (ev == MG_EV_HTTP_MSG) {
+    #####:  915:        http_client_capture_response(ctx, (struct mg_http_message *)ev_data);
+    #####:  916:        c->is_closing = 1;
+    #####:  917:        return;
+        -:  918:    }
+        -:  919:
+    #####:  920:    if (ev == MG_EV_ERROR || ev == MG_EV_CLOSE) {
+    #####:  921:        if (!ctx->ok) {
+    #####:  922:            ctx->done = true;
+        -:  923:        }
+        -:  924:    }
+        -:  925:}
+        -:  926:
+    #####:  927:static bool http_rpc_request_timeout(const DaemonConfig *cfg, const char *request_json,
+        -:  928:                                     char **response_json_out, const unsigned timeout_ms) {
+    #####:  929:    if (cfg == NULL || request_json == NULL || response_json_out == NULL) {
+    #####:  930:        return false;
+        -:  931:    }
+        -:  932:
+    #####:  933:    const char *host =
+    #####:  934:        cfg->session.remote_host[0] != '\0' ? cfg->session.remote_host : "127.0.0.1";
+    #####:  935:    const uint16_t port =
+    #####:  936:        cfg->session.remote_port != 0 ? cfg->session.remote_port : cfg->server.http.port;
+        -:  937:
+        -:  938:    char url[AVAR_DAEMON_URL_BUF_SIZE];
+    #####:  939:    snprintf(url, sizeof url, "http://%s:%u/api/rpc", host, (unsigned)port);
+        -:  940:
+    #####:  941:    HttpClientContext ctx = {
+        -:  942:        .request = request_json,
+    #####:  943:        .auth_token = cfg->server.auth_token[0] != '\0' ? cfg->server.auth_token : NULL,
+        -:  944:    };
+    #####:  945:    snprintf(ctx.url, sizeof ctx.url, "%s", url);
+    #####:  946:    mg_mgr_init(&ctx.mgr);
+        -:  947:
+    #####:  948:    struct mg_connection *c = mg_http_connect(&ctx.mgr, ctx.url, http_client_handler, &ctx);
+    #####:  949:    if (c == NULL) {
+    #####:  950:        mg_mgr_free(&ctx.mgr);
+    #####:  951:        return false;
+        -:  952:    }
+        -:  953:
+    #####:  954:    const unsigned wait_ms = timeout_ms == 0U ? 5000U : timeout_ms;
+    #####:  955:    const uint64_t deadline = mg_millis() + (uint64_t)wait_ms;
+    #####:  956:    while (!ctx.done && mg_millis() < deadline) {
+    #####:  957:        mg_mgr_poll(&ctx.mgr, 50);
+        -:  958:    }
+        -:  959:
+    #####:  960:    mg_mgr_free(&ctx.mgr);
+    #####:  961:    if (!ctx.ok || ctx.response == NULL) {
+    #####:  962:        free(ctx.response);
+    #####:  963:        return false;
+        -:  964:    }
+        -:  965:
+    #####:  966:    *response_json_out = ctx.response;
+    #####:  967:    return true;
+        -:  968:}
+        -:  969:
+    #####:  970:static bool http_rpc_request(const DaemonConfig *cfg, const char *request_json,
+        -:  971:                             char **response_json_out) {
+    #####:  972:    return http_rpc_request_timeout(cfg, request_json, response_json_out, 5000U);
+        -:  973:}
+        -:  974:
+    #####:  975:static bool http_ping_remote_timeout(const DaemonConfig *cfg, const unsigned timeout_ms) {
+    #####:  976:    char *response = NULL;
+    #####:  977:    const char *req = "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":1}";
+    #####:  978:    const bool ok = http_rpc_request_timeout(cfg, req, &response, timeout_ms);
+    #####:  979:    free(response);
+    #####:  980:    return ok;
+        -:  981:}
+        -:  982:
+    #####:  983:static bool http_ping_remote(const DaemonConfig *cfg) {
+    #####:  984:    return http_ping_remote_timeout(cfg, 5000U);
+        -:  985:}
+        -:  986:
+    #####:  987:DaemonTransport *daemon_transport_create(AvarTransportKind kind) {
+    #####:  988:    DaemonTransport *transport = calloc(1, sizeof(DaemonTransport));
+    #####:  989:    if (transport == NULL) {
+    #####:  990:        return NULL;
+        -:  991:    }
+        -:  992:
+    #####:  993:    switch (kind) {
+    #####:  994:        case AvarTransportHttp: {
+    #####:  995:            HttpTransportContext *ctx = calloc(1, sizeof(HttpTransportContext));
+    #####:  996:            if (ctx == NULL) {
+    #####:  997:                free(transport);
+    #####:  998:                return NULL;
+        -:  999:            }
+    #####: 1000:            transport->context = ctx;
+    #####: 1001:            transport->vtable = &http_vtable;
+    #####: 1002:            break;
+        -: 1003:        }
+    #####: 1004:        case AvarTransportPipe: {
+    #####: 1005:            IpcTransportContext *ctx = calloc(1, sizeof(IpcTransportContext));
+    #####: 1006:            if (ctx == NULL) {
+    #####: 1007:                free(transport);
+    #####: 1008:                return NULL;
+        -: 1009:            }
+    #####: 1010:            transport->context = ctx;
+    #####: 1011:            transport->vtable = &pipe_vtable;
+    #####: 1012:            break;
+        -: 1013:        }
+    #####: 1014:        case AvarTransportUnix: {
+    #####: 1015:            IpcTransportContext *ctx = calloc(1, sizeof(IpcTransportContext));
+    #####: 1016:            if (ctx == NULL) {
+    #####: 1017:                free(transport);
+    #####: 1018:                return NULL;
+        -: 1019:            }
+    #####: 1020:            transport->context = ctx;
+    #####: 1021:            transport->vtable = &unix_vtable;
+    #####: 1022:            break;
+        -: 1023:        }
+    #####: 1024:        case AvarTransportLocal:
+    #####: 1025:            free(transport);
+    #####: 1026:            return NULL;
+        -: 1027:    }
+        -: 1028:
+    #####: 1029:    return transport;
+        -: 1030:}
+        -: 1031:
+    #####: 1032:bool daemon_transport_start(DaemonTransport *transport, const DaemonConfig *cfg) {
+    #####: 1033:    if (transport == NULL || transport->vtable == NULL || transport->vtable->start == NULL) {
+    #####: 1034:        return false;
+        -: 1035:    }
+    #####: 1036:    return transport->vtable->start(transport, cfg);
+        -: 1037:}
+        -: 1038:
+    #####: 1039:void daemon_transport_stop(DaemonTransport *transport) {
+    #####: 1040:    if (transport != NULL && transport->vtable != NULL && transport->vtable->stop != NULL) {
+    #####: 1041:        transport->vtable->stop(transport);
+        -: 1042:    }
+    #####: 1043:}
+        -: 1044:
+    #####: 1045:bool daemon_transport_ping(DaemonTransport *transport) {
+    #####: 1046:    if (transport == NULL || transport->vtable == NULL || transport->vtable->ping == NULL) {
+    #####: 1047:        return false;
+        -: 1048:    }
+    #####: 1049:    return transport->vtable->ping(transport);
+        -: 1050:}
+        -: 1051:
+    #####: 1052:void daemon_transport_destroy(DaemonTransport *transport) {
+    #####: 1053:    if (transport != NULL && transport->vtable != NULL && transport->vtable->destroy != NULL) {
+    #####: 1054:        transport->vtable->destroy(transport);
+        -: 1055:    }
+    #####: 1056:}
+        -: 1057:
+    #####: 1058:void daemon_transport_poll(DaemonTransport *transport, unsigned timeout_ms) {
+    #####: 1059:    if (transport == NULL || transport->vtable != &http_vtable) {
+    #####: 1060:        return;
+        -: 1061:    }
+        -: 1062:
+    #####: 1063:    HttpTransportContext *ctx = transport->context;
+    #####: 1064:    if (ctx != NULL && ctx->started) {
+    #####: 1065:        mg_mgr_poll(&ctx->mgr, (int)timeout_ms);
+    #####: 1066:        daemon_rpc_streams_tick(&ctx->mgr);
+        -: 1067:    }
+        -: 1068:}
+        -: 1069:
+    #####: 1070:static bool ping_transport_timeout(const AvarTransportKind kind, const DaemonConfig *cfg,
+        -: 1071:                                 const unsigned timeout_ms) {
+    #####: 1072:    if (cfg == NULL) {
+    #####: 1073:        return false;
+        -: 1074:    }
+        -: 1075:
+    #####: 1076:    const unsigned wait_ms = timeout_ms == 0U ? 5000U : timeout_ms;
+        -: 1077:
+    #####: 1078:    switch (kind) {
+    #####: 1079:        case AvarTransportHttp:
+    #####: 1080:            return cfg->server.http.enabled && http_ping_remote_timeout(cfg, wait_ms);
+    #####: 1081:        case AvarTransportPipe: {
+    #####: 1082:            if (!cfg->server.pipe.enabled) {
+    #####: 1083:                return false;
+        -: 1084:            }
+    #####: 1085:            char *resp = NULL;
+    #####: 1086:            const char *req = "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":1}";
+        -: 1087:            const bool ok =
+    #####: 1088:                ipc_rpc_exchange(cfg->server.pipe.name, true, req, &resp, wait_ms);
+    #####: 1089:            free(resp);
+    #####: 1090:            return ok;
+        -: 1091:        }
+    #####: 1092:        case AvarTransportUnix: {
+    #####: 1093:            if (!cfg->server.unix_socket.enabled) {
+    #####: 1094:                return false;
+        -: 1095:            }
+    #####: 1096:            char *resp = NULL;
+    #####: 1097:            const char *req = "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":1}";
+        -: 1098:            const bool ok =
+    #####: 1099:                ipc_rpc_exchange(cfg->server.unix_socket.path, false, req, &resp, wait_ms);
+    #####: 1100:            free(resp);
+    #####: 1101:            return ok;
+        -: 1102:        }
+    #####: 1103:        default:
+    #####: 1104:            return false;
+        -: 1105:    }
+        -: 1106:}
+        -: 1107:
+    #####: 1108:static bool ping_transport(const AvarTransportKind kind, const DaemonConfig *cfg) {
+    #####: 1109:    return ping_transport_timeout(kind, cfg, 5000U);
+        -: 1110:}
+        -: 1111:
+    #####: 1112:bool daemon_transport_ping_remote(const AvarTransportKind kind, const DaemonConfig *cfg) {
+    #####: 1113:    return ping_transport(kind, cfg);
+        -: 1114:}
+        -: 1115:
+    #####: 1116:bool daemon_transport_ping_any_timeout(const DaemonConfig *cfg, const unsigned timeout_ms) {
+    #####: 1117:    if (cfg == NULL) {
+    #####: 1118:        return false;
+        -: 1119:    }
+        -: 1120:
+    #####: 1121:    const AvarTransportKind order[] = {cfg->session.transport, AvarTransportPipe,
+        -: 1122:                                       AvarTransportHttp, AvarTransportUnix};
+        -: 1123:
+    #####: 1124:    for (size_t i = 0; i < sizeof order / sizeof order[0]; ++i) {
+    #####: 1125:        bool duplicate = false;
+    #####: 1126:        for (size_t j = 0; j < i; ++j) {
+    #####: 1127:            if (order[j] == order[i]) {
+    #####: 1128:                duplicate = true;
+    #####: 1129:                break;
+        -: 1130:            }
+        -: 1131:        }
+    #####: 1132:        if (!duplicate && ping_transport_timeout(order[i], cfg, timeout_ms)) {
+    #####: 1133:            return true;
+        -: 1134:        }
+        -: 1135:    }
+        -: 1136:
+    #####: 1137:    return false;
+        -: 1138:}
+        -: 1139:
+    #####: 1140:bool daemon_transport_ping_any(const DaemonConfig *cfg) {
+    #####: 1141:    return daemon_transport_ping_any_timeout(cfg, 5000U);
+        -: 1142:}
+        -: 1143:
+    #####: 1144:DaemonTransport *daemon_transport_create_https(void) {
+    #####: 1145:    DaemonTransport *transport = calloc(1, sizeof(DaemonTransport));
+    #####: 1146:    if (transport == NULL) {
+    #####: 1147:        return NULL;
+        -: 1148:    }
+        -: 1149:
+    #####: 1150:    HttpTransportContext *ctx = calloc(1, sizeof(HttpTransportContext));
+    #####: 1151:    if (ctx == NULL) {
+    #####: 1152:        free(transport);
+    #####: 1153:        return NULL;
+        -: 1154:    }
+        -: 1155:
+    #####: 1156:    ctx->https = true;
+    #####: 1157:    transport->context = ctx;
+    #####: 1158:    transport->vtable = &https_vtable;
+    #####: 1159:    return transport;
+        -: 1160:}
+        -: 1161:
+    #####: 1162:static bool rpc_transport(const AvarTransportKind kind, const DaemonConfig *cfg,
+        -: 1163:                          const char *request_json, char **response_json_out) {
+    #####: 1164:    if (cfg == NULL || request_json == NULL || response_json_out == NULL) {
+    #####: 1165:        return false;
+        -: 1166:    }
+        -: 1167:
+    #####: 1168:    switch (kind) {
+    #####: 1169:        case AvarTransportHttp:
+    #####: 1170:            return cfg->server.http.enabled &&
+    #####: 1171:                   http_rpc_request(cfg, request_json, response_json_out);
+    #####: 1172:        case AvarTransportPipe:
+    #####: 1173:            return cfg->server.pipe.enabled &&
+    #####: 1174:                   ipc_rpc_exchange(cfg->server.pipe.name, true, request_json, response_json_out,
+        -: 1175:                                    5000U);
+    #####: 1176:        case AvarTransportUnix:
+    #####: 1177:            return cfg->server.unix_socket.enabled &&
+    #####: 1178:                   ipc_rpc_exchange(cfg->server.unix_socket.path, false, request_json,
+        -: 1179:                                    response_json_out, 5000U);
+    #####: 1180:        default:
+    #####: 1181:            return false;
+        -: 1182:    }
+        -: 1183:}
+        -: 1184:
+    #####: 1185:bool daemon_transport_rpc_request(const AvarTransportKind kind, const DaemonConfig *cfg,
+        -: 1186:                                  const char *request_json, char **response_json_out) {
+    #####: 1187:    return rpc_transport(kind, cfg, request_json, response_json_out);
+        -: 1188:}
+        -: 1189:
+    #####: 1190:bool daemon_transport_rpc_request_any(const DaemonConfig *cfg, const char *request_json,
+        -: 1191:                                      char **response_json_out) {
+    #####: 1192:    if (cfg == NULL) {
+    #####: 1193:        return false;
+        -: 1194:    }
+        -: 1195:
+    #####: 1196:    const AvarTransportKind order[] = {cfg->session.transport, AvarTransportPipe,
+        -: 1197:                                       AvarTransportHttp, AvarTransportUnix};
+        -: 1198:
+    #####: 1199:    for (size_t i = 0; i < sizeof order / sizeof order[0]; ++i) {
+    #####: 1200:        bool duplicate = false;
+    #####: 1201:        for (size_t j = 0; j < i; ++j) {
+    #####: 1202:            if (order[j] == order[i]) {
+    #####: 1203:                duplicate = true;
+    #####: 1204:                break;
+        -: 1205:            }
+        -: 1206:        }
+    #####: 1207:        if (!duplicate && rpc_transport(order[i], cfg, request_json, response_json_out)) {
+    #####: 1208:            return true;
+        -: 1209:        }
+        -: 1210:    }
+        -: 1211:
+    #####: 1212:    return false;
+        -: 1213:}

@@ -107,7 +107,7 @@ static int handle_scheduler_rm(int argc, char *argv[]) {
 static int handle_scheduler_ls(int argc, char *argv[]) {
     int sub_argc = 0;
     char **sub_argv = NULL;
-    if (cli_make_subargv(argc, argv, 2, "avar scheduler ls", &sub_argc, &sub_argv) != EXIT_SUCCESS) {
+    if (cli_make_subargv(argc, argv, 3, "avar scheduler ls", &sub_argc, &sub_argv) != EXIT_SUCCESS) {
         return EXIT_FAILURE;
     }
 

@@ -136,13 +136,15 @@ int cli_parse_avar(int argc, char **argv, AvarArgs *out) {
 
     void *argtable[] = {help, version, queue, name, proxy, detached, attached, url, end};
 
-    const int parse_rc = cli_run_argtable(argv[0], argtable, end, argc, argv, NULL);
+    bool help_requested = false;
+    const int parse_rc =
+            cli_run_argtable(argv[0], argtable, end, argc, argv, &help_requested);
     if (parse_rc != EXIT_SUCCESS) {
         arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
         return parse_rc;
     }
 
-    if (help->count > 0) {
+    if (help_requested || help->count > 0) {
         cli_print_avar_help();
         out->help = true;
         arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);

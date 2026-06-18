@@ -281,6 +281,21 @@ AVAR_TEST(utils_print_help_handles_single_line) {
 #endif
 }
 
+AVAR_TEST(utils_strndup_truncates) {
+    char *copy = strndup("hello world", 5U);
+    AVAR_ASSERT_NOT_NULL(copy);
+    AVAR_ASSERT_STR_EQ(copy, "hello");
+    free(copy);
+
+    AVAR_ASSERT_NULL(strndup(NULL, 4U));
+}
+
+AVAR_TEST(utils_stderr_is_tty_is_boolean) {
+    (void)avar_stderr_is_tty();
+    (void)avar_terminal_columns();
+    (void)avar_progress_bar_width(10);
+}
+
 AVAR_TEST_MAIN(
         run_utils_is_valid_url_rejects_null();
         run_utils_is_valid_url_rejects_missing_scheme();
@@ -307,4 +322,6 @@ AVAR_TEST_MAIN(
         run_utils_format_transfer_rate_uses_configured_units();
         run_utils_unit_parsers_accept_config_keys();
         run_utils_size_unit_rejects_kibibits();
-        run_utils_print_help_handles_single_line();)
+        run_utils_print_help_handles_single_line();
+        run_utils_strndup_truncates();
+        run_utils_stderr_is_tty_is_boolean();)

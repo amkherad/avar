@@ -94,7 +94,15 @@ static void http_fetch_handler(struct mg_connection *c, int ev, void *ev_data) {
         if (ev_data != NULL && *(int *)ev_data != 0) {
             ctx->done = true;
             c->is_closing = 1;
+            return;
         }
+#if defined(MG_TLS)
+        if (ctx->url != NULL && !mg_url_is_ssl(ctx->url)) {
+            http_fetch_send(c, ctx);
+        }
+#else
+        http_fetch_send(c, ctx);
+#endif
         return;
     }
 
@@ -565,3 +573,28 @@ int stream_hls_download(const char *playlist_url, const char *dest_path, const c
     hls_playlist_free(&segments);
     return rc;
 }
+
+#if defined(AVAR_TESTING)
+bool stream_hls_test_playlist_is_master(const char *text) {
+    return playlist_is_master(text);
+}
+
+char *stream_hls_test_pick_variant_url(const char *playlist, const char *base_url) {
+    return pick_variant_url(playlist, base_url);
+}
+
+size_t stream_hls_test_parse_media_segment_count(const char *playlist, const char *base_url) {
+    HlsPlaylist segments = {0};
+    if (hls_parse_media_playlist(playlist, base_url, &segments) != 0) {
+        hls_playlist_free(&segments);
+        return 0U;
+    }
+    const size_t count = segments.count;
+    hls_playlist_free(&segments);
+    return count;
+}
+
+bool stream_hls_test_parse_hex_iv(const char *value, unsigned char iv[16]) {
+    return parse_hex_iv(value, iv);
+}
+#endif

@@ -18,6 +18,8 @@ out/
 cmake-build-debug/
 cmake-build-release/
 cmake-build-test/
+/build-coverage-test/
+/build-coverage/
 
 # VSCode #
 ###########

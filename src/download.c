@@ -3582,3 +3582,26 @@ int download_remove(const char *target, const bool by_id, const bool purge_files
     LOG_INFO("Removed download item %s (%s files)", target, purge_files ? "purged" : "kept");
     return EXIT_SUCCESS;
 }
+
+#if defined(AVAR_TESTING)
+char *download_test_choose_filename(const char *url, const char *header_value,
+                                     const size_t header_len) {
+    return choose_filename(url, header_value, header_len);
+}
+
+bool download_test_parse_content_range_total(const char *header, uint64_t *total_out) {
+    if (header == NULL) {
+        return false;
+    }
+    const struct mg_str value = mg_str(header);
+    return parse_content_range_total(value, total_out);
+}
+
+uint64_t download_test_existing_file_size(const char *path) {
+    return existing_file_size(path);
+}
+
+char *download_test_generate_id(void) {
+    return download_generate_id();
+}
+#endif

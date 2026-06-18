@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "avar.h"
+#include "mongoose_log.h"
 
 #if defined(_WIN32)
     #include <direct.h>
@@ -129,6 +130,8 @@ bool test_guard_init(TestGuard *guard, const char *prefix) {
     if (!test_guard_make_dir(guard->work_dir)) {
         return false;
     }
+
+    avar_mongoose_log_silence();
 
     return true;
 }

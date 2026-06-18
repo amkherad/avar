@@ -72,6 +72,31 @@ def _parse_range_header(value: str, total_size: int) -> tuple[int, int] | None:
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
+        if self.path == "/hls/playlist.m3u8":
+            body = (
+                b"#EXTM3U\n"
+                b"#EXT-X-VERSION:3\n"
+                b"#EXT-X-TARGETDURATION:1\n"
+                b"#EXT-X-MEDIA-SEQUENCE:0\n"
+                b"segment0.ts\n"
+                b"segment1.ts\n"
+            )
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.apple.mpegurl")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if self.path.startswith("/hls/segment"):
+            body = b"hls-segment-data"
+            self.send_response(200)
+            self.send_header("Content-Type", "video/mp2t")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if self.path == "/plain.txt":
             body = b"hello world"
             self.send_response(200)
