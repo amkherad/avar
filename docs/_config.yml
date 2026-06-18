@@ -7,10 +7,10 @@ remote_theme: Appdynamics/jekyll-rtd-theme
 # Site URLs — update these placeholders when you host the documentation.
 url: ''
 baseurl: '/avar'
-repository: 'https://github.com/placeholder/avar'
-repo_url: 'https://github.com/placeholder/avar'
-download_url: 'https://github.com/placeholder/avar/releases'
-issues_url: 'https://github.com/placeholder/avar/issues'
+repository: 'https://github.com/amkherad/avar'
+repo_url: 'https://github.com/amkherad/avar'
+download_url: 'https://github.com/amkherad/avar/releases'
+issues_url: 'https://github.com/amkherad/avar/issues'
 
 nav_version: true
 edit: false
