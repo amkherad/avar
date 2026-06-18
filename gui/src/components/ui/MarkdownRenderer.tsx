@@ -42,11 +42,11 @@ function MermaidBlock({ code }: { code: string }) {
     async function render() {
       try {
         const { svg } = await mermaid.render(`mermaid-${id}`, code);
-        if (!cancelled) {
+        if (!cancelled && container) {
           container.innerHTML = svg;
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && container) {
           container.textContent = code;
         }
       }

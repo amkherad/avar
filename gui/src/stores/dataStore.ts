@@ -58,7 +58,7 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
   },
 
   setSelectedDownloadId: (id) =>
-    set((state) => ({
+    set(() => ({
       selectedDownloadId: id,
       selectedDownloadIds: id ? [id] : [],
       selectionAnchorId: id,

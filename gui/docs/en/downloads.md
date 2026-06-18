@@ -4,7 +4,12 @@ The downloads panel shows all items in the currently selected queue.
 
 ## ➕ Adding a download
 
-Click **Add download** next to the search field (or press **Ctrl+N**). Enter a URL and confirm. The download is added to the active queue.
+Click **Add download** next to the search field (or press **Ctrl+N**). Enter a URL and choose:
+
+- **Queue download** — adds the item to the active queue without starting it immediately.
+- **Start now** — adds the item and begins downloading right away.
+
+The dialog closes after either action succeeds.
 
 ## 🔍 Search and filters
 

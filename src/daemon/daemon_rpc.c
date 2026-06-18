@@ -13,6 +13,7 @@
 #include <logger.h>
 #include <mongoose.h>
 #include <queue.h>
+#include <utils.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,6 +42,7 @@ typedef struct {
 static DaemonLogRing _log_ring = {0};
 static char _auth_token[128] = {0};
 static time_t _daemon_started_at = 0;
+static time_t _frontend_last_activity = 0;
 
 static cJSON *rpc_error(int code, const char *message, cJSON *id) {
     cJSON *root = cJSON_CreateObject();
@@ -79,6 +81,7 @@ static cJSON *rpc_result(cJSON *result, cJSON *id) {
 
 void daemon_rpc_init(void) {
     _daemon_started_at = time(NULL);
+    _frontend_last_activity = 0;
     memset(&_log_ring, 0, sizeof _log_ring);
 }
 
@@ -401,10 +404,14 @@ static cJSON *handle_download_add(cJSON *params) {
         return NULL;
     }
 
+    char *normalized_url = strdup(url->valuestring);
+    if (normalized_url == NULL) {
+        return NULL;
+    }
+    trim_whitespace_inplace(normalized_url);
+
     const cJSON *queue = cJSON_GetObjectItemCaseSensitive(params, "queue");
     const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, "name");
-    const cJSON *attached = cJSON_GetObjectItemCaseSensitive(params, "attached");
-    const bool is_attached = cJSON_IsTrue(attached);
 
     const char *queue_name =
         cJSON_IsString(queue) && queue->valuestring != NULL ? queue->valuestring : NULL;
@@ -415,20 +422,27 @@ static cJSON *handle_download_add(cJSON *params) {
 
     cJSON *result = cJSON_CreateObject();
     if (result == NULL) {
+        free(normalized_url);
         free(proxy_url);
         return NULL;
     }
 
-    if (is_attached) {
-        const int rc = transient_download(url->valuestring, queue_name, dl_name, true);
-        cJSON_AddNumberToObject(result, "exitCode", rc);
+    if (!is_valid_http_url(normalized_url)) {
+        cJSON_AddNumberToObject(result, "exitCode", EXIT_FAILURE);
+        free(normalized_url);
         free(proxy_url);
         return result;
     }
 
+    const cJSON *start_now = cJSON_GetObjectItemCaseSensitive(params, "startNow");
+    const bool should_start = cJSON_IsTrue(start_now);
+
     char *id = NULL;
-    const int rc =
-            download_start_background_with_proxy(url->valuestring, queue_name, dl_name, proxy_url, &id);
+    int rc = download_enqueue_with_proxy(normalized_url, queue_name, dl_name, proxy_url, &id);
+    if (rc == EXIT_SUCCESS && should_start && id != NULL) {
+        rc = download_start(id);
+    }
+    free(normalized_url);
     free(proxy_url);
     cJSON_AddNumberToObject(result, "exitCode", rc);
     if (id != NULL) {
@@ -798,6 +812,31 @@ typedef struct StreamClient {
 static StreamClient *_stream_clients = NULL;
 static time_t _stream_last_tick = 0;
 
+static size_t stream_client_count(void) {
+    size_t count = 0U;
+    for (StreamClient *cursor = _stream_clients; cursor != NULL; cursor = cursor->next) {
+        if (cursor->connection != NULL && !cursor->connection->is_closing) {
+            count++;
+        }
+    }
+    return count;
+}
+
+void daemon_rpc_note_frontend_activity(void) {
+    _frontend_last_activity = time(NULL);
+}
+
+bool daemon_rpc_frontend_clients_active(const unsigned grace_seconds) {
+    if (stream_client_count() > 0U) {
+        return true;
+    }
+    if (_frontend_last_activity == 0) {
+        return false;
+    }
+    const time_t now = time(NULL);
+    return now - _frontend_last_activity < (time_t)grace_seconds;
+}
+
 static void stream_client_register(struct mg_connection *connection, const bool websocket) {
     if (connection == NULL) {
         return;
@@ -813,6 +852,7 @@ static void stream_client_register(struct mg_connection *connection, const bool 
     node->websocket = websocket;
     node->next = _stream_clients;
     _stream_clients = node;
+    daemon_rpc_note_frontend_activity();
 }
 
 static void stream_client_unregister(struct mg_connection *connection) {
@@ -1067,6 +1107,8 @@ bool daemon_rpc_handle_http(const char *uri, const char *body, const size_t body
     if (uri == NULL || body_out == NULL || status_out == NULL) {
         return false;
     }
+
+    daemon_rpc_note_frontend_activity();
 
     if (strcmp(uri, "/api/ping") == 0) {
         *body_out = strdup("{\"status\":\"ok\"}\n");

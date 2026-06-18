@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import {
   defaultFooterMonitors,
   defaultGuiConfig,
@@ -86,7 +86,7 @@ export const useConfigStore = create<ConfigState>()(
           sessionSecrets: stored.sessionSecrets ?? {},
         };
       },
-      storage: {
+      storage: createJSONStorage(() => ({
         getItem: (name) => {
           const raw = localStorage.getItem(name);
           if (!raw && name === GUI_CONFIG_KEY) {
@@ -110,7 +110,7 @@ export const useConfigStore = create<ConfigState>()(
           localStorage.removeItem(name);
           localStorage.removeItem(GUI_SECRETS_KEY);
         },
-      },
+      })),
     },
   ),
 );

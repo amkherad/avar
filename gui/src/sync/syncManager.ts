@@ -85,8 +85,7 @@ function startSseSync(client: DaemonClient): SyncStopFn {
 
   source.onerror = () => {
     if (source.readyState === EventSource.CLOSED) {
-      appLogger.gui.error("SSE connection closed");
-      useConnectionStore.setState({ connection: "disconnected" });
+      appLogger.gui.warn("SSE connection closed (daemon may still be running)");
     } else {
       appLogger.gui.debug("SSE connection error (reconnecting)");
     }
@@ -99,7 +98,7 @@ function startSseSync(client: DaemonClient): SyncStopFn {
 
 function startWebSocketSync(client: DaemonClient): SyncStopFn {
   let ws: WebSocket | null = null;
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectTimer: number | null = null;
   let closed = false;
 
   const connect = () => {

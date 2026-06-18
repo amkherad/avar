@@ -115,6 +115,18 @@ AVAR_TEST(utils_is_valid_http_url_delegates_to_http_schemes) {
     AVAR_ASSERT(!is_valid_http_url(NULL));
 }
 
+AVAR_TEST(utils_trim_whitespace_inplace_trims_ends) {
+    char value[] = "  https://example.com/file.mkv  ";
+    trim_whitespace_inplace(value);
+    AVAR_ASSERT_STR_EQ(value, "https://example.com/file.mkv");
+}
+
+AVAR_TEST(utils_is_valid_http_url_accepts_trimmed_urls) {
+    char value[] = "https://example.com/file.mkv ";
+    trim_whitespace_inplace(value);
+    AVAR_ASSERT(is_valid_http_url(value));
+}
+
 AVAR_TEST(utils_print_help_returns_success) {
     const char *messages[] = {
             "Avar",
@@ -279,6 +291,8 @@ AVAR_TEST_MAIN(
         run_utils_is_valid_url_accepts_paths_queries_and_fragments();
         run_utils_is_valid_url_accepts_userinfo_and_port();
         run_utils_is_valid_http_url_delegates_to_http_schemes();
+        run_utils_trim_whitespace_inplace_trims_ends();
+        run_utils_is_valid_http_url_accepts_trimmed_urls();
         run_utils_print_help_returns_success();
         run_utils_format_progress_bar_renders_percent_fill();
         run_utils_format_spatial_progress_bar_renders_separate_regions();

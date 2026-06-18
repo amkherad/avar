@@ -24,6 +24,17 @@ export interface AvarTrayLabels {
   stopAll: string;
 }
 
+export interface AvarTrayActiveDownload {
+  id: string;
+  filename: string;
+  percent: number;
+}
+
+export interface AvarTrayActiveDownloads {
+  sectionLabel: string;
+  items: AvarTrayActiveDownload[];
+}
+
 export interface AvarExtensionBridgeState {
   enabled: boolean;
   connected: boolean;
@@ -45,6 +56,7 @@ export interface AvarElectronApi {
   getExtensionBridgeState: () => Promise<AvarExtensionBridgeState>;
   getExtensionBridgeUrl: () => Promise<string>;
   setTrayLabels: (labels: AvarTrayLabels) => Promise<void>;
+  setTrayActiveDownloads: (payload: AvarTrayActiveDownloads) => Promise<void>;
 }
 
 declare global {

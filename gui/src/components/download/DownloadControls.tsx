@@ -14,7 +14,6 @@ import {
   canResume,
   canStart,
   canStop,
-  isPaused,
 } from "@/lib/downloadStatus";
 
 export interface DownloadControlsProps {
@@ -24,18 +23,8 @@ export interface DownloadControlsProps {
 
 export function DownloadControls({ downloads, className = "" }: DownloadControlsProps) {
   const { t } = useTranslation();
-  const {
-    busy,
-    pause,
-    resume,
-    start,
-    stop,
-    removeWithConfirm,
-    togglePause,
-    toggleStart,
-  } = useDownloadActions();
+  const { busy, pause, resume, start, stop, removeWithConfirm } = useDownloadActions();
 
-  const single = downloads.length === 1 ? downloads[0] : null;
   const ids = downloads.map((item) => item.id);
 
   const anyPausable = downloads.some((item) => canPause(item.status));
@@ -43,71 +32,58 @@ export function DownloadControls({ downloads, className = "" }: DownloadControls
   const anyStartable = downloads.some((item) => canStart(item.status));
   const anyStoppable = downloads.some((item) => canStop(item.status));
 
-  function handlePauseResume() {
-    if (single) {
-      void togglePause(single);
-      return;
-    }
-    if (anyResumable) {
-      void resume(ids);
-    } else if (anyPausable) {
-      void pause(ids);
-    }
-  }
-
-  function handleStartStop() {
-    if (single) {
-      void toggleStart(single);
-      return;
-    }
-    if (anyStoppable) {
-      void stop(ids);
-    } else if (anyStartable) {
-      void start(ids);
-    }
-  }
-
-  const showPause =
-    downloads.length > 1 ? anyPausable || anyResumable : single && (canPause(single.status) || isPaused(single.status));
-  const showStartStop =
-    downloads.length > 1
-      ? anyStartable || anyStoppable
-      : single && (canStart(single.status) || canStop(single.status));
-
-  const paused = single ? isPaused(single.status) : anyResumable && !anyPausable;
-
   return (
     <div className={`avar-download-controls ${className}`.trim()}>
-      {showPause ? (
+      {anyStartable ? (
+        <ShortcutButton
+          size="sm"
+          variant="secondary"
+          loading={busy}
+          shortcut="download.start"
+          registerShortcut={false}
+          aria-label={t("download.start")}
+          onClick={() => void start(ids)}
+        >
+          <FontAwesomeIcon icon={faPlay} />
+        </ShortcutButton>
+      ) : null}
+      {anyStoppable ? (
+        <ShortcutButton
+          size="sm"
+          variant="secondary"
+          loading={busy}
+          shortcut="download.stop"
+          registerShortcut={false}
+          aria-label={t("download.stop")}
+          onClick={() => void stop(ids)}
+        >
+          <FontAwesomeIcon icon={faStop} />
+        </ShortcutButton>
+      ) : null}
+      {anyPausable ? (
         <ShortcutButton
           size="sm"
           variant="secondary"
           loading={busy}
           shortcut="download.pause"
           registerShortcut={false}
-          aria-label={paused ? t("download.resume") : t("download.pause")}
-          onClick={() => void handlePauseResume()}
+          aria-label={t("download.pause")}
+          onClick={() => void pause(ids)}
         >
-          <FontAwesomeIcon icon={paused ? faPlay : faPause} />
+          <FontAwesomeIcon icon={faPause} />
         </ShortcutButton>
       ) : null}
-      {showStartStop ? (
+      {anyResumable ? (
         <ShortcutButton
           size="sm"
           variant="secondary"
           loading={busy}
-          shortcut={anyStoppable || (single && canStop(single.status)) ? "download.stop" : "download.start"}
+          shortcut="download.pause"
           registerShortcut={false}
-          aria-label={
-            anyStoppable || (single && canStop(single.status))
-              ? t("download.stop")
-              : t("download.start")
-          }
-          onClick={() => void handleStartStop()}
+          aria-label={t("download.resume")}
+          onClick={() => void resume(ids)}
         >
-          <FontAwesomeIcon
-            icon={anyStoppable || (single && canStop(single.status)) ? faStop : faPlay}
-          />
+          <FontAwesomeIcon icon={faPlay} />
         </ShortcutButton>
       ) : null}
       <ShortcutButton

@@ -17,6 +17,7 @@ export interface AddDownloadParams {
   queue?: string;
   name?: string;
   attached?: boolean;
+  startNow?: boolean;
   outputPath?: string;
   group?: string;
   proxy?: ProxySettings;
@@ -179,7 +180,7 @@ export class DaemonClient {
   }
 
   async addQueue(params: QueueAddParams): Promise<string> {
-    const result = await this.rpc<QueueRpcResult>("queue.add", params as Record<string, unknown>);
+    const result = await this.rpc<QueueRpcResult>("queue.add", { ...params });
     if (result.exitCode !== 0 || !result.id) {
       throw new DaemonApiError("Failed to add queue", result.exitCode ?? -1);
     }
@@ -238,6 +239,7 @@ export class DaemonClient {
         : {
             url: options.url,
             attached: options.attached ?? false,
+            ...(options.startNow ? { startNow: true } : {}),
             ...(options.queue ? { queue: options.queue } : {}),
             ...(options.name ? { name: options.name } : {}),
             ...(options.outputPath ? { outputPath: options.outputPath } : {}),
@@ -245,9 +247,24 @@ export class DaemonClient {
             ...(options.proxy ? { proxy: proxySettingsToRpcParams(options.proxy) } : {}),
           };
 
-    const result = await this.rpc<{ exitCode: number }>("download.add", params);
-    if (result.exitCode !== 0) {
-      throw new DaemonApiError("Failed to add download", result.exitCode);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 30_000);
+    try {
+      const result = await this.rpc<{ exitCode: number }>(
+        "download.add",
+        params,
+        controller.signal,
+      );
+      if (result.exitCode !== 0) {
+        throw new DaemonApiError("Failed to add download", result.exitCode);
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        throw new DaemonApiError("Timed out waiting for daemon to queue download", -1);
+      }
+      throw err;
+    } finally {
+      window.clearTimeout(timer);
     }
   }
 

@@ -724,6 +724,24 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         cJSON_AddNullToObject(obj, AVAR_FIELD_QUEUE_ID);
     }
 
+    if (job->state != NULL && job->state->total_size > 0U && job->state->chunk_size > 0U) {
+        cJSON_AddNumberToObject(obj, AVAR_FIELD_CHUNK_SIZE, (double)job->state->chunk_size);
+        cJSON *ranges = cJSON_AddArrayToObject(obj, "doneRanges");
+        if (ranges != NULL) {
+            for (size_t i = 0U; i < job->state->done_range_count; i++) {
+                cJSON *pair = cJSON_CreateArray();
+                if (pair == NULL) {
+                    continue;
+                }
+                cJSON_AddItemToArray(pair,
+                                     cJSON_CreateNumber((double)job->state->done_ranges[i].start));
+                cJSON_AddItemToArray(pair,
+                                     cJSON_CreateNumber((double)job->state->done_ranges[i].end));
+                cJSON_AddItemToArray(ranges, pair);
+            }
+        }
+    }
+
     char *json = cJSON_PrintUnformatted(obj);
     cJSON_Delete(obj);
     return json;
@@ -2464,16 +2482,28 @@ static void job_free(DownloadJob *job) {
     free(job);
 }
 
-static int run_transient_download(const char *url, const char *queue, const char *name,
-                                  const char *proxy_override) {
-    if (url == NULL || !is_valid_http_url(url)) {
+static int run_transient_download_ex(const char *url, const char *queue, const char *name,
+                                   const char *proxy_override, const bool start_immediately,
+                                   char **id_out) {
+    char *normalized_url = url != NULL ? strdup(url) : NULL;
+    if (normalized_url == NULL) {
+        LOG_ERROR("Out of memory");
+        return EXIT_FAILURE;
+    }
+    trim_whitespace_inplace(normalized_url);
+
+    if (!is_valid_http_url(normalized_url)) {
+        free(normalized_url);
         LOG_ERROR("Invalid download URL");
         return EXIT_FAILURE;
     }
 
+    url = normalized_url;
+
     char *temp_dir = default_temp_path();
     char *download_dir = default_download_path();
     if (temp_dir == NULL || download_dir == NULL) {
+        free(normalized_url);
         free(temp_dir);
         free(download_dir);
         LOG_ERROR("Failed to resolve download directories");
@@ -2481,6 +2511,7 @@ static int run_transient_download(const char *url, const char *queue, const char
     }
 
     if (make_dirs_in_path(temp_dir) != 0 || make_dirs_in_path(download_dir) != 0) {
+        free(normalized_url);
         free(temp_dir);
         free(download_dir);
         LOG_ERROR("Failed to create download directories");
@@ -2496,6 +2527,7 @@ static int run_transient_download(const char *url, const char *queue, const char
     }
 
     if (item_id == NULL) {
+        free(normalized_url);
         free(temp_dir);
         free(download_dir);
         LOG_ERROR("Failed to allocate download id");
@@ -2505,6 +2537,7 @@ static int run_transient_download(const char *url, const char *queue, const char
     char *job_dir = build_job_dir(temp_dir, item_id);
     char *state_path = job_dir != NULL ? build_state_path(job_dir) : NULL;
     if (job_dir == NULL || state_path == NULL || make_dirs_in_path(job_dir) != 0) {
+        free(normalized_url);
         free(item_id);
         free(job_dir);
         free(state_path);
@@ -2551,6 +2584,7 @@ static int run_transient_download(const char *url, const char *queue, const char
             filename = choose_filename(url, NULL, 0);
         }
         if (filename == NULL) {
+            free(normalized_url);
             free(item_id);
             free(job_dir);
             free(state_path);
@@ -2589,6 +2623,7 @@ static int run_transient_download(const char *url, const char *queue, const char
 
     if (state == NULL || filename == NULL || temp_path == NULL || dest_path == NULL) {
         download_state_free(state);
+        free(normalized_url);
         free(item_id);
         free(filename);
         free(temp_path);
@@ -2601,6 +2636,7 @@ static int run_transient_download(const char *url, const char *queue, const char
     DownloadJob *job = calloc(1, sizeof(*job));
     if (job == NULL) {
         download_state_free(state);
+        free(normalized_url);
         free(item_id);
         free(filename);
         free(temp_path);
@@ -2617,6 +2653,7 @@ static int run_transient_download(const char *url, const char *queue, const char
     }
 
     job->url = strdup(url);
+    free(normalized_url);
     job->item_id = item_id;
     job->filename = filename;
     job->filename_inferred = state != NULL ? state->filename_inferred : true;
@@ -2630,15 +2667,37 @@ static int run_transient_download(const char *url, const char *queue, const char
     job->last_speed_sample_ms = mg_millis();
     load_job_retry_state(job);
 
-    LOG_INFO("Downloading %s <- %s", dest_path, url);
-    (void) dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
-
-    const int rc = run_download(job);
-    if (rc != EXIT_SUCCESS && !job->failed) {
-        (void) dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+    int rc = EXIT_SUCCESS;
+    if (start_immediately) {
+        LOG_INFO("Downloading %s <- %s", dest_path, url);
+        (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+        rc = run_download(job);
+        if (rc != EXIT_SUCCESS && !job->failed) {
+            (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+        }
+    } else {
+        LOG_INFO("Queued %s <- %s", dest_path, url);
+        (void)dm_item_upsert(job, AVAR_DL_STATUS_QUEUED);
+        if (id_out != NULL && job->item_id != NULL) {
+            *id_out = strdup(job->item_id);
+            if (*id_out == NULL) {
+                rc = EXIT_FAILURE;
+            }
+        }
     }
+
     job_free(job);
     return rc;
+}
+
+static int run_transient_download(const char *url, const char *queue, const char *name,
+                                  const char *proxy_override) {
+    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL);
+}
+
+int download_enqueue_with_proxy(const char *url, const char *queue, const char *name,
+                                const char *proxy_url, char **id_out) {
+    return run_transient_download_ex(url, queue, name, proxy_url, false, id_out);
 }
 
 int transient_download(const char *url, const char *queue, const char *name, const bool attached) {
@@ -2690,16 +2749,24 @@ int download_start_background(const char *url, const char *queue, const char *na
 
 int download_start_background_with_proxy(const char *url, const char *queue, const char *name,
                                          const char *proxy_url, char **id_out) {
-    if (url == NULL || !is_valid_http_url(url)) {
+    char *normalized_url = url != NULL ? strdup(url) : NULL;
+    if (normalized_url == NULL) {
+        return EXIT_FAILURE;
+    }
+    trim_whitespace_inplace(normalized_url);
+
+    if (!is_valid_http_url(normalized_url)) {
+        free(normalized_url);
         return EXIT_FAILURE;
     }
 
     BackgroundDownloadArgs *args = calloc(1, sizeof(*args));
     if (args == NULL) {
+        free(normalized_url);
         return EXIT_FAILURE;
     }
 
-    args->url = strdup(url);
+    args->url = normalized_url;
     args->queue = queue != NULL ? strdup(queue) : NULL;
     args->name = name != NULL ? strdup(name) : NULL;
     args->proxy = proxy_url != NULL ? strdup(proxy_url) : NULL;

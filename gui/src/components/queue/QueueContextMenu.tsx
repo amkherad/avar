@@ -37,25 +37,22 @@ export function QueueContextMenu({
       return [];
     }
 
-    const list: ContextMenuItem[] = [];
-
-    if (queue.running) {
-      list.push({
-        id: "stop",
-        label: t("queue.stop"),
-        icon: faStop,
-        disabled: busy,
-        onClick: () => onStop(queue.id),
-      });
-    } else {
-      list.push({
+    const list: ContextMenuItem[] = [
+      {
         id: "start",
         label: t("queue.start"),
         icon: faPlay,
-        disabled: busy,
+        disabled: busy || queue.running,
         onClick: () => onStart(queue.id),
-      });
-    }
+      },
+      {
+        id: "stop",
+        label: t("queue.stop"),
+        icon: faStop,
+        disabled: busy || !queue.running,
+        onClick: () => onStop(queue.id),
+      },
+    ];
 
     if (showModify && onModify) {
       list.push({

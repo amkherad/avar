@@ -71,6 +71,10 @@ export interface DownloadInfo {
 
   totalBytes: number;
 
+  chunkSize?: number;
+
+  doneRanges?: Array<[number, number]>;
+
   errorCount?: number;
 
   maxRetries?: number | null;

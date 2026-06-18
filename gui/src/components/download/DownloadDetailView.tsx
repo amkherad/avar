@@ -9,6 +9,7 @@ import type { DownloadInfo } from "@/api/types";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
 import { formatBytePair, progressPercent } from "./format";
+import { DownloadProgressBar } from "./DownloadProgressBar";
 
 export interface DownloadDetailViewProps {
   download: DownloadInfo;
@@ -63,9 +64,7 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
         <div className="avar-download-detail__field">
           <dt>{t("download.progress")}</dt>
           <dd>
-            <div className="avar-progress" aria-hidden="true">
-              <div className="avar-progress__bar" style={{ width: `${percent}%` }} />
-            </div>
+            <DownloadProgressBar download={download} />
             <span className="avar-list__meta">
               {formatBytePair(download.bytesDownloaded, download.totalBytes)} ({percent}%)
             </span>

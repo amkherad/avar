@@ -8,6 +8,25 @@ import { defaultProxySettings, type ProxySettings } from "@/lib/proxySettings";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { appLogger } from "@/lib/appLogger";
 
+const CONFIG_DEFAULTS = {
+  "dm.segmentation.enabled": "false",
+  "dm.segmentation.strategy": "balanced",
+  "dm.segmentation.concurrency": "4",
+  "dm.segmentation.chunkSize": "262144",
+  "dm.segmentation.minFileSize": "1048576",
+  "dm.tempPath": "",
+  "dm.downloadPath": "",
+  "dm.progress.sizeUnit": "auto",
+  "dm.progress.speedUnit": "auto",
+  "dm.progress.style": "segmented",
+  "dm.proxy.enabled": "false",
+  "dm.proxy.type": "http",
+  "dm.proxy.host": "",
+  "dm.proxy.port": "",
+  "dm.proxy.username": "",
+  "dm.proxy.password": "",
+} as const;
+
 const SEGMENT_KEYS = [
   "dm.segmentation.enabled",
   "dm.segmentation.strategy",
@@ -36,18 +55,32 @@ export function DownloadSettings() {
     try {
       const next: Record<string, string> = {};
       for (const key of SEGMENT_KEYS) {
-        next[key] = (await client.getConfig(key)) ?? "";
+        const defaultValue = CONFIG_DEFAULTS[key];
+        next[key] =
+          (await client.getConfig(key, defaultValue)) ?? defaultValue;
       }
       setValues(next);
 
-      const enabled = (await client.getConfig("dm.proxy.enabled")) === "true";
+      const enabled =
+        (await client.getConfig("dm.proxy.enabled", CONFIG_DEFAULTS["dm.proxy.enabled"])) ===
+        "true";
       setProxy({
         enabled,
-        type: ((await client.getConfig("dm.proxy.type")) as ProxySettings["type"]) || "http",
-        host: (await client.getConfig("dm.proxy.host")) ?? "",
-        port: (await client.getConfig("dm.proxy.port")) ?? "",
-        username: (await client.getConfig("dm.proxy.username")) ?? "",
-        password: (await client.getConfig("dm.proxy.password")) ?? "",
+        type:
+          ((await client.getConfig("dm.proxy.type", CONFIG_DEFAULTS["dm.proxy.type"])) as ProxySettings["type"]) ||
+          "http",
+        host:
+          (await client.getConfig("dm.proxy.host", CONFIG_DEFAULTS["dm.proxy.host"])) ??
+          CONFIG_DEFAULTS["dm.proxy.host"],
+        port:
+          (await client.getConfig("dm.proxy.port", CONFIG_DEFAULTS["dm.proxy.port"])) ??
+          CONFIG_DEFAULTS["dm.proxy.port"],
+        username:
+          (await client.getConfig("dm.proxy.username", CONFIG_DEFAULTS["dm.proxy.username"])) ??
+          CONFIG_DEFAULTS["dm.proxy.username"],
+        password:
+          (await client.getConfig("dm.proxy.password", CONFIG_DEFAULTS["dm.proxy.password"])) ??
+          CONFIG_DEFAULTS["dm.proxy.password"],
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));

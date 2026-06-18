@@ -34,9 +34,27 @@ function parseDownloadItem(item: unknown): DownloadInfo {
     queueId: record.queueId ? String(record.queueId) : undefined,
     bytesDownloaded: toNumber(record.bytesDownloaded),
     totalBytes: toNumber(record.totalBytes),
+    chunkSize: record.chunkSize !== undefined ? toNumber(record.chunkSize) : undefined,
+    doneRanges: parseDoneRanges(record.doneRanges),
     errorCount: record.errorCount !== undefined ? toNumber(record.errorCount) : undefined,
     maxRetries,
   };
+}
+
+function parseDoneRanges(value: unknown): Array<[number, number]> | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const ranges: Array<[number, number]> = [];
+  for (const item of value) {
+    if (!Array.isArray(item) || item.length < 2) {
+      continue;
+    }
+    ranges.push([toNumber(item[0]), toNumber(item[1])]);
+  }
+
+  return ranges.length > 0 ? ranges : undefined;
 }
 
 function toNumber(value: unknown): number {

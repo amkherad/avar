@@ -74,6 +74,9 @@ const trayLabels = {
   stopAll: "Stop All",
 };
 
+/** @type {{ sectionLabel: string, items: Array<{ id: string, filename: string, percent: number }> }} */
+let trayActiveDownloads = { sectionLabel: "Active downloads", items: [] };
+
 function resolveAppUrl(hash = "") {
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     return `${process.env.VITE_DEV_SERVER_URL}${hash}`;
@@ -179,19 +182,57 @@ function showMainWindow() {
 }
 
 function buildTrayMenu() {
-  return Menu.buildFromTemplate([
+  /** @type {import('electron').MenuItemConstructorOptions[]} */
+  const template = [
     { label: trayLabels.show, click: () => showMainWindow() },
     { type: "separator" },
+  ];
+
+  if (trayActiveDownloads.items.length > 0) {
+    template.push({ label: trayActiveDownloads.sectionLabel, enabled: false });
+    for (const item of trayActiveDownloads.items) {
+      const label =
+        item.filename.length > 48 ? `${item.filename.slice(0, 47)}…` : item.filename;
+      template.push({
+        label: `${label} (${item.percent}%)`,
+        enabled: false,
+      });
+    }
+    template.push({ type: "separator" });
+  }
+
+  template.push(
     { label: trayLabels.startAll, click: () => void runBulkAction("start") },
     { label: trayLabels.pauseAll, click: () => void runBulkAction("pause") },
     { label: trayLabels.resumeAll, click: () => void runBulkAction("resume") },
     { label: trayLabels.stopAll, click: () => void runBulkAction("stop") },
     { type: "separator" },
-    { label: trayLabels.exit, click: () => {
-      appIsQuitting = true;
-      app.quit();
-    } },
-  ]);
+    {
+      label: trayLabels.exit,
+      click: () => {
+        appIsQuitting = true;
+        app.quit();
+      },
+    },
+  );
+
+  return Menu.buildFromTemplate(template);
+}
+
+function updateTrayTooltip() {
+  if (!tray) {
+    return;
+  }
+
+  if (trayActiveDownloads.items.length === 0) {
+    tray.setToolTip("Avar");
+    return;
+  }
+
+  const lines = trayActiveDownloads.items.map(
+    (item) => `${item.filename} (${item.percent}%)`,
+  );
+  tray.setToolTip(["Avar", ...lines].join("\n"));
 }
 
 function createTray() {
@@ -204,6 +245,7 @@ function createTray() {
   tray = new Tray(trayImage);
   tray.setToolTip("Avar");
   tray.setContextMenu(buildTrayMenu());
+  updateTrayTooltip();
 
   tray.on("click", () => {
     showMainWindow();
@@ -378,6 +420,32 @@ ipcMain.handle("tray:setLabels", (_event, labels) => {
     Object.assign(trayLabels, labels);
     if (tray) {
       tray.setContextMenu(buildTrayMenu());
+    }
+  }
+});
+
+ipcMain.handle("tray:setActiveDownloads", (_event, payload) => {
+  if (payload && typeof payload === "object") {
+    trayActiveDownloads = {
+      sectionLabel:
+        typeof payload.sectionLabel === "string"
+          ? payload.sectionLabel
+          : trayActiveDownloads.sectionLabel,
+      items: Array.isArray(payload.items)
+        ? payload.items
+            .filter(
+              (item) =>
+                item &&
+                typeof item.id === "string" &&
+                typeof item.filename === "string" &&
+                typeof item.percent === "number",
+            )
+            .slice(0, 3)
+        : [],
+    };
+    if (tray) {
+      tray.setContextMenu(buildTrayMenu());
+      updateTrayTooltip();
     }
   }
 });

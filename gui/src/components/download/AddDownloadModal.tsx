@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faListCheck } from "@fortawesome/free-solid-svg-icons";
+import { faListCheck, faPlay } from "@fortawesome/free-solid-svg-icons";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -51,14 +51,15 @@ export function AddDownloadModal({ open, onClose }: AddDownloadModalProps) {
     setProxy(defaultProxySettings());
   }
 
-  async function handleSubmit() {
+  async function handleSubmit(startNow: boolean) {
     if (!client || !url.trim()) {
       return;
     }
 
     const params: AddDownloadParams = {
       url: url.trim(),
-      attached: true,
+      attached: false,
+      startNow,
       queue: isDefaultQueue(effectiveQueueId) ? undefined : selectedQueue?.name,
       name: filename.trim() || undefined,
       outputPath: outputPath.trim() || undefined,
@@ -69,10 +70,12 @@ export function AddDownloadModal({ open, onClose }: AddDownloadModalProps) {
     setAdding(true);
     try {
       await client.addDownload(params);
-      appLogger.gui.info(t("download.queued", { url: url.trim() }));
+      appLogger.gui.info(
+        startNow ? t("download.started", { url: url.trim() }) : t("download.queued", { url: url.trim() }),
+      );
       resetForm();
       onClose();
-      await useDataStore.getState().refresh();
+      void useDataStore.getState().refresh();
     } catch (err) {
       appLogger.gui.error(
         t("download.addFailed"),
@@ -94,9 +97,13 @@ export function AddDownloadModal({ open, onClose }: AddDownloadModalProps) {
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button loading={adding} onClick={() => void handleSubmit()}>
+          <Button loading={adding} variant="secondary" onClick={() => void handleSubmit(false)}>
             <FontAwesomeIcon icon={faListCheck} />
             {t("download.queueSubmit")}
+          </Button>
+          <Button loading={adding} onClick={() => void handleSubmit(true)}>
+            <FontAwesomeIcon icon={faPlay} />
+            {t("download.startNow")}
           </Button>
         </>
       }
@@ -109,7 +116,7 @@ export function AddDownloadModal({ open, onClose }: AddDownloadModalProps) {
         autoFocus
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
-            void handleSubmit();
+            void handleSubmit(false);
           }
         }}
       />
@@ -155,25 +162,4 @@ export function AddDownloadModal({ open, onClose }: AddDownloadModalProps) {
       <ProxySettingsFields value={proxy} onChange={setProxy} />
     </Modal>
   );
-}
-
-export function useAddDownloadModal(
-  controlledOpen?: boolean,
-  onOpenChange?: (open: boolean) => void,
-) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const open = controlledOpen ?? uncontrolledOpen;
-
-  function setOpen(next: boolean) {
-    if (controlledOpen === undefined) {
-      setUncontrolledOpen(next);
-    }
-    onOpenChange?.(next);
-  }
-
-  return {
-    open,
-    openModal: () => setOpen(true),
-    closeModal: () => setOpen(false),
-  };
 }

@@ -44,6 +44,26 @@ bool is_valid_http_url(stringa url) {
     return is_valid_url(url, httpSchema);
 }
 
+void trim_whitespace_inplace(char *value) {
+    if (value == NULL || value[0] == '\0') {
+        return;
+    }
+
+    char *start = value;
+    while (*start != '\0' && isspace((unsigned char)*start)) {
+        start++;
+    }
+
+    if (start != value) {
+        memmove(value, start, strlen(start) + 1);
+    }
+
+    size_t len = strlen(value);
+    while (len > 0 && isspace((unsigned char)value[len - 1])) {
+        value[--len] = '\0';
+    }
+}
+
 bool is_valid_url(stringa url, stringa validSchemes[]) {
     if (url == NULL) return false;
 

@@ -3,14 +3,57 @@ import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/Button";
+import { useDraggable } from "@/hooks/useDraggable";
 import { closePopupWindow, resolveConfirm } from "@/lib/popup";
 import { usePopupStore } from "@/stores/popupStore";
 
-export function PopupHost() {
+function DraggablePopupWindow({
+  id,
+  title,
+  url,
+  width,
+  height,
+}: {
+  id: string;
+  title: string;
+  url: string;
+  width: number;
+  height: number;
+}) {
   const { t } = useTranslation();
+  const { dragHandleProps, dialogStyle } = useDraggable({ resetKey: id });
+
+  return (
+    <div
+      className="avar-popup-window"
+      style={{ width, height, ...dialogStyle }}
+      role="dialog"
+      aria-label={title}
+    >
+      <header
+        className="avar-popup-window__header avar-modal__header--draggable"
+        {...dragHandleProps}
+      >
+        <span className="avar-popup-window__title">{title}</span>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label={t("common.close")}
+          onClick={() => closePopupWindow(id)}
+        >
+          <FontAwesomeIcon icon={faXmark} />
+        </Button>
+      </header>
+      <iframe className="avar-popup-window__frame" src={url} title={title} />
+    </div>
+  );
+}
+
+export function PopupHost() {
   const windows = usePopupStore((s) => s.windows);
   const confirm = usePopupStore((s) => s.confirm);
   const [checkboxChecked, setCheckboxChecked] = useState(false);
+  const { dragHandleProps, dialogStyle } = useDraggable({ resetKey: confirm?.id });
 
   useEffect(() => {
     setCheckboxChecked(confirm?.checkboxDefault ?? false);
@@ -19,30 +62,14 @@ export function PopupHost() {
   return (
     <>
       {windows.map((win) => (
-        <div
+        <DraggablePopupWindow
           key={win.id}
-          className="avar-popup-window"
-          style={{ width: win.width, height: win.height }}
-          role="dialog"
-          aria-label={win.title}
-        >
-          <header className="avar-popup-window__header">
-            <span className="avar-popup-window__title">{win.title}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              aria-label={t("common.close")}
-              onClick={() => closePopupWindow(win.id)}
-            >
-              <FontAwesomeIcon icon={faXmark} />
-            </Button>
-          </header>
-          <iframe
-            className="avar-popup-window__frame"
-            src={win.url}
-            title={win.title}
-          />
-        </div>
+          id={win.id}
+          title={win.title}
+          url={win.url}
+          width={win.width}
+          height={win.height}
+        />
       ))}
 
       {confirm ? (
@@ -52,8 +79,9 @@ export function PopupHost() {
             role="alertdialog"
             aria-modal="true"
             aria-labelledby="avar-confirm-title"
+            style={dialogStyle}
           >
-            <header className="avar-modal__header">
+            <header className="avar-modal__header avar-modal__header--draggable" {...dragHandleProps}>
               <h2 id="avar-confirm-title">{confirm.title}</h2>
             </header>
             <div className="avar-modal__body">

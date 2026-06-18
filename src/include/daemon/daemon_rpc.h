@@ -76,4 +76,13 @@ void daemon_rpc_stream_attach_ws(struct mg_connection *connection);
 /** Removes a streaming connection from the registry. */
 void daemon_rpc_stream_detach(struct mg_connection *connection);
 
+/** Records HTTP or streaming client activity (keeps auto-shutdown idle timer reset). */
+void daemon_rpc_note_frontend_activity(void);
+
+/**
+ * Returns true when a GUI client is connected: active SSE/WebSocket streams, or
+ * recent /api activity within grace_seconds.
+ */
+bool daemon_rpc_frontend_clients_active(unsigned grace_seconds);
+
 #endif

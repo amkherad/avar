@@ -33,7 +33,7 @@ The extension popup shows a green/red dot for bridge connectivity. Downloads are
 
 ### 🖥️ Desktop tray (Electron)
 
-When running the Electron app, Avar stays available in the system tray (Windows, macOS, KDE, GNOME, and other Linux desktops with tray support). Left-click the tray icon to show the main window; right-click for **Show Avar**, bulk download actions (**Start All**, **Pause All**, **Resume All**, **Stop All**), and **Exit Avar**. Closing the main window hides it to the tray instead of quitting.
+When running the Electron app, Avar stays available in the system tray (Windows, macOS, KDE, GNOME, and other Linux desktops with tray support). Left-click the tray icon to show the main window; right-click for **Show Avar**, up to three active downloads with progress (oldest first), bulk download actions (**Start All**, **Pause All**, **Resume All**, **Stop All**), and **Exit Avar**. The tray tooltip also summarizes active downloads. Closing the main window hides it to the tray instead of quitting.
 
 Use the **puzzle-piece icon** in the header (next to the theme toggle) to open the extension integration panel: connection status, listen toggle, bridge URL, protocol version, and extension update availability.
 

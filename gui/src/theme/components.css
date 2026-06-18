@@ -362,6 +362,14 @@
   font-size: 1.1rem;
 }
 
+.avar-modal__header--draggable {
+  user-select: none;
+}
+
+.avar-modal__header--draggable:active {
+  cursor: grabbing;
+}
+
 .avar-modal__body {
   padding: 0.5rem 1rem 1rem;
   display: flex;
@@ -1338,7 +1346,7 @@
 
 .avar-resize-handle {
   flex-shrink: 0;
-  background: transparent;
+  background: color-mix(in srgb, var(--avar-primary) 22%, var(--avar-border));
   transition: background 0.12s;
 }
 
@@ -1356,7 +1364,7 @@
 
 .avar-resize-handle:hover,
 .avar-resize-handle:active {
-  background: color-mix(in srgb, var(--avar-primary) 25%, transparent);
+  background: color-mix(in srgb, var(--avar-primary) 45%, var(--avar-border));
 }
 
 .avar-download-table {
@@ -1444,9 +1452,17 @@
 
 .avar-download-table__col-resize {
   position: absolute;
-  inset-block: 0;
+  top: 50%;
   inset-inline-end: -2px;
   width: 5px;
+  height: 1.25rem;
+  transform: translateY(-50%);
+  background: color-mix(in srgb, var(--avar-primary) 22%, var(--avar-border));
+}
+
+.avar-download-table__col-resize:hover,
+.avar-download-table__col-resize:active {
+  background: color-mix(in srgb, var(--avar-primary) 45%, var(--avar-border));
 }
 
 .avar-download-table__body {
@@ -1878,6 +1894,28 @@
   height: 100%;
   background: var(--avar-primary);
   border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.avar-progress--segmented {
+  display: flex;
+  gap: 2px;
+  background: transparent;
+}
+
+.avar-progress__segment {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  background: var(--avar-bg-muted);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.avar-progress__segment-fill {
+  height: 100%;
+  background: var(--avar-primary);
+  border-radius: 2px;
   transition: width 0.25s ease;
 }
 

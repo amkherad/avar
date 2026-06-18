@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { QueueInfo } from "@/api/types";
 import { FontAwesomeIcon } from "@/icons";
@@ -6,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
+import { QueueContextMenu } from "@/components/queue/QueueContextMenu";
 
 export interface QueueTableProps {
   queues: QueueInfo[];
@@ -33,6 +35,11 @@ export function QueueTable({
   loading = false,
 }: QueueTableProps) {
   const { t } = useTranslation();
+  const [contextMenu, setContextMenu] = useState<{
+    queue: QueueInfo;
+    x: number;
+    y: number;
+  } | null>(null);
 
   if (loading) {
     return (
@@ -47,6 +54,7 @@ export function QueueTable({
   }
 
   return (
+    <>
     <div className="avar-queue-table">
       <div className="avar-queue-table__header" role="row">
         <div className="avar-queue-table__th" role="columnheader">
@@ -71,7 +79,22 @@ export function QueueTable({
           const statusLabel = queue.running ? t("queue.running") : t("queue.stopped");
 
           return (
-            <div key={queue.id} className="avar-queue-table__row" role="row">
+            <div
+              key={queue.id}
+              className="avar-queue-table__row"
+              role="row"
+              onContextMenu={(event) => {
+                if (queue.readonly) {
+                  return;
+                }
+                event.preventDefault();
+                setContextMenu({
+                  queue,
+                  x: event.clientX,
+                  y: event.clientY,
+                });
+              }}
+            >
               <div className="avar-queue-table__cell" role="cell">
                 <TruncateWithTooltip text={queue.name} className="avar-list__title" />
               </div>
@@ -152,5 +175,19 @@ export function QueueTable({
         })}
       </div>
     </div>
+
+    <QueueContextMenu
+      queue={contextMenu?.queue ?? null}
+      position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
+      showDelete={showDelete}
+      showModify={showModify}
+      busy={contextMenu ? busyId === contextMenu.queue.id : false}
+      onClose={() => setContextMenu(null)}
+      onStart={onStart}
+      onStop={onStop}
+      onDelete={onDelete}
+      onModify={onModify}
+    />
+    </>
   );
 }

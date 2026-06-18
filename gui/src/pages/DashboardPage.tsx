@@ -13,7 +13,7 @@ import { DownloadTable } from "@/components/download/DownloadTable";
 import { DownloadToolbar } from "@/components/download/DownloadToolbar";
 import { DownloadDetailPanel } from "@/components/download/DownloadDetailPanel";
 import { DownloadContextMenu } from "@/components/download/DownloadContextMenu";
-import { AddDownloadModal, useAddDownloadModal } from "@/components/download/AddDownloadModal";
+import { AddDownloadModal } from "@/components/download/AddDownloadModal";
 import { Footer } from "@/components/layout/Footer";
 import { ConsolePanel } from "@/components/console/ConsolePanel";
 import { useConnectionStore } from "@/stores/connectionStore";
@@ -32,7 +32,7 @@ import { openDownloadPopup } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useShortcutAction } from "@/shortcuts/useShortcutAction";
-import { canPause, canResume, canStart, canStop } from "@/lib/downloadStatus";
+import { canPause, canResume } from "@/lib/downloadStatus";
 import {
   selectDownloadsForQueue,
   selectEffectiveQueueId,
@@ -78,7 +78,11 @@ function DownloadPanel({
   const adjustDetailPanelWidth = useLayoutStore((s) => s.adjustDetailPanelWidth);
   const downloadViewMode = useLayoutStore((s) => s.downloadViewMode);
   const setDownloadViewMode = useLayoutStore((s) => s.setDownloadViewMode);
-  const { open, openModal, closeModal } = useAddDownloadModal(addDownloadOpen, onAddDownloadOpenChange);
+  const { open, openModal, closeModal } = {
+    open: addDownloadOpen,
+    openModal: () => onAddDownloadOpenChange(true),
+    closeModal: () => onAddDownloadOpenChange(false),
+  };
   const downloadActions = useDownloadActions();
 
   const [contextMenu, setContextMenu] = useState<{

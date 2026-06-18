@@ -17,7 +17,7 @@ interface ConnectionStoreState {
   connection: ConnectionState;
   client: DaemonClient | null;
   activeSession: GuiSession | null;
-  pingTimerId: ReturnType<typeof setInterval> | null;
+  pingTimerId: number | null;
   reconnectClient: () => void;
   checkConnection: () => Promise<boolean>;
   startPingMonitor: () => void;

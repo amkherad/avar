@@ -32,6 +32,7 @@ export interface QueueListProps {
 export function QueueList({
   queues,
   selectedId,
+  downloadCounts,
   compact = false,
   showDelete = false,
   selectable = true,

@@ -16,8 +16,8 @@ const CONFIG_DEFAULTS = {
 export function DaemonSettings() {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
-  const [autoShutdown, setAutoShutdown] = useState(CONFIG_DEFAULTS.autoShutdown);
-  const [autoShutdownIdleSeconds, setAutoShutdownIdleSeconds] = useState(
+  const [autoShutdown, setAutoShutdown] = useState<string>(CONFIG_DEFAULTS.autoShutdown);
+  const [autoShutdownIdleSeconds, setAutoShutdownIdleSeconds] = useState<string>(
     CONFIG_DEFAULTS.autoShutdownIdleSeconds,
   );
   const [logEnabled, setLogEnabled] = useState(false);

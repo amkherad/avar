@@ -13,6 +13,7 @@ import { initNotificationWatcher } from "@/lib/notificationWatcher";
 import { initBrowserExtensionBridge } from "@/lib/browserExtensionBridge";
 import { toggleDetailPanelWithSelection } from "@/lib/detailPanel";
 import { useElectronTrayLabels } from "@/hooks/useElectronTrayLabels";
+import { useElectronTrayDownloads } from "@/hooks/useElectronTrayDownloads";
 import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
 import { parsePopupHash } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
@@ -55,6 +56,7 @@ function AppContent() {
   useEffect(() => initNotificationWatcher(), []);
   useEffect(() => initBrowserExtensionBridge(), []);
   useElectronTrayLabels();
+  useElectronTrayDownloads();
 
   useEffect(() => {
     appLogger.gui.info("Avar GUI started");

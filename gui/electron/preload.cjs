@@ -12,4 +12,5 @@ contextBridge.exposeInMainWorld("avar", {
   getExtensionBridgeState: () => ipcRenderer.invoke("extensionBridge:getState"),
   getExtensionBridgeUrl: () => ipcRenderer.invoke("extensionBridge:getUrl"),
   setTrayLabels: (labels) => ipcRenderer.invoke("tray:setLabels", labels),
+  setTrayActiveDownloads: (payload) => ipcRenderer.invoke("tray:setActiveDownloads", payload),
 });

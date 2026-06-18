@@ -26,6 +26,10 @@ int download_start_background(const char *url, const char *queue, const char *na
 int download_start_background_with_proxy(const char *url, const char *queue, const char *name,
                                          const char *proxy_url, char **id_out);
 
+/** Adds a download to dm.items with queued status without starting it. */
+int download_enqueue_with_proxy(const char *url, const char *queue, const char *name,
+                                const char *proxy_url, char **id_out);
+
 size_t download_active_count(void);
 
 /**

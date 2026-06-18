@@ -14,14 +14,11 @@ export interface UseResizeOptions {
 
 export function useResize({
   axis,
-  min,
-  max,
   invert = false,
   onResize,
   onResizeEnd,
 }: UseResizeOptions) {
   const startPos = useRef(0);
-  const startSize = useRef(0);
   const active = useRef(false);
 
   const onPointerDown = useCallback(

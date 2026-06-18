@@ -8,6 +8,7 @@ import {
   useState,
   type ChangeEvent,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type SelectHTMLAttributes,
 } from "react";
@@ -63,7 +64,6 @@ export function Select({
   name,
   required,
   onClick,
-  ...rest
 }: SelectProps) {
   const autoId = useId();
   const selectId = id ?? (label ? `select-${label.replace(/\s+/g, "-").toLowerCase()}` : autoId);
@@ -215,12 +215,13 @@ export function Select({
           aria-expanded={open}
           disabled={disabled}
           onClick={(event) => {
-            onClick?.(event);
+            if (onClick) {
+              onClick(event as unknown as ReactMouseEvent<HTMLSelectElement>);
+            }
             if (!event.defaultPrevented) {
               toggleDropdown(event);
             }
           }}
-          {...rest}
         >
           <span className="avar-dropdown__value">{selected?.label ?? ""}</span>
           <span className={`avar-dropdown__chevron ${open ? "avar-dropdown__chevron--open" : ""}`}>

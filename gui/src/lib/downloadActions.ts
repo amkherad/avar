@@ -19,7 +19,6 @@ export interface DownloadActionResult {
 }
 
 async function runForIds(
-  client: DaemonClient,
   ids: string[],
   label: string,
   action: (id: string) => Promise<void>,
@@ -60,7 +59,7 @@ export async function pauseDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canPause(item.status);
   });
-  return runForIds(client, eligible, "pause", (id) => client.pauseDownload(id));
+  return runForIds(eligible, "pause", (id) => client.pauseDownload(id));
 }
 
 export async function resumeDownloads(
@@ -72,7 +71,7 @@ export async function resumeDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canResume(item.status);
   });
-  return runForIds(client, eligible, "resume", (id) => client.resumeDownload(id));
+  return runForIds(eligible, "resume", (id) => client.resumeDownload(id));
 }
 
 export async function startDownloads(
@@ -84,7 +83,7 @@ export async function startDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canStart(item.status);
   });
-  return runForIds(client, eligible, "start", (id) => client.startDownload(id));
+  return runForIds(eligible, "start", (id) => client.startDownload(id));
 }
 
 export async function stopDownloads(
@@ -96,7 +95,7 @@ export async function stopDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canStop(item.status);
   });
-  return runForIds(client, eligible, "stop", (id) => client.stopDownload(id));
+  return runForIds(eligible, "stop", (id) => client.stopDownload(id));
 }
 
 export async function deleteDownloads(
@@ -104,7 +103,7 @@ export async function deleteDownloads(
   ids: string[],
   purgeFiles = false,
 ): Promise<DownloadActionResult> {
-  const result = await runForIds(client, ids, "delete", (id) =>
+  const result = await runForIds(ids, "delete", (id) =>
     client.removeDownload(id, purgeFiles),
   );
   if (result.succeeded.length > 0) {

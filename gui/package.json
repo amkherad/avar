@@ -9,6 +9,7 @@
     "dev": "vite",
     "dev:desktop": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "build": "vite build",
+    "lint": "tsc --noEmit",
     "preview": "vite preview",
     "build:desktop": "npm run build && electron-builder --mac --win --linux",
     "build:desktop:current": "npm run build && electron-builder",

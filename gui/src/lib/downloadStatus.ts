@@ -8,10 +8,10 @@ export function isActive(status: string): boolean {
 
 export function canStart(status: string): boolean {
   return (
+    status === "queued" ||
     status === "paused" ||
-    status === "error" ||
     status === "failed" ||
-    status === "cancelled"
+    status === "stopped"
   );
 }
 

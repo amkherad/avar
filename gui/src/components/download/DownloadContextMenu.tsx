@@ -1,5 +1,12 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import {
+  faCircleInfo,
+  faPause,
+  faPlay,
+  faStop,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
 import type { DownloadInfo } from "@/api/types";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
@@ -21,57 +28,53 @@ export function DownloadContextMenu({ download, position, onClose }: DownloadCon
       return [];
     }
 
-    const list: ContextMenuItem[] = [];
-
-    if (canStart(download.status)) {
-      list.push({
+    return [
+      {
         id: "start",
         label: t("download.start"),
+        icon: faPlay,
+        disabled: !canStart(download.status) || actions.busy,
         onClick: () => void actions.start([download.id]),
-      });
-    }
-
-    if (canStop(download.status)) {
-      list.push({
+      },
+      {
         id: "stop",
         label: t("download.stop"),
+        icon: faStop,
+        disabled: !canStop(download.status) || actions.busy,
         onClick: () => void actions.stop([download.id]),
-      });
-    }
-
-    if (canPause(download.status)) {
-      list.push({
+      },
+      {
         id: "pause",
         label: t("download.pause"),
+        icon: faPause,
+        disabled: !canPause(download.status) || actions.busy,
         onClick: () => void actions.pause([download.id]),
-      });
-    }
-
-    if (canResume(download.status)) {
-      list.push({
+      },
+      {
         id: "resume",
         label: t("download.resume"),
+        icon: faPlay,
+        disabled: !canResume(download.status) || actions.busy,
         onClick: () => void actions.resume([download.id]),
-      });
-    }
-
-    list.push({
-      id: "details",
-      label: t("download.detailsTitle"),
-      onClick: () => void openDownloadPopup(download, t("download.detailsTitle")),
-    });
-
-    list.push({
-      id: "delete",
-      label: t("download.delete"),
-      danger: true,
-      onClick: () => void actions.removeWithConfirm([download]),
-    });
-
-    return list;
+      },
+      {
+        id: "details",
+        label: t("download.detailsTitle"),
+        icon: faCircleInfo,
+        onClick: () => void openDownloadPopup(download, t("download.detailsTitle")),
+      },
+      {
+        id: "delete",
+        label: t("download.delete"),
+        icon: faTrash,
+        disabled: actions.busy,
+        danger: true,
+        onClick: () => void actions.removeWithConfirm([download]),
+      },
+    ];
   }, [actions, download, t]);
 
-  if (!download || !position || items.length === 0) {
+  if (!download || !position) {
     return null;
   }
 

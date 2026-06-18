@@ -9,6 +9,7 @@
 #include "config.h"
 #include <daemon/daemon.h>
 #include <daemon/daemon_transport.h>
+#include <daemon/daemon_rpc.h>
 #include "file-system.h"
 #include "logger.h"
 
@@ -112,4 +113,14 @@ AVAR_TEST(daemon_start_ping_stop) {
 #endif
 }
 
-AVAR_TEST_MAIN(run_daemon_start_ping_stop();)
+AVAR_TEST(daemon_rpc_frontend_client_activity) {
+    daemon_rpc_init();
+    AVAR_ASSERT(!daemon_rpc_frontend_clients_active(60U));
+    daemon_rpc_note_frontend_activity();
+    AVAR_ASSERT(daemon_rpc_frontend_clients_active(60U));
+}
+
+AVAR_TEST_MAIN(
+    run_daemon_rpc_frontend_client_activity();
+    run_daemon_start_ping_stop();
+)
