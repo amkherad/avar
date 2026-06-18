@@ -369,6 +369,7 @@
     "port": "درگاه",
     "username": "نام کاربری (اختیاری)",
     "password": "رمز عبور (اختیاری)",
+    "noProxy": "بدون پروکسی برای (NO_PROXY)",
     "types": {
       "http": "HTTP",
       "https": "HTTPS",

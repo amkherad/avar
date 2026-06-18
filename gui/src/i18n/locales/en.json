@@ -369,6 +369,7 @@
     "port": "Port",
     "username": "Username (optional)",
     "password": "Password (optional)",
+    "noProxy": "Bypass proxy for (NO_PROXY)",
     "types": {
       "http": "HTTP",
       "https": "HTTPS",

@@ -221,7 +221,7 @@ AVAR_TEST(download_integration_redirect_follow) {
 
     char url[256];
     build_url("redirect.bin", url, sizeof url);
-    const int rc = transient_download(url, NULL, NULL, true);
+    const int rc = transient_download(url, NULL, NULL, NULL, true);
     stop_local_server();
 
     AVAR_ASSERT_EQ(rc, EXIT_SUCCESS);
@@ -238,7 +238,7 @@ AVAR_TEST(download_integration_attached_roundtrip) {
 
     char url[256];
     build_url("plain.txt", url, sizeof url);
-    const int rc = transient_download(url, NULL, NULL, true);
+    const int rc = transient_download(url, NULL, NULL, NULL, true);
     stop_local_server();
 
     AVAR_ASSERT_EQ(rc, EXIT_SUCCESS);
@@ -270,7 +270,7 @@ AVAR_TEST(download_integration_small_file_skips_segmentation) {
 
     char url[256];
     build_url("plain.txt", url, sizeof url);
-    const int rc = transient_download(url, NULL, NULL, true);
+    const int rc = transient_download(url, NULL, NULL, NULL, true);
 
     unsigned max_concurrent = 0U;
     unsigned total_range_requests = 0U;
@@ -288,7 +288,7 @@ AVAR_TEST(download_integration_segmented_parallel_completes) {
     remove_segmented_artifacts();
     start_local_server();
 
-    const int rc = transient_download(g_segmented_url, NULL, NULL, true);
+    const int rc = transient_download(g_segmented_url, NULL, NULL, NULL, true);
 
     unsigned max_concurrent = 0U;
     unsigned total_range_requests = 0U;
@@ -311,7 +311,7 @@ AVAR_TEST(download_integration_segmented_disabled_uses_stream) {
     remove_segmented_artifacts();
     start_local_server();
 
-    const int rc = transient_download(g_segmented_url, NULL, NULL, true);
+    const int rc = transient_download(g_segmented_url, NULL, NULL, NULL, true);
 
     unsigned max_concurrent = 0U;
     unsigned total_range_requests = 0U;
@@ -336,7 +336,7 @@ AVAR_TEST(download_integration_segment_retry_recovers_from_drop) {
 
     char url[256];
     build_url("flaky_segmented.bin", url, sizeof url);
-    const int rc = transient_download(url, NULL, NULL, true);
+    const int rc = transient_download(url, NULL, NULL, NULL, true);
 
     unsigned total_range_requests = 0U;
     AVAR_ASSERT(read_range_stats(NULL, &total_range_requests));
@@ -360,7 +360,7 @@ AVAR_TEST(download_integration_range_refused_falls_back_to_stream) {
 
     char url[256];
     build_url("liesrange.bin", url, sizeof url);
-    const int rc = transient_download(url, NULL, NULL, true);
+    const int rc = transient_download(url, NULL, NULL, NULL, true);
     stop_local_server();
 
     /* The server advertises range support but answers 200 to Range requests;

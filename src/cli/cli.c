@@ -93,8 +93,8 @@ void cli_print_avar_help(void) {
     puts("Avar Download Manager");
     puts("");
     puts("Usage:");
-    puts("  avar <url> [--attached] [--queue=<queue>] [--name=<name>] [--detached]");
-    puts("  avar dl|download <url> [--queue=<queue>]");
+    puts("  avar <url> [--attached] [--queue=<queue>] [--name=<name>] [--proxy=<url>] [--detached]");
+    puts("  avar dl|download <url> [--queue=<queue>] [--proxy=<url>]");
     puts("  avar queue add <name> [--description=<text>] [--tempPath=<path>] ...");
     puts("  avar queue rm <id> [--name=<name>] [--purge-items]");
     puts("  avar queue edit <id> [--description=<text>] ...");
@@ -128,12 +128,13 @@ int cli_parse_avar(int argc, char **argv, AvarArgs *out) {
     arg_lit_t *version = arg_lit0("v", "version", "show version");
     arg_str_t *queue = arg_str0(NULL, "queue", "QUEUE", "target queue name");
     arg_str_t *name = arg_str0(NULL, "name", "NAME", "download item name");
+    arg_str_t *proxy = arg_str0(NULL, "proxy", "URL", "proxy URL (http/https/socks5)");
     arg_lit_t *detached = arg_lit0("d", "detached", "detach process and return immediately");
     arg_lit_t *attached = arg_lit0(NULL, "attached", "run download in foreground with progress");
     arg_str_t *url = arg_str0(NULL, NULL, "URL", "download URL");
     arg_end_t *end = arg_end(20);
 
-    void *argtable[] = {help, version, queue, name, detached, attached, url, end};
+    void *argtable[] = {help, version, queue, name, proxy, detached, attached, url, end};
 
     const int parse_rc = cli_run_argtable(argv[0], argtable, end, argc, argv, NULL);
     if (parse_rc != EXIT_SUCCESS) {
@@ -165,6 +166,9 @@ int cli_parse_avar(int argc, char **argv, AvarArgs *out) {
     }
     if (name->count > 0) {
         out->name = name->sval[0];
+    }
+    if (proxy->count > 0) {
+        out->proxy = proxy->sval[0];
     }
     if (detached->count > 0) {
         out->detached = true;

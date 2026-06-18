@@ -225,8 +225,12 @@ typedef struct ChunkSlot {
 typedef struct DlConnCtx {
     DownloadJob *job;
     ChunkSlot *slot;
+    char *proxy_url;
+    ProxyKind proxy_kind;
+    ProxySocksCtx socks;
     bool use_proxy;
     bool proxy_tunnel_done;
+    bool proxy_http_forward;
 } DlConnCtx;
 
 typedef struct DownloadJob {
@@ -388,6 +392,8 @@ static void schedule_pending_chunks(DownloadJob *job);
 static void touch_slot_activity(ChunkSlot *slot);
 
 static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot);
+
+static void dl_conn_ctx_destroy(DlConnCtx *ctx);
 
 static void dl_conn_ctx_free(struct mg_connection *c);
 
@@ -1055,7 +1061,7 @@ static ChunkSlot *chunk_slot_find(DownloadJob *job, const struct mg_connection *
 }
 
 static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot) {
-    DlConnCtx *ctx = malloc(sizeof(*ctx));
+    DlConnCtx *ctx = calloc(1, sizeof(*ctx));
     if (ctx == NULL) {
         return NULL;
     }
@@ -1065,12 +1071,20 @@ static DlConnCtx *dl_conn_ctx_create(DownloadJob *job, ChunkSlot *slot) {
     return ctx;
 }
 
+static void dl_conn_ctx_destroy(DlConnCtx *ctx) {
+    if (ctx == NULL) {
+        return;
+    }
+    free(ctx->proxy_url);
+    free(ctx);
+}
+
 static void dl_conn_ctx_free(struct mg_connection *c) {
     if (c == NULL || c->fn_data == NULL) {
         return;
     }
 
-    free(c->fn_data);
+    dl_conn_ctx_destroy((DlConnCtx *)c->fn_data);
     c->fn_data = NULL;
 }
 
@@ -1087,14 +1101,31 @@ static bool dl_connect(DownloadJob *job, ChunkSlot *slot, struct mg_connection *
 
     const char *proxy_url =
             job->state != NULL && job->state->proxy != NULL ? job->state->proxy : NULL;
-    const char *connect_url =
-            proxy_url != NULL ? proxy_url : job->current_url;
     ctx->use_proxy = proxy_url != NULL;
+    if (proxy_url != NULL) {
+        ctx->proxy_url = strdup(proxy_url);
+        if (ctx->proxy_url == NULL) {
+            free(ctx);
+            set_error(job, "Out of memory");
+            return false;
+        }
+        ctx->proxy_kind = proxy_kind_from_url(proxy_url);
+        ctx->proxy_http_forward = proxy_uses_http_forward(proxy_url, job->current_url);
+    }
 
-    struct mg_connection *c = mg_http_connect(&job->mgr, connect_url, dl_handler, ctx);
+    char *connect_url = proxy_url != NULL ? proxy_connect_url(proxy_url) : NULL;
+    if (connect_url == NULL && proxy_url != NULL) {
+        dl_conn_ctx_destroy(ctx);
+        set_error(job, "Invalid proxy URL");
+        return false;
+    }
+
+    const char *resolved_connect = connect_url != NULL ? connect_url : job->current_url;
+    struct mg_connection *c = mg_http_connect(&job->mgr, resolved_connect, dl_handler, ctx);
+    free(connect_url);
     if (c == NULL) {
-        free(ctx);
-        set_error(job, "Failed to connect to %s", connect_url);
+        dl_conn_ctx_destroy(ctx);
+        set_error(job, "Failed to connect to %s", resolved_connect);
         return false;
     }
 
@@ -1303,6 +1334,10 @@ static void send_request(DownloadJob *job, struct mg_connection *c, const uint64
                          const uint64_t range_end) {
     const struct mg_str host = mg_url_host(job->current_url);
     const char *uri = mg_url_uri(job->current_url);
+    const DlConnCtx *ctx = (const DlConnCtx *)c->fn_data;
+    if (ctx != NULL && ctx->proxy_http_forward) {
+        uri = job->current_url;
+    }
 
     LOG_DEBUG("Sending http request to %s", job->current_url);
 
@@ -2259,8 +2294,12 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
 
         if (ctx->use_proxy && !ctx->proxy_tunnel_done) {
+            if (ctx->proxy_kind == ProxyKindSocks5) {
+                proxy_socks5_begin(c, job->current_url, ctx->proxy_url, &ctx->socks);
+                return;
+            }
             if (proxy_target_is_https(job->current_url)) {
-                proxy_send_connect(c, job->current_url);
+                proxy_send_connect(c, job->current_url, ctx->proxy_url);
                 return;
             }
             send_request_for_slot(job, c, slot);
@@ -2329,6 +2368,26 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
     } else if (ev == MG_EV_READ) {
         if (ctx->use_proxy && !ctx->proxy_tunnel_done && c->recv.len > 0) {
+            if (ctx->proxy_kind == ProxyKindSocks5) {
+                if (proxy_socks5_handle_read((const char *)c->recv.buf, c->recv.len, c,
+                                             job->current_url, ctx->proxy_url, &ctx->socks)) {
+                    ctx->proxy_tunnel_done = true;
+                    c->recv.len = 0;
+                    if (proxy_target_is_https(job->current_url)) {
+                        init_download_tls(c, job->current_url);
+                    } else {
+                        send_request_for_slot(job, c, slot);
+                    }
+                    return;
+                }
+                if (ctx->socks.stage == ProxySocksStageFailed) {
+                    set_error(job, "SOCKS5 proxy failed");
+                    request_close(job, c, false);
+                    return;
+                }
+                return;
+            }
+
             if (proxy_connect_response_ok((const char *)c->recv.buf, c->recv.len)) {
                 ctx->proxy_tunnel_done = true;
                 c->recv.len = 0;
@@ -2826,12 +2885,13 @@ int download_enqueue_ex(const char *url, const char *queue, const char *name,
                                      referer, NULL);
 }
 
-int transient_download(const char *url, const char *queue, const char *name, const bool attached) {
+int transient_download(const char *url, const char *queue, const char *name, const char *proxy_url,
+                       const bool attached) {
     if (!attached) {
         LOG_ERROR("Only --attached downloads are supported in local CLI mode");
         return EXIT_FAILURE;
     }
-    return run_transient_download(url, queue, name, NULL, NULL);
+    return run_transient_download(url, queue, name, proxy_url, NULL);
 }
 
 #if defined(_WIN32)
@@ -3075,16 +3135,17 @@ static void apply_proxy_to_state(DownloadState *state, const char *proxy_overrid
         return;
     }
 
-    char *proxy_url = NULL;
+    char *proxy_url = proxy_resolve_for_target(state->url, proxy_override);
     if (proxy_override != NULL && proxy_override[0] != '\0') {
-        proxy_url = strdup(proxy_override);
-    } else if (state->proxy == NULL) {
-        proxy_url = proxy_load_global_url();
-    }
-
-    if (proxy_url != NULL) {
         free(state->proxy);
         state->proxy = proxy_url;
+        return;
+    }
+
+    if (state->proxy == NULL && proxy_url != NULL) {
+        state->proxy = proxy_url;
+    } else {
+        free(proxy_url);
     }
 }
 

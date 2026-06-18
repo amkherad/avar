@@ -7,6 +7,7 @@ export interface ProxySettings {
   port: string;
   username: string;
   password: string;
+  noProxy?: string;
 }
 
 export const defaultProxySettings = (): ProxySettings => ({
@@ -31,4 +32,24 @@ export function proxySettingsToRpcParams(
     username: proxy.username.trim() || undefined,
     password: proxy.password || undefined,
   };
+}
+
+/** Maps a stored proxy URL from download items back to form fields. */
+export function proxySettingsFromUrl(url: string | null | undefined): ProxySettings {
+  if (!url) {
+    return defaultProxySettings();
+  }
+  try {
+    const parsed = new URL(url);
+    return {
+      enabled: true,
+      type: (parsed.protocol.replace(":", "") as ProxyType) || "http",
+      host: parsed.hostname,
+      port: parsed.port,
+      username: decodeURIComponent(parsed.username),
+      password: decodeURIComponent(parsed.password),
+    };
+  } catch {
+    return defaultProxySettings();
+  }
 }

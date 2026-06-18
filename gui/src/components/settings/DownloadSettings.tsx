@@ -25,6 +25,7 @@ const CONFIG_DEFAULTS = {
   "dm.proxy.port": "",
   "dm.proxy.username": "",
   "dm.proxy.password": "",
+  "dm.proxy.noProxy": "",
 } as const;
 
 const SEGMENT_KEYS = [
@@ -81,6 +82,9 @@ export function DownloadSettings() {
         password:
           (await client.getConfig("dm.proxy.password", CONFIG_DEFAULTS["dm.proxy.password"])) ??
           CONFIG_DEFAULTS["dm.proxy.password"],
+        noProxy:
+          (await client.getConfig("dm.proxy.noProxy", CONFIG_DEFAULTS["dm.proxy.noProxy"])) ??
+          CONFIG_DEFAULTS["dm.proxy.noProxy"],
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
@@ -109,6 +113,7 @@ export function DownloadSettings() {
       await client.setConfig("dm.proxy.port", proxy.port);
       await client.setConfig("dm.proxy.username", proxy.username);
       await client.setConfig("dm.proxy.password", proxy.password);
+      await client.setConfig("dm.proxy.noProxy", proxy.noProxy ?? "");
       appLogger.gui.info("Download settings saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
@@ -199,7 +204,7 @@ export function DownloadSettings() {
         </Select>
       </section>
 
-      <ProxySettingsFields value={proxy} onChange={setProxy} />
+      <ProxySettingsFields value={proxy} onChange={setProxy} showNoProxy />
 
       {error ? <p className="avar-field__error">{error}</p> : null}
       <Button loading={saving} onClick={() => void save()}>

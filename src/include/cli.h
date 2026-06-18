@@ -19,6 +19,7 @@ typedef struct {
     const char *url;
     const char *queue;
     const char *name;
+    const char *proxy;
     bool detached;
     bool attached;
 } AvarArgs;

@@ -44,6 +44,16 @@ View and remap keyboard shortcuts in a single aligned table. Click a shortcut bu
 
 Use **Reset all** to restore defaults.
 
+### 📥 Downloads
+
+Configure default download paths, segmentation, progress display, and **proxy** settings:
+
+- **Use proxy** — Enable a global HTTP, HTTPS, or SOCKS5 proxy for downloads that do not specify their own proxy.
+- **Host / Port / Username / Password** — Proxy server credentials. Stored in `config.json` under `dm.proxy.*`.
+- **Bypass proxy for (NO_PROXY)** — Comma-separated hosts or domains that should connect directly (for example `localhost,127.0.0.1,.example.com`). Matches the `NO_PROXY` environment variable when set.
+
+Per-download proxy overrides are available in **Add download**. Global proxy settings apply when a download has no override and when standard environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`) are not set.
+
 ### Daemon
 
 - **Auto shutdown** — Never, or when idle (no active downloads). When idle shutdown is enabled, set **Idle time before shutdown** in seconds.
