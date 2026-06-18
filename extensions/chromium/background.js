@@ -1,8 +1,11 @@
-importScripts("media.js", "protocol.js");
+importScripts("media.js", "capture.js", "protocol.js");
 
 const EXTENSION_VERSION = "0.1.0";
 const { discoverBridgeUrl, sendMessage, pingBridge, DEFAULT_ELECTRON_BRIDGE } =
   globalThis.AvarExtensionProtocol;
+
+const networkCapture = globalThis.AvarNetworkCapture.createNetworkMediaCapture(chrome);
+networkCapture.installListeners();
 
 async function getConfig() {
   const stored = await chrome.storage.local.get(["bridgeUrl", "guiUrl", "daemonUrl", "authToken"]);
@@ -48,13 +51,22 @@ async function addDownload(payload) {
 async function collectFromTab(tabId) {
   try {
     const response = await chrome.tabs.sendMessage(tabId, { type: "avar-get-page-media" });
+    const domItems = response?.items || [];
+    const capturedItems = networkCapture.getForTab(tabId);
+    const items = AvarMedia.mergeMediaItems(domItems, capturedItems);
     return {
-      urls: response?.urls || [],
-      items: response?.items || [],
+      urls: items.map((item) => item.url),
+      items,
       pageUrl: null,
     };
   } catch {
-    return { urls: [], items: [], pageUrl: null };
+    const capturedItems = networkCapture.getForTab(tabId);
+    const items = AvarMedia.mergeMediaItems(capturedItems);
+    return {
+      urls: items.map((item) => item.url),
+      items,
+      pageUrl: null,
+    };
   }
 }
 
