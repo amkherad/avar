@@ -14,8 +14,8 @@ static TestGuard g_guard;
 static void setup_temp_config(void) {
     AVAR_ASSERT(test_guard_init(&g_guard, "avar-test-queue"));
     remove(g_guard.config_path);
-    init_logger(false);
     AVAR_ASSERT_EQ(config_open_at(g_guard.config_path), 0);
+    init_logger(false);
 }
 
 AVAR_TEST(queue_add_and_list) {

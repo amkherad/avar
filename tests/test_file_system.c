@@ -134,6 +134,12 @@ AVAR_TEST(file_system_config_path_uses_home) {
 #if defined(_WIN32)
     (void)_putenv(AVAR_ENV_USERPROFILE "=C:\\avar-test-home");
 #else
+    const char *xdg_saved = getenv(AVAR_ENV_XDG_CONFIG_HOME);
+    char xdg_backup[512] = {0};
+    if (xdg_saved != NULL) {
+        snprintf(xdg_backup, sizeof xdg_backup, "%s", xdg_saved);
+    }
+    AVAR_ASSERT_EQ(unsetenv(AVAR_ENV_XDG_CONFIG_HOME), 0);
     AVAR_ASSERT_EQ(setenv(AVAR_ENV_HOME, "/avar-test-home", 1), 0);
 #endif
 
@@ -154,7 +160,19 @@ AVAR_TEST(file_system_config_path_uses_home) {
 #else
         AVAR_ASSERT_EQ(setenv(key, backup, 1), 0);
 #endif
+    } else {
+#if !defined(_WIN32)
+        AVAR_ASSERT_EQ(unsetenv(key), 0);
+#endif
     }
+
+#if !defined(_WIN32)
+    if (xdg_backup[0] != '\0') {
+        AVAR_ASSERT_EQ(setenv(AVAR_ENV_XDG_CONFIG_HOME, xdg_backup, 1), 0);
+    } else {
+        AVAR_ASSERT_EQ(unsetenv(AVAR_ENV_XDG_CONFIG_HOME), 0);
+    }
+#endif
 }
 
 AVAR_TEST(file_system_default_paths_from_config) {

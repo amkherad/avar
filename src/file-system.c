@@ -78,7 +78,7 @@ int make_dirs_in_path(const char *full_path)
 
         /* If component is empty we’re at a leading slash or doubled
            separators – skip it. */
-        if (i > 0 && path[i-1] == PATH_SEP) {
+        if (i == 0 || (i > 0 && path[i-1] == PATH_SEP)) {
             path[i] = savec;
             continue;
         }

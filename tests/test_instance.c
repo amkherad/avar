@@ -48,8 +48,10 @@ AVAR_TEST(instance_suffixes_paths_and_resources) {
     AVAR_ASSERT(avar_path_with_instance(path, sizeof path, "/tmp/avar.pid"));
     AVAR_ASSERT_STR_EQ(path, "/tmp/avar-work.pid");
 
+#if defined(_WIN32)
     AVAR_ASSERT(avar_path_with_instance(path, sizeof path, "\\\\.\\pipe\\avar"));
     AVAR_ASSERT_STR_EQ(path, "\\\\.\\pipe\\avar-work");
+#endif
 
     AVAR_ASSERT(avar_path_with_instance(path, sizeof path, "/tmp/avar.sock"));
     AVAR_ASSERT_STR_EQ(path, "/tmp/avar-work.sock");

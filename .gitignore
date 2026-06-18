@@ -20,6 +20,7 @@ cmake-build-release/
 cmake-build-test/
 /build-coverage-test/
 /build-coverage/
+/build-gui/
 
 # VSCode #
 ###########
