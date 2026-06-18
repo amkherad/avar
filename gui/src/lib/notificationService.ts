@@ -1,6 +1,7 @@
 import i18n from "@/i18n";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import { getServiceWorkerRegistration } from "@/lib/pwa";
+import { useConfigStore } from "@/stores/configStore";
 import type { DownloadInfo, QueueInfo } from "@/api/types";
 
 export type NotificationCategory = "download" | "queue" | "general";
@@ -50,6 +51,10 @@ async function showViaServiceWorker(notification: AppNotification): Promise<bool
 }
 
 export async function showNotification(notification: AppNotification): Promise<void> {
+  if (!useConfigStore.getState().config.notificationsEnabled) {
+    return;
+  }
+
   const { title, body } = notification;
 
   if (isElectron() && window.avar?.showNotification) {

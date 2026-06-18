@@ -17,7 +17,8 @@ Use the inner sidebar to switch between setting groups.
 - **Refresh interval** — Poll frequency when using periodic sync (seconds).
 - **Connection check interval** — How often the GUI pings the daemon (seconds).
 - **Footer monitors** — Toggle disk, memory, CPU, and network stats in the footer (collected from the daemon when connected). Choose **Text values** or **Histogram + values** to show sparkline-style history for memory, CPU, and network. Histogram mode keeps labels inline with semi-transparent values overlaid on the chart.
-- **Install web app** — Install Avar as a standalone PWA (when your browser supports it) and enable desktop notifications.
+- **Notifications** — Toggle desktop notifications for download status changes, queue start/stop, and connection alerts. In the browser, you may still need to grant notification permission separately.
+- **Install web app** — Install Avar as a standalone PWA (when your browser supports it).
 
 ### 🌐 Browser integration
 

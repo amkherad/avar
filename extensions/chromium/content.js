@@ -9,6 +9,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   const items = AvarMedia.collectMediaItems(document);
-  sendResponse({ urls: items.map((item) => item.url), items });
+  sendResponse({
+    urls: items.map((item) => item.url),
+    items,
+    pageTitle: document.title || "",
+  });
   return true;
 });

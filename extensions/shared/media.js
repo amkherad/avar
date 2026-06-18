@@ -151,10 +151,143 @@ function sortMediaItems(items) {
     if (categoryDelta !== 0) {
       return categoryDelta;
     }
-    const leftName = guessFilename(left.url);
-    const rightName = guessFilename(right.url);
+    const leftName = itemDisplayFilename(left);
+    const rightName = itemDisplayFilename(right);
     return leftName.localeCompare(rightName);
   });
+}
+
+function sortMediaItemsByMode(items, mode, sizeForItem) {
+  const list = [...items];
+  if (mode === "size-asc" || mode === "size-desc") {
+    return list.sort((left, right) => {
+      const leftSize = sizeForItem ? sizeForItem(left) : left.size;
+      const rightSize = sizeForItem ? sizeForItem(right) : right.size;
+      const leftKnown = typeof leftSize === "number" && leftSize >= 0;
+      const rightKnown = typeof rightSize === "number" && rightSize >= 0;
+
+      if (!leftKnown && !rightKnown) {
+        return itemDisplayFilename(left).localeCompare(itemDisplayFilename(right));
+      }
+      if (!leftKnown) {
+        return 1;
+      }
+      if (!rightKnown) {
+        return -1;
+      }
+
+      const delta = leftSize - rightSize;
+      if (delta !== 0) {
+        return mode === "size-asc" ? delta : -delta;
+      }
+      return itemDisplayFilename(left).localeCompare(itemDisplayFilename(right));
+    });
+  }
+
+  return sortMediaItems(list);
+}
+
+function trimQuotes(value) {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function parseContentDispositionFilename(value) {
+  if (!value) {
+    return "";
+  }
+
+  const starMatch = /filename\*\s*=\s*([^;]+)/i.exec(value);
+  if (starMatch) {
+    let encoded = starMatch[1].trim();
+    if (encoded.toLowerCase().startsWith("utf-8''")) {
+      encoded = encoded.slice(7);
+    }
+    encoded = trimQuotes(encoded);
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  }
+
+  const match = /filename\s*=\s*([^;]+)/i.exec(value);
+  if (match) {
+    return trimQuotes(match[1].trim());
+  }
+
+  return "";
+}
+
+function parseContentLength(value) {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function getContentLengthFromHeaders(headers) {
+  return parseContentLength(getResponseHeader(headers, "content-length"));
+}
+
+function extractFilenameFromHeaders(headers) {
+  const fromDisposition = parseContentDispositionFilename(
+    getResponseHeader(headers, "content-disposition"),
+  );
+  if (fromDisposition) {
+    return fromDisposition;
+  }
+
+  for (const name of [
+    "x-filename",
+    "x-file-name",
+    "x-suggested-filename",
+    "x-download-filename",
+  ]) {
+    const value = getResponseHeader(headers, name);
+    if (value) {
+      const trimmed = trimQuotes(value.trim());
+      if (trimmed) {
+        return trimmed;
+      }
+    }
+  }
+
+  const contentLocation = getResponseHeader(headers, "content-location");
+  if (contentLocation) {
+    const fromLocation = guessFilenameFromUrl(contentLocation);
+    if (fromLocation && isInferableUrlFilename(fromLocation, contentLocation)) {
+      return fromLocation;
+    }
+  }
+
+  return "";
+}
+
+function withCapturedMetadata(item, responseHeaders) {
+  if (!item) {
+    return null;
+  }
+  const next = { ...item };
+  const filename = extractFilenameFromHeaders(responseHeaders);
+  if (filename) {
+    next.filename = filename;
+  }
+  const size = getContentLengthFromHeaders(responseHeaders);
+  if (size !== null) {
+    next.size = size;
+  }
+  return next;
 }
 
 function classifyCapturedRequest(url, responseHeaders) {
@@ -165,48 +298,122 @@ function classifyCapturedRequest(url, responseHeaders) {
   const contentType = normalizeMimeType(getResponseHeader(responseHeaders, "content-type"));
 
   if (HLS_URL_RE.test(url) || looksLikeHlsType(contentType)) {
-    return { url, kind: "hls" };
+    return withCapturedMetadata({ url, kind: "hls" }, responseHeaders);
   }
   if (DASH_URL_RE.test(url) || looksLikeDashType(contentType)) {
-    return { url, kind: "dash" };
+    return withCapturedMetadata({ url, kind: "dash" }, responseHeaders);
   }
 
   if (VIDEO_MIME.test(contentType)) {
-    return { url, kind: "direct" };
+    return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
   }
 
   if (AUDIO_MIME.test(contentType)) {
-    return { url, kind: "direct" };
+    return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
   }
 
   if (IMAGE_MIME.test(contentType) && looksLikeMediaUrl(url)) {
-    return { url, kind: "direct" };
+    return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
   }
 
   try {
     const parsed = new URL(url);
     if (/googlevideo\.com$/i.test(parsed.hostname) && /videoplayback/i.test(parsed.pathname)) {
-      return { url, kind: "direct" };
+      return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
     }
     if (/mime=video/i.test(parsed.search)) {
-      return { url, kind: "direct" };
+      return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
     }
     if (/mime=audio/i.test(parsed.search)) {
-      return { url, kind: "direct" };
+      return withCapturedMetadata({ url, kind: "direct" }, responseHeaders);
     }
   } catch {
     // ignore
   }
 
   if (NETWORK_STREAM_RE.test(url) && (looksLikeMediaUrl(url) || HLS_URL_RE.test(url) || DASH_URL_RE.test(url))) {
-    return { url, kind: classifyStreamKind(url) };
+    return withCapturedMetadata({ url, kind: classifyStreamKind(url) }, responseHeaders);
   }
 
   if (NETWORK_STREAM_RE.test(url) && /videoplayback|\/hls\/|hls_playlist/i.test(url)) {
-    return { url, kind: classifyStreamKind(url) };
+    return withCapturedMetadata({ url, kind: classifyStreamKind(url) }, responseHeaders);
   }
 
   return null;
+}
+
+function sanitizePageTitle(title) {
+  if (!title) {
+    return "";
+  }
+  return title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").trim();
+}
+
+function isInferableUrlFilename(name, url) {
+  if (!name || name === url) {
+    return false;
+  }
+  if (MEDIA_EXT.test(name)) {
+    return true;
+  }
+  if (/\.[a-z0-9]{2,5}$/i.test(name) && name.length > 4) {
+    return true;
+  }
+  if (/^(videoplayback|index|stream|media|file|download|data|asset|chunk|segment)$/i.test(name)) {
+    return false;
+  }
+  if (/^[a-f0-9-]{20,}$/i.test(name)) {
+    return false;
+  }
+  if (!name.includes(".") && name.length <= 8) {
+    return false;
+  }
+  return true;
+}
+
+function guessFilenameFromUrl(url) {
+  if (!url) {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(url);
+    const queryNames = [
+      "filename",
+      "file",
+      "download",
+      "name",
+      "title",
+      "attachment",
+      "response-content-disposition",
+    ];
+
+    for (const key of queryNames) {
+      const value = parsed.searchParams.get(key);
+      if (!value) {
+        continue;
+      }
+      if (key === "response-content-disposition") {
+        const fromDisposition = parseContentDispositionFilename(value);
+        if (fromDisposition) {
+          return fromDisposition;
+        }
+        continue;
+      }
+      const trimmed = trimQuotes(value.trim());
+      if (trimmed) {
+        try {
+          return decodeURIComponent(trimmed);
+        } catch {
+          return trimmed;
+        }
+      }
+    }
+  } catch {
+    return guessFilename(url);
+  }
+
+  return guessFilename(url);
 }
 
 function guessFilename(url) {
@@ -225,6 +432,74 @@ function guessFilename(url) {
   }
 }
 
+function itemDisplayFilename(item, pageTitle) {
+  if (item?.filename) {
+    return item.filename;
+  }
+
+  const url = item?.url || "";
+  const fromUrl = guessFilenameFromUrl(url);
+  if (fromUrl && isInferableUrlFilename(fromUrl, url)) {
+    return fromUrl;
+  }
+
+  const title = sanitizePageTitle(pageTitle || item?.pageTitle || "");
+  if (title) {
+    return title;
+  }
+
+  return fromUrl || url;
+}
+
+const HLS_SEGMENT_RE = /\.(ts|m4s|cmfv|cmfa|aac|vtt|key)(\?|#|$)/i;
+
+function shouldListMediaItem(item) {
+  if (!item?.url) {
+    return false;
+  }
+  if (item.kind === "hls" || item.kind === "dash") {
+    return true;
+  }
+  if (item.kind !== "direct") {
+    return false;
+  }
+  if (HLS_SEGMENT_RE.test(item.url)) {
+    return false;
+  }
+  return true;
+}
+
+function matchesMediaFilter(item, filter) {
+  if (!filter || filter === "all") {
+    return true;
+  }
+  return classifyMediaCategory(item) === filter;
+}
+
+function filterMediaItems(items, filter) {
+  if (!filter || filter === "all") {
+    return items;
+  }
+  return items.filter((item) => matchesMediaFilter(item, filter));
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return "—";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+
+  const digits = size >= 100 || unitIndex === 0 ? 0 : size >= 10 ? 1 : 2;
+  return `${size.toFixed(digits)} ${units[unitIndex]}`;
+}
+
 function formatDisplayUrl(url, maxLen = 48) {
   if (!url || url.length <= maxLen) {
     return url;
@@ -234,16 +509,36 @@ function formatDisplayUrl(url, maxLen = 48) {
   return `${url.slice(0, head)}…${url.slice(-tail)}`;
 }
 
-function addMediaItem(map, url, kind) {
+function addMediaItem(map, url, kind, filename, size) {
   const href = typeof url === "string" ? url : null;
   if (!isFetchable(href)) {
     return;
   }
   const resolvedKind = kind || classifyStreamKind(href);
   const existing = map.get(href);
-  if (!existing || (existing.kind === "direct" && resolvedKind !== "direct")) {
-    map.set(href, { url: href, kind: resolvedKind });
+  if (!existing) {
+    const item = { url: href, kind: resolvedKind };
+    if (filename) {
+      item.filename = filename;
+    }
+    if (typeof size === "number" && size >= 0) {
+      item.size = size;
+    }
+    map.set(href, item);
+    return;
   }
+
+  const next = { ...existing };
+  if (existing.kind === "direct" && resolvedKind !== "direct") {
+    next.kind = resolvedKind;
+  }
+  if (filename && !next.filename) {
+    next.filename = filename;
+  }
+  if (typeof size === "number" && size >= 0 && next.size == null) {
+    next.size = size;
+  }
+  map.set(href, next);
 }
 
 function mergeMediaItems(...lists) {
@@ -256,10 +551,10 @@ function mergeMediaItems(...lists) {
       if (!item?.url) {
         continue;
       }
-      addMediaItem(map, item.url, item.kind);
+      addMediaItem(map, item.url, item.kind, item.filename, item.size);
     }
   }
-  return sortMediaItems([...map.values()]);
+  return [...map.values()];
 }
 
 function extractStreamUrlsFromText(text, base, map) {
@@ -369,10 +664,23 @@ if (typeof globalThis !== "undefined") {
     collectMediaItems,
     mergeMediaItems,
     sortMediaItems,
+    sortMediaItemsByMode,
     classifyStreamKind,
     classifyMediaCategory,
     classifyCapturedRequest,
+    parseContentDispositionFilename,
+    extractFilenameFromHeaders,
+    parseContentLength,
+    getContentLengthFromHeaders,
     guessFilename,
+    guessFilenameFromUrl,
+    isInferableUrlFilename,
+    sanitizePageTitle,
+    itemDisplayFilename,
+    filterMediaItems,
+    matchesMediaFilter,
+    shouldListMediaItem,
+    formatFileSize,
     formatDisplayUrl,
     MEDIA_EXT,
   };

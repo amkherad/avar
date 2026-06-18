@@ -2,11 +2,13 @@
  * Network media capture for extension background scripts.
  */
 
-function createNetworkMediaCapture(api) {
-  /** @type {Map<number, Map<string, {url: string, kind: string}>>} */
+function createNetworkMediaCapture(api, options = {}) {
+  const { onCaptured } = options;
+
+  /** @type {Map<number, Map<string, {url: string, kind: string, filename?: string, size?: number}>>} */
   const capturedByTab = new Map();
 
-  function remember(tabId, url, kind) {
+  function remember(tabId, url, kind, filename, size) {
     if (tabId < 0 || !url || typeof AvarMedia === "undefined") {
       return;
     }
@@ -16,9 +18,32 @@ function createNetworkMediaCapture(api) {
       capturedByTab.set(tabId, tabMap);
     }
     const existing = tabMap.get(url);
-    if (!existing || (existing.kind === "direct" && kind !== "direct")) {
-      tabMap.set(url, { url, kind });
+    if (!existing) {
+      const item = { url, kind };
+      if (filename) {
+        item.filename = filename;
+      }
+      if (typeof size === "number" && size >= 0) {
+        item.size = size;
+      }
+      tabMap.set(url, item);
+      if (typeof onCaptured === "function") {
+        onCaptured(tabId, item);
+      }
+      return;
     }
+
+    const next = { ...existing };
+    if (existing.kind === "direct" && kind !== "direct") {
+      next.kind = kind;
+    }
+    if (filename && !next.filename) {
+      next.filename = filename;
+    }
+    if (typeof size === "number" && size >= 0 && next.size == null) {
+      next.size = size;
+    }
+    tabMap.set(url, next);
   }
 
   function clearTab(tabId) {
@@ -39,7 +64,7 @@ function createNetworkMediaCapture(api) {
     }
     const captured = AvarMedia.classifyCapturedRequest(details.url, details.responseHeaders);
     if (captured) {
-      remember(details.tabId, captured.url, captured.kind);
+      remember(details.tabId, captured.url, captured.kind, captured.filename, captured.size);
     }
   }
 

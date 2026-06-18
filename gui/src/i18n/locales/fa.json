@@ -134,6 +134,7 @@
     "toggleDetailPanel": "نمایش/مخفی کردن پنل جزئیات",
     "retries": "تلاش‌ها",
     "retriesQueueDefault": "پیش‌فرض صف",
+    "errorMessage": "خطا",
     "filenameSource": "منبع نام فایل",
     "filenameInferred": "استنتاج خودکار",
     "filenameUser": "تعیین‌شده توسط کاربر"
@@ -204,6 +205,11 @@
       "daemon": "دیمن",
       "browser": "یکپارچه‌سازی مرورگر",
       "shortcuts": "میانبرها"
+    },
+    "notifications": {
+      "title": "اعلان‌ها",
+      "hint": "نمایش اعلان دسکتاپ هنگام تغییر وضعیت دانلود، شروع یا توقف صف، یا قطع اتصال دیمن.",
+      "enabled": "نمایش اعلان‌ها"
     },
     "pwa": {
       "title": "نصب وب‌اپ",
