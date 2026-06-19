@@ -35,6 +35,7 @@ typedef struct {
 } DaemonRuntime;
 
 static DaemonRuntime _runtime = {0};
+static volatile bool _daemon_loop_active = false;
 
 #if defined(_WIN32)
 static HANDLE g_pid_file_handle = INVALID_HANDLE_VALUE;
@@ -384,6 +385,23 @@ static int send_stop_signal(int pid, bool force_kill) {
 #endif
 }
 
+static int wait_for_in_process_daemon_stop(void) {
+    for (int i = 0; i < 100; ++i) {
+        if (!daemon_is_running(NULL) && !_daemon_loop_active) {
+            LOG_INFO("Daemon stopped");
+            return EXIT_SUCCESS;
+        }
+#if defined(_WIN32)
+        Sleep(100);
+#else
+        usleep(100000);
+#endif
+    }
+
+    LOG_ERROR("Timed out waiting for in-process daemon to stop");
+    return EXIT_FAILURE;
+}
+
 static bool wait_for_daemon_pid(const char *pid_file, int timeout_ms) {
     if (pid_file == NULL) {
         return false;
@@ -672,16 +690,21 @@ int daemon_start(const DaemonConfig *cfg) {
     memcpy(&_runtime.cfg, cfg, sizeof _runtime.cfg);
     _runtime.running = true;
     _runtime.reload_requested = false;
+    _daemon_loop_active = true;
 
     daemon_rpc_init();
     daemon_rpc_set_auth_token(cfg->server.auth_token[0] != '\0' ? cfg->server.auth_token : NULL);
 
-    if (!start_runtime_transports(cfg)) {
-        destroy_runtime_transports();
+    if (daemon_acquire_pid_file(cfg->server.pid_file) != 0) {
+        _runtime.running = false;
+        _daemon_loop_active = false;
         return EXIT_FAILURE;
     }
 
-    if (daemon_acquire_pid_file(cfg->server.pid_file) != 0) {
+    if (!start_runtime_transports(cfg)) {
+        _runtime.running = false;
+        _daemon_loop_active = false;
+        daemon_release_pid_file(cfg->server.pid_file);
         destroy_runtime_transports();
         return EXIT_FAILURE;
     }
@@ -735,6 +758,8 @@ int daemon_start(const DaemonConfig *cfg) {
         }
     }
 
+    _daemon_loop_active = false;
+
     LOG_INFO("Draining active downloads before shutdown");
     daemon_release_pid_file(cfg->server.pid_file);
     daemon_rpc_shutdown();
@@ -750,17 +775,28 @@ int daemon_stop(const DaemonStopOptions *opts) {
     const bool wait = opts != NULL && opts->wait;
     const bool force_kill = opts != NULL && opts->force_kill;
 
-    int pid = 0;
-    if (!daemon_is_running(&pid)) {
-        LOG_INFO("Daemon is not running");
-        return EXIT_SUCCESS;
-    }
-
 #if defined(_WIN32)
     const int self_pid = (int)GetCurrentProcessId();
 #else
     const int self_pid = (int)getpid();
 #endif
+
+    int pid = 0;
+    const bool running_per_pid_file = daemon_is_running(&pid);
+
+    if (!running_per_pid_file) {
+        if (_runtime.running) {
+            _runtime.running = false;
+            if (!wait) {
+                LOG_INFO("Shutdown requested for in-process daemon");
+                return EXIT_SUCCESS;
+            }
+            return wait_for_in_process_daemon_stop();
+        }
+
+        LOG_INFO("Daemon is not running");
+        return EXIT_SUCCESS;
+    }
 
     if (pid == self_pid) {
         _runtime.running = false;
@@ -769,20 +805,7 @@ int daemon_stop(const DaemonStopOptions *opts) {
             return EXIT_SUCCESS;
         }
 
-        for (int i = 0; i < 100; ++i) {
-            if (!daemon_is_running(NULL)) {
-                LOG_INFO("Daemon stopped");
-                return EXIT_SUCCESS;
-            }
-#if defined(_WIN32)
-            Sleep(100);
-#else
-            usleep(100000);
-#endif
-        }
-
-        LOG_ERROR("Timed out waiting for in-process daemon to stop");
-        return EXIT_FAILURE;
+        return wait_for_in_process_daemon_stop();
     }
 
     if (send_stop_signal(pid, force_kill) != 0) {

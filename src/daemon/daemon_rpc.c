@@ -24,7 +24,9 @@
 #if defined(_WIN32)
     #include <io.h>
     #include <fcntl.h>
+    #include <windows.h>
 #else
+    #include <pthread.h>
     #include <unistd.h>
 #endif
 
@@ -43,6 +45,32 @@ static DaemonLogRing _log_ring = {0};
 static char _auth_token[128] = {0};
 static time_t _daemon_started_at = 0;
 static time_t _frontend_last_activity = 0;
+#if defined(_WIN32)
+static CRITICAL_SECTION _rpc_lock;
+static bool _rpc_lock_ready = false;
+#else
+static pthread_mutex_t _rpc_lock = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
+static void rpc_lock(void) {
+#if defined(_WIN32)
+    if (_rpc_lock_ready) {
+        EnterCriticalSection(&_rpc_lock);
+    }
+#else
+    (void)pthread_mutex_lock(&_rpc_lock);
+#endif
+}
+
+static void rpc_unlock(void) {
+#if defined(_WIN32)
+    if (_rpc_lock_ready) {
+        LeaveCriticalSection(&_rpc_lock);
+    }
+#else
+    (void)pthread_mutex_unlock(&_rpc_lock);
+#endif
+}
 
 static cJSON *rpc_error(int code, const char *message, cJSON *id) {
     cJSON *root = cJSON_CreateObject();
@@ -80,6 +108,12 @@ static cJSON *rpc_result(cJSON *result, cJSON *id) {
 }
 
 void daemon_rpc_init(void) {
+#if defined(_WIN32)
+    if (!_rpc_lock_ready) {
+        InitializeCriticalSection(&_rpc_lock);
+        _rpc_lock_ready = true;
+    }
+#endif
     _daemon_started_at = time(NULL);
     _frontend_last_activity = 0;
     memset(&_log_ring, 0, sizeof _log_ring);
@@ -1069,7 +1103,7 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     return NULL;
 }
 
-bool daemon_rpc_handle(const char *request_json, char **response_json_out) {
+static bool daemon_rpc_handle_unlocked(const char *request_json, char **response_json_out) {
     if (response_json_out != NULL) {
         *response_json_out = NULL;
     }
@@ -1111,8 +1145,15 @@ bool daemon_rpc_handle(const char *request_json, char **response_json_out) {
     return true;
 }
 
-bool daemon_rpc_handle_http(const char *uri, const char *body, const size_t body_len,
-                            char **body_out, int *status_out) {
+bool daemon_rpc_handle(const char *request_json, char **response_json_out) {
+    rpc_lock();
+    const bool ok = daemon_rpc_handle_unlocked(request_json, response_json_out);
+    rpc_unlock();
+    return ok;
+}
+
+static bool daemon_rpc_handle_http_unlocked(const char *uri, const char *body, const size_t body_len,
+                                            char **body_out, int *status_out) {
     if (body_out != NULL) {
         *body_out = NULL;
     }
@@ -1172,7 +1213,7 @@ bool daemon_rpc_handle_http(const char *uri, const char *body, const size_t body
         request_buf[body_len] = '\0';
 
         char *rpc_response = NULL;
-        if (!daemon_rpc_handle(request_buf, &rpc_response)) {
+        if (!daemon_rpc_handle_unlocked(request_buf, &rpc_response)) {
             *body_out = strdup("{\"error\":\"invalid rpc\"}\n");
             *status_out = 400;
             return *body_out != NULL;
@@ -1185,6 +1226,14 @@ bool daemon_rpc_handle_http(const char *uri, const char *body, const size_t body
     *body_out = strdup("{\"error\":\"unsupported\"}\n");
     *status_out = 404;
     return *body_out != NULL;
+}
+
+bool daemon_rpc_handle_http(const char *uri, const char *body, const size_t body_len,
+                            char **body_out, int *status_out) {
+    rpc_lock();
+    const bool ok = daemon_rpc_handle_http_unlocked(uri, body, body_len, body_out, status_out);
+    rpc_unlock();
+    return ok;
 }
 
 bool daemon_rpc_call(const AvarTransportKind transport, const DaemonConfig *cfg,
