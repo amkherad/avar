@@ -224,10 +224,12 @@ static int test_guard_process_id(void) {
 #endif
 }
 
-bool test_guard_bind_http_port(int *port_out) {
-    if (port_out == NULL) {
+static bool test_guard_bind_http_port(TestGuard *guard) {
+    if (guard == NULL) {
         return false;
     }
+
+    test_guard_release_http_port(guard);
 
 #if defined(_WIN32)
     static bool winsock_ready = false;
@@ -272,13 +274,22 @@ bool test_guard_bind_http_port(int *port_out) {
         return false;
     }
 
-    *port_out = (int)ntohs(addr.sin_port);
+    guard->http_port = (int)ntohs(addr.sin_port);
+    guard->http_port_sock = sock;
+    return guard->http_port > 0;
+}
+
+void test_guard_release_http_port(TestGuard *guard) {
+    if (guard == NULL || guard->http_port_sock < 0) {
+        return;
+    }
+
 #if defined(_WIN32)
-    closesocket(sock);
+    closesocket((SOCKET)guard->http_port_sock);
 #else
-    close(sock);
+    close(guard->http_port_sock);
 #endif
-    return *port_out > 0;
+    guard->http_port_sock = -1;
 }
 
 bool test_guard_init(TestGuard *guard, const char *prefix) {
@@ -287,6 +298,7 @@ bool test_guard_init(TestGuard *guard, const char *prefix) {
     }
 
     memset(guard, 0, sizeof *guard);
+    guard->http_port_sock = -1;
     snprintf(guard->instance_id, sizeof guard->instance_id, "%s-%d", prefix, test_guard_process_id());
 
     const char *base = test_guard_temp_base();
@@ -297,7 +309,7 @@ bool test_guard_init(TestGuard *guard, const char *prefix) {
     snprintf(guard->stats_path, sizeof guard->stats_path, "%s%crange-stats.json", guard->work_dir,
              PATH_SEPARATOR);
 
-    if (!test_guard_bind_http_port(&guard->http_port)) {
+    if (!test_guard_bind_http_port(guard)) {
         return false;
     }
 
@@ -311,11 +323,12 @@ bool test_guard_init(TestGuard *guard, const char *prefix) {
     return true;
 }
 
-void test_guard_cleanup_paths(const TestGuard *guard) {
+void test_guard_cleanup_paths(TestGuard *guard) {
     if (guard == NULL) {
         return;
     }
 
+    test_guard_release_http_port(guard);
     remove(guard->config_path);
     remove(guard->stats_path);
 }
@@ -372,6 +385,7 @@ bool test_guard_http_server_start(const TestGuard *guard, const char *script_pat
         test_guard_http_server_stop(server);
     }
 
+    test_guard_release_http_port((TestGuard *)guard);
     test_guard_set_server_env(guard);
 
 #if defined(_WIN32)

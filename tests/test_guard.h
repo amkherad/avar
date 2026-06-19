@@ -13,13 +13,14 @@ typedef struct TestGuard {
     char config_path[512];
     char stats_path[512];
     int http_port;
+    int http_port_sock;
 } TestGuard;
 
 bool test_guard_init(TestGuard *guard, const char *prefix);
 
-void test_guard_cleanup_paths(const TestGuard *guard);
+void test_guard_release_http_port(TestGuard *guard);
 
-bool test_guard_bind_http_port(int *port_out);
+void test_guard_cleanup_paths(TestGuard *guard);
 
 bool test_guard_http_url(const TestGuard *guard, const char *path, char *out, size_t out_size);
 

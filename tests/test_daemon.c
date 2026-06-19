@@ -80,6 +80,8 @@ AVAR_TEST(daemon_start_ping_stop) {
     bool ping_before = daemon_transport_ping_remote(AvarTransportPipe, &cfg);
     AVAR_ASSERT(!ping_before);
 
+    test_guard_release_http_port(&g_guard);
+
 #if defined(_WIN32)
     HANDLE thread = CreateThread(NULL, 0, daemon_thread_main, (LPVOID)&cfg, 0, NULL);
     AVAR_ASSERT_NOT_NULL(thread);

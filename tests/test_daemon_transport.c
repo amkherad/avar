@@ -98,6 +98,7 @@ AVAR_TEST(transport_http_start_poll_stop) {
 
     DaemonConfig cfg;
     AVAR_ASSERT(load_cfg(&cfg));
+    test_guard_release_http_port(&g_guard);
     DaemonTransport *http = daemon_transport_create(AvarTransportHttp);
     AVAR_ASSERT_NOT_NULL(http);
     AVAR_ASSERT(daemon_transport_start(http, &cfg));
@@ -128,6 +129,8 @@ AVAR_TEST(transport_pipe_rpc_while_daemon_running) {
 
     DaemonConfig cfg;
     AVAR_ASSERT(load_cfg(&cfg));
+
+    test_guard_release_http_port(&g_guard);
 
 #if defined(_WIN32)
     HANDLE thread = CreateThread(NULL, 0, daemon_thread_main, (LPVOID)&cfg, 0, NULL);
