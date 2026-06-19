@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "avar.h"
+#include "logger.h"
 #include "mongoose_log.h"
 
 #if defined(_WIN32)
@@ -304,6 +305,7 @@ bool test_guard_init(TestGuard *guard, const char *prefix) {
         return false;
     }
 
+    init_logger(false);
     avar_mongoose_log_silence();
 
     return true;

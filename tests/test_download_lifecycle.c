@@ -18,88 +18,51 @@
 #if defined(_WIN32)
     #include <windows.h>
 #else
-    #include <signal.h>
-    #include <sys/types.h>
-    #include <sys/wait.h>
     #include <unistd.h>
 #endif
 
 static TestGuard g_guard;
+static TestHttpServer g_http_server;
 static char g_temp_dir[512];
 static char g_download_dir[512];
 static char g_server_script[512];
+static bool g_fixture_ready = false;
 
-#if defined(_WIN32)
-static PROCESS_INFORMATION g_server_proc = {0};
-#else
-static pid_t g_server_pid;
-#endif
+static bool setup_paths(void) {
+    if (!g_fixture_ready) {
+        if (!test_guard_init(&g_guard, "avar-dl-lifecycle")) {
+            return false;
+        }
+        snprintf(g_server_script, sizeof g_server_script, "%s/scripts/http_test_server.py",
+                 AVAR_SOURCE_DIR);
+        test_guard_http_server_init(&g_http_server);
+        if (!test_guard_http_server_start(&g_guard, g_server_script, &g_http_server)) {
+            return false;
+        }
+        g_fixture_ready = true;
+    }
 
-static void setup_paths(void) {
-    AVAR_ASSERT(test_guard_init(&g_guard, "avar-dl-lifecycle"));
-    test_guard_set_server_env(&g_guard);
+    if (!test_guard_http_server_is_ready(&g_guard)) {
+        return false;
+    }
 
     snprintf(g_temp_dir, sizeof g_temp_dir, "%s%ctemp", g_guard.work_dir, PATH_SEPARATOR);
     snprintf(g_download_dir, sizeof g_download_dir, "%s%cdownload", g_guard.work_dir,
              PATH_SEPARATOR);
-    snprintf(g_server_script, sizeof g_server_script, "%s/scripts/http_test_server.py",
-             AVAR_SOURCE_DIR);
 
     (void)make_dirs_in_path(g_temp_dir);
     (void)make_dirs_in_path(g_download_dir);
 
     remove(g_guard.config_path);
-    AVAR_ASSERT_EQ(config_open_at(g_guard.config_path), 0);
-    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_TEMP_PATH, g_temp_dir), 0);
-    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_DOWNLOAD_PATH, g_download_dir), 0);
-}
-
-static void start_local_server(void) {
-    test_guard_set_server_env(&g_guard);
-
-#if defined(_WIN32)
-    if (g_server_proc.hProcess != NULL) {
-        TerminateProcess(g_server_proc.hProcess, 0);
-        CloseHandle(g_server_proc.hProcess);
-        CloseHandle(g_server_proc.hThread);
-        memset(&g_server_proc, 0, sizeof g_server_proc);
+    if (config_open_at(g_guard.config_path) != 0) {
+        return false;
+    }
+    if (set_config(AVAR_CFG_DM_TEMP_PATH, g_temp_dir) != 0
+        || set_config(AVAR_CFG_DM_DOWNLOAD_PATH, g_download_dir) != 0) {
+        return false;
     }
 
-    STARTUPINFOA si = {0};
-    si.cb = sizeof si;
-    char command[768];
-    snprintf(command, sizeof command, "python \"%s\"", g_server_script);
-    AVAR_ASSERT(CreateProcessA(NULL, command, NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, NULL, &si,
-                               &g_server_proc));
-    Sleep(1000);
-#else
-    g_server_pid = fork();
-    AVAR_ASSERT(g_server_pid != -1);
-    if (g_server_pid == 0) {
-        execlp("python3", "python3", g_server_script, NULL);
-        execlp("python", "python", g_server_script, NULL);
-        _exit(127);
-    }
-    usleep(500000);
-#endif
-}
-
-static void stop_local_server(void) {
-#if defined(_WIN32)
-    if (g_server_proc.hProcess != NULL) {
-        TerminateProcess(g_server_proc.hProcess, 0);
-        WaitForSingleObject(g_server_proc.hProcess, 2000);
-        CloseHandle(g_server_proc.hProcess);
-        CloseHandle(g_server_proc.hThread);
-        memset(&g_server_proc, 0, sizeof g_server_proc);
-    }
-#else
-    if (g_server_pid > 0) {
-        kill(g_server_pid, SIGTERM);
-        waitpid(g_server_pid, NULL, 0);
-        g_server_pid = 0;
-    }
-#endif
+    return true;
 }
 
 static void build_url(const char *path, char *out, size_t out_size) {
@@ -107,8 +70,7 @@ static void build_url(const char *path, char *out, size_t out_size) {
 }
 
 AVAR_TEST(download_lifecycle_enqueue_and_remove) {
-    setup_paths();
-    start_local_server();
+    AVAR_ASSERT(setup_paths());
 
     char url[256];
     build_url("plain.txt", url, sizeof url);
@@ -118,8 +80,6 @@ AVAR_TEST(download_lifecycle_enqueue_and_remove) {
 
     char *item_id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, 0, AVAR_FIELD_ID);
     AVAR_ASSERT_NOT_NULL(item_id);
-
-    stop_local_server();
 
     char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, 0, AVAR_FIELD_STATUS);
     AVAR_ASSERT_NOT_NULL(status);
@@ -137,9 +97,8 @@ AVAR_TEST(download_lifecycle_enqueue_and_remove) {
 }
 
 AVAR_TEST(download_lifecycle_pause_resume_background) {
-    setup_paths();
+    AVAR_ASSERT(setup_paths());
     thread_pool_reset_global();
-    start_local_server();
 
     char url[256];
     build_url("segmented.bin", url, sizeof url);
@@ -161,7 +120,6 @@ AVAR_TEST(download_lifecycle_pause_resume_background) {
     }
 
     AVAR_ASSERT(download_wait_idle(60000U));
-    stop_local_server();
     thread_pool_reset_global();
 
     AVAR_ASSERT_EQ(download_remove(item_id, true, true, false), EXIT_SUCCESS);
@@ -169,9 +127,8 @@ AVAR_TEST(download_lifecycle_pause_resume_background) {
 }
 
 AVAR_TEST(download_lifecycle_enqueue_proxy_and_active_list) {
-    setup_paths();
+    AVAR_ASSERT(setup_paths());
     thread_pool_reset_global();
-    start_local_server();
 
     char url[256];
     build_url("plain.txt", url, sizeof url);
@@ -189,7 +146,6 @@ AVAR_TEST(download_lifecycle_enqueue_proxy_and_active_list) {
     const size_t active_count = download_active_list(active, 4U);
     (void)active_count;
 
-    stop_local_server();
     thread_pool_reset_global();
 
     AVAR_ASSERT_EQ(download_remove(item_id, true, true, false), EXIT_SUCCESS);
@@ -197,9 +153,8 @@ AVAR_TEST(download_lifecycle_enqueue_proxy_and_active_list) {
 }
 
 AVAR_TEST(download_lifecycle_start_stop_background) {
-    setup_paths();
+    AVAR_ASSERT(setup_paths());
     thread_pool_reset_global();
-    start_local_server();
 
     char url[256];
     build_url("plain.txt", url, sizeof url);
@@ -221,7 +176,6 @@ AVAR_TEST(download_lifecycle_start_stop_background) {
     }
 
     AVAR_ASSERT(download_wait_idle(60000U));
-    stop_local_server();
     thread_pool_reset_global();
 
     AVAR_ASSERT_EQ(download_remove(item_id, true, true, true), EXIT_SUCCESS);
@@ -239,4 +193,5 @@ AVAR_TEST_MAIN(
         run_download_lifecycle_pause_resume_background();
         run_download_lifecycle_enqueue_proxy_and_active_list();
         run_download_lifecycle_start_stop_background();
-        run_download_lifecycle_invalid_operations();)
+        run_download_lifecycle_invalid_operations();
+        test_guard_http_server_stop(&g_http_server);)

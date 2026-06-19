@@ -789,30 +789,73 @@ static bool ipc_rpc_exchange(const char *endpoint, const bool is_pipe, const cha
     return true;
 }
 #else
+static int ipc_open_endpoint(const char *endpoint, const bool is_pipe, const unsigned timeout_ms) {
+    if (endpoint == NULL) {
+        return -1;
+    }
+
+    const unsigned wait_ms = timeout_ms == 0U ? 5000U : timeout_ms;
+    const uint64_t deadline = mg_millis() + (uint64_t)wait_ms;
+
+    while (mg_millis() < deadline) {
+        int fd = -1;
+        if (is_pipe) {
+            fd = open(endpoint, O_RDWR | O_NONBLOCK);
+            if (fd < 0 && (errno == ENXIO || errno == ENOENT || errno == EAGAIN)) {
+                usleep(10000);
+                continue;
+            }
+        } else {
+            fd = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (fd < 0) {
+                return -1;
+            }
+
+            const int flags = fcntl(fd, F_GETFL, 0);
+            if (flags >= 0) {
+                (void)fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+            }
+
+            struct sockaddr_un addr = {0};
+            addr.sun_family = AF_UNIX;
+            snprintf(addr.sun_path, sizeof addr.sun_path, "%s", endpoint);
+            if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
+                const int connect_err = errno;
+                close(fd);
+                if (connect_err == EINPROGRESS || connect_err == EAGAIN) {
+                    usleep(10000);
+                    continue;
+                }
+                return -1;
+            }
+        }
+
+        if (fd < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+
+        const int flags = fcntl(fd, F_GETFL, 0);
+        if (flags >= 0) {
+            (void)fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+        }
+
+        return fd;
+    }
+
+    return -1;
+}
+
 static bool ipc_rpc_exchange(const char *endpoint, const bool is_pipe, const char *request_json,
                              char **response_json_out, const unsigned timeout_ms) {
-    (void)timeout_ms;
     if (endpoint == NULL || request_json == NULL || response_json_out == NULL) {
         return false;
     }
     *response_json_out = NULL;
 
-    int fd = -1;
-    if (is_pipe) {
-        fd = open(endpoint, O_WRONLY);
-    } else {
-        fd = socket(AF_UNIX, SOCK_STREAM, 0);
-        if (fd >= 0) {
-            struct sockaddr_un addr = {0};
-            addr.sun_family = AF_UNIX;
-            snprintf(addr.sun_path, sizeof addr.sun_path, "%s", endpoint);
-            if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
-                close(fd);
-                return false;
-            }
-        }
-    }
-
+    const int fd = ipc_open_endpoint(endpoint, is_pipe, timeout_ms);
     if (fd < 0) {
         return false;
     }

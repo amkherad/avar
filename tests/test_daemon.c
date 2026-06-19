@@ -90,7 +90,7 @@ AVAR_TEST(daemon_start_ping_stop) {
 
     bool ready = false;
     for (int i = 0; i < 50; ++i) {
-        if (daemon_transport_ping_remote(AvarTransportPipe, &cfg)) {
+        if (daemon_transport_ping_any_timeout(&cfg, 100U)) {
             ready = true;
             break;
         }

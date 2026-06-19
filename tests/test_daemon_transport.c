@@ -139,7 +139,7 @@ AVAR_TEST(transport_pipe_rpc_while_daemon_running) {
 
     bool ready = false;
     for (int i = 0; i < 50; ++i) {
-        if (daemon_transport_ping_remote(AvarTransportPipe, &cfg)) {
+        if (daemon_transport_ping_any_timeout(&cfg, 100U)) {
             ready = true;
             break;
         }

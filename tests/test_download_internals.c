@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "download.h"
+#include "config.h"
 #include "file-system.h"
 
 static TestGuard g_guard;
@@ -49,6 +50,10 @@ AVAR_TEST(download_internals_existing_file_size) {
 }
 
 AVAR_TEST(download_internals_generate_id) {
+    AVAR_ASSERT(test_guard_init(&g_guard, "avar-dl-internals-id"));
+    remove(g_guard.config_path);
+    AVAR_ASSERT_EQ(config_open_at(g_guard.config_path), 0);
+
     char *id1 = download_test_generate_id();
     char *id2 = download_test_generate_id();
     AVAR_ASSERT_NOT_NULL(id1);

@@ -18,7 +18,10 @@ static int ascii_stricmp(const char *a, const char *b) {
 }
 #endif
 
-static logger_t g_logger;
+static logger_t g_logger = {
+    .out = NULL,
+    .min_lvl = LOG_LEVEL_INFO,
+};
 static FILE *g_log_file = NULL;
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -164,14 +167,15 @@ void _vlog_msg(log_level_t lvl, const char *file, const char *func, int line, co
     char message[512];
     vsnprintf(message, sizeof message, fmt, va_list);
 
-    fprintf(g_logger.out, "%s%s\n", prefix, message);
+    FILE *out = g_logger.out != NULL ? g_logger.out : stdout;
+    fprintf(out, "%s%s\n", prefix, message);
 
     if (color != CONSOLE_COLOR_NORMAL) {
         reset_console_color();
     }
 
     if (lvl == LOG_LEVEL_VERBOSE || lvl == LOG_LEVEL_FATAL) {
-        fflush(g_logger.out);
+        fflush(out);
     }
 
     char full_line[576];
