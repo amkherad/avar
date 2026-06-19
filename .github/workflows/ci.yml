@@ -14,6 +14,11 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Setup CMake and Ninja
         uses: lukka/get-cmake@latest
         with:
@@ -24,9 +29,6 @@ jobs:
 
       - name: Build avar
         run: cmake --build build --parallel
-
-      - name: Verify test dependencies
-        run: python3 --version
 
       - name: Run tests
         timeout-minutes: 20

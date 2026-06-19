@@ -134,8 +134,8 @@ AVAR_TEST(utils_print_help_returns_success) {
             "  --help  Show help",
     };
 
-    AVAR_ASSERT_EQ(print_help(3, messages), EXIT_SUCCESS);
 #if !defined(_WIN32)
+    AVAR_ASSERT_EQ(print_help(3, messages), EXIT_SUCCESS);
     char *output = capture_print_help(3, messages);
     AVAR_ASSERT_NOT_NULL(output);
     AVAR_ASSERT_STR_EQ(output,
@@ -143,6 +143,8 @@ AVAR_TEST(utils_print_help_returns_success) {
                        "Usage: avar [options]\n"
                        "  --help  Show help\n");
     free(output);
+#else
+    (void)messages;
 #endif
 }
 
@@ -272,12 +274,14 @@ AVAR_TEST(utils_size_unit_rejects_kibibits) {
 AVAR_TEST(utils_print_help_handles_single_line) {
     const char *messages[] = {"Avar"};
 
-    AVAR_ASSERT_EQ(print_help(1, messages), EXIT_SUCCESS);
 #if !defined(_WIN32)
+    AVAR_ASSERT_EQ(print_help(1, messages), EXIT_SUCCESS);
     char *output = capture_print_help(1, messages);
     AVAR_ASSERT_NOT_NULL(output);
     AVAR_ASSERT_STR_EQ(output, "Avar (v" VERSION_STR ")\n");
     free(output);
+#else
+    (void)messages;
 #endif
 }
 

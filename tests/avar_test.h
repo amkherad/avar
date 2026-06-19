@@ -30,16 +30,18 @@ static void avar_test_fail(const char *file, int line, const char *expr) {
 #define AVAR_TEST(name)                                                                            \
     static void name(void);                                                                        \
     static void run_##name(void) {                                                                 \
-        printf("  %s\n", #name);                                                                   \
+        fprintf(stderr, "  %s\n", #name);                                                          \
+        fflush(stderr);                                                                            \
         name();                                                                                    \
     }                                                                                              \
     static void name(void)
 
 #define AVAR_TEST_MAIN(...)                                                                        \
     int main(void) {                                                                               \
-        printf("Running tests...\n");                                                              \
+        fprintf(stderr, "Running tests...\n");                                                     \
+        fflush(stderr);                                                                            \
         __VA_ARGS__                                                                                \
-        printf("%d assertions, %d failed\n", avar_tests_run, avar_tests_failed);                     \
+        fprintf(stderr, "%d assertions, %d failed\n", avar_tests_run, avar_tests_failed);          \
         return avar_tests_failed > 0 ? EXIT_FAILURE : EXIT_SUCCESS;                                \
     }
 
