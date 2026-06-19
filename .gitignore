@@ -21,6 +21,10 @@ cmake-build-test/
 /build-coverage-test/
 /build-coverage/
 /build-gui/
+/.cmake/
+/build-test/
+daemon_transport.c.gcov
+/.cmake.tar.gz
 /build-all/
 /dist-all/
 

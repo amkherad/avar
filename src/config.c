@@ -7,7 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <pthread.h>
     #include <unistd.h>
 #endif
 
@@ -29,6 +32,37 @@ struct ConfigPaths {
 };
 
 static struct ConfigContext _config = {0};
+
+#if defined(_WIN32)
+static CRITICAL_SECTION g_config_lock;
+static bool g_config_lock_ready = false;
+
+static void config_lock_init(void) {
+    if (!g_config_lock_ready) {
+        InitializeCriticalSection(&g_config_lock);
+        g_config_lock_ready = true;
+    }
+}
+
+static void config_lock(void) {
+    config_lock_init();
+    EnterCriticalSection(&g_config_lock);
+}
+
+static void config_unlock(void) {
+    LeaveCriticalSection(&g_config_lock);
+}
+#else
+static pthread_mutex_t g_config_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void config_lock(void) {
+    (void)pthread_mutex_lock(&g_config_lock);
+}
+
+static void config_unlock(void) {
+    (void)pthread_mutex_unlock(&g_config_lock);
+}
+#endif
 
 static char *get_config_from_env(stringa key);
 static struct ConfigPaths get_config_path(bool user);
@@ -330,12 +364,14 @@ char *get_config(stringa key) {
         return env_value;
     }
 
+    config_lock();
     ensure_initialized();
 
     char *leaf = NULL;
     cJSON *parent = resolve_parent(_config.root, key, false, &leaf);
     if (parent == NULL || leaf == NULL) {
         free(leaf);
+        config_unlock();
         return NULL;
     }
 
@@ -343,10 +379,13 @@ char *get_config(stringa key) {
     free(leaf);
 
     if (item == NULL || !cJSON_IsString(item) || item->valuestring == NULL) {
+        config_unlock();
         return NULL;
     }
 
-    return strdup(item->valuestring);
+    char *value = strdup(item->valuestring);
+    config_unlock();
+    return value;
 }
 
 char *get_config_or_default(stringa key, stringa default_value) {
@@ -363,9 +402,11 @@ char *get_config_or_default(stringa key, stringa default_value) {
 }
 
 int set_config(stringa key, stringa value) {
+    config_lock();
     ensure_initialized();
 
     if (key == NULL || value == NULL) {
+        config_unlock();
         LOG_ERROR("Config key and value must not be NULL");
         return -1;
     }
@@ -374,6 +415,7 @@ int set_config(stringa key, stringa value) {
     cJSON *parent = resolve_parent(_config.root, key, true, &leaf);
     if (parent == NULL || leaf == NULL) {
         free(leaf);
+        config_unlock();
         LOG_ERROR("Invalid config key: %s", key);
         return -1;
     }
@@ -384,23 +426,29 @@ int set_config(stringa key, stringa value) {
             cJSON_ReplaceItemInObjectCaseSensitive(parent, leaf, cJSON_CreateString(value));
         } else if (cJSON_SetValuestring(existing, value) == NULL) {
             free(leaf);
+            config_unlock();
             LOG_ERROR("Failed to set config value for key: %s", key);
             return -1;
         }
     } else if (cJSON_AddStringToObject(parent, leaf, value) == NULL) {
         free(leaf);
+        config_unlock();
         LOG_ERROR("Failed to add config value for key: %s", key);
         return -1;
     }
 
     free(leaf);
-    return persist_config(_config.path);
+    const int rc = persist_config(_config.path);
+    config_unlock();
+    return rc;
 }
 
 int reset_config(stringa key) {
+    config_lock();
     ensure_initialized();
 
     if (key == NULL) {
+        config_unlock();
         LOG_ERROR("Config key must not be NULL");
         return -1;
     }
@@ -409,6 +457,7 @@ int reset_config(stringa key) {
     cJSON *parent = resolve_parent(_config.root, key, false, &leaf);
     if (parent == NULL || leaf == NULL) {
         free(leaf);
+        config_unlock();
         LOG_ERROR("Config key not found: %s", key);
         return -1;
     }
@@ -416,6 +465,7 @@ int reset_config(stringa key) {
     const cJSON *item = cJSON_GetObjectItemCaseSensitive(parent, leaf);
     if (item == NULL) {
         free(leaf);
+        config_unlock();
         LOG_ERROR("Config key not found: %s", key);
         return -1;
     }
@@ -424,50 +474,65 @@ int reset_config(stringa key) {
     free(leaf);
     prune_empty_parents(_config.root, key);
 
-    return persist_config(_config.path);
+    const int rc = persist_config(_config.path);
+    config_unlock();
+    return rc;
 }
 
 int reset_all_config(void) {
+    config_lock();
     ensure_initialized();
 
     cJSON_Delete(_config.root);
     _config.root = cJSON_CreateObject();
     if (_config.root == NULL) {
+        config_unlock();
         LOG_ERROR("Failed to reset config");
         return -1;
     }
 
-    return persist_config(_config.path);
+    const int rc = persist_config(_config.path);
+    config_unlock();
+    return rc;
 }
 
 int save_config(stringa path) {
+    config_lock();
     ensure_initialized();
 
     if (path == NULL) {
+        config_unlock();
         LOG_ERROR("Config path must not be NULL");
         return -1;
     }
 
-    return persist_config(path);
+    const int rc = persist_config(path);
+    config_unlock();
+    return rc;
 }
 
 int load_config(stringa path) {
+    config_lock();
     ensure_initialized();
 
     if (path == NULL) {
+        config_unlock();
         LOG_ERROR("Config path must not be NULL");
         return -1;
     }
 
     cJSON *loaded = load_json_file(path);
     if (loaded == NULL) {
+        config_unlock();
         LOG_ERROR("Failed to load config from: %s", path);
         return -1;
     }
 
     cJSON_Delete(_config.root);
     _config.root = loaded;
-    return persist_config(_config.path);
+    const int rc = persist_config(_config.path);
+    config_unlock();
+    return rc;
 }
 
 static cJSON *resolve_array_parent(const char *key, bool create, char **leaf_out) {
@@ -511,22 +576,28 @@ static cJSON *resolve_array_parent(const char *key, bool create, char **leaf_out
 }
 
 size_t get_config_array_size(const char *key) {
+    config_lock();
     ensure_initialized();
 
     char *leaf = NULL;
     cJSON *array = resolve_array_parent(key, false, &leaf);
     free(leaf);
     if (array == NULL) {
+        config_unlock();
         return 0;
     }
 
-    return (size_t)cJSON_GetArraySize(array);
+    const size_t size = (size_t)cJSON_GetArraySize(array);
+    config_unlock();
+    return size;
 }
 
 char *get_config_array_item_field(const char *key, const size_t index, const char *field) {
+    config_lock();
     ensure_initialized();
 
     if (field == NULL) {
+        config_unlock();
         return NULL;
     }
 
@@ -534,42 +605,48 @@ char *get_config_array_item_field(const char *key, const size_t index, const cha
     cJSON *array = resolve_array_parent(key, false, &leaf);
     free(leaf);
     if (array == NULL) {
+        config_unlock();
         return NULL;
     }
 
     const cJSON *item = cJSON_GetArrayItem(array, (int)index);
     if (item == NULL || !cJSON_IsObject(item)) {
+        config_unlock();
         return NULL;
     }
 
     const cJSON *value = cJSON_GetObjectItemCaseSensitive(item, field);
     if (value == NULL) {
+        config_unlock();
         return NULL;
     }
 
+    char *result = NULL;
     if (cJSON_IsString(value) && value->valuestring != NULL) {
-        return strdup(value->valuestring);
-    }
-
-    if (cJSON_IsNumber(value)) {
+        result = strdup(value->valuestring);
+    } else if (cJSON_IsNumber(value)) {
         char buffer[32];
         snprintf(buffer, sizeof buffer, "%.0f", value->valuedouble);
-        return strdup(buffer);
+        result = strdup(buffer);
     }
 
-    return NULL;
+    config_unlock();
+    return result;
 }
 
 int append_config_array_item(const char *key, const char *json_object) {
+    config_lock();
     ensure_initialized();
 
     if (key == NULL || json_object == NULL) {
+        config_unlock();
         return -1;
     }
 
     cJSON *parsed = cJSON_Parse(json_object);
     if (parsed == NULL || !cJSON_IsObject(parsed)) {
         cJSON_Delete(parsed);
+        config_unlock();
         LOG_ERROR("Invalid JSON object for config array item");
         return -1;
     }
@@ -579,28 +656,35 @@ int append_config_array_item(const char *key, const char *json_object) {
     free(leaf);
     if (array == NULL) {
         cJSON_Delete(parsed);
+        config_unlock();
         return -1;
     }
 
     if (!cJSON_AddItemToArray(array, parsed)) {
         cJSON_Delete(parsed);
+        config_unlock();
         return -1;
     }
 
-    return persist_config(_config.path);
+    const int rc = persist_config(_config.path);
+    config_unlock();
+    return rc;
 }
 
 int update_config_array_item(const char *key, const char *match_field,
                              const char *match_value, const char *json_object) {
+    config_lock();
     ensure_initialized();
 
     if (key == NULL || match_field == NULL || match_value == NULL || json_object == NULL) {
+        config_unlock();
         return -1;
     }
 
     cJSON *parsed = cJSON_Parse(json_object);
     if (parsed == NULL || !cJSON_IsObject(parsed)) {
         cJSON_Delete(parsed);
+        config_unlock();
         return -1;
     }
 
@@ -609,6 +693,7 @@ int update_config_array_item(const char *key, const char *match_field,
     free(leaf);
     if (array == NULL) {
         cJSON_Delete(parsed);
+        config_unlock();
         return -1;
     }
 
@@ -629,17 +714,22 @@ int update_config_array_item(const char *key, const char *match_field,
         }
 
         cJSON_ReplaceItemInArray(array, i, parsed);
-        return persist_config(_config.path);
+        const int rc = persist_config(_config.path);
+        config_unlock();
+        return rc;
     }
 
     cJSON_Delete(parsed);
+    config_unlock();
     return -1;
 }
 
 int remove_config_array_item(const char *key, const char *match_field, const char *match_value) {
+    config_lock();
     ensure_initialized();
 
     if (key == NULL || match_field == NULL || match_value == NULL) {
+        config_unlock();
         return -1;
     }
 
@@ -647,6 +737,7 @@ int remove_config_array_item(const char *key, const char *match_field, const cha
     cJSON *array = resolve_array_parent(key, false, &leaf);
     free(leaf);
     if (array == NULL) {
+        config_unlock();
         return -1;
     }
 
@@ -667,40 +758,51 @@ int remove_config_array_item(const char *key, const char *match_field, const cha
         }
 
         cJSON_DeleteItemFromArray(array, i);
-        return persist_config(_config.path);
+        const int rc = persist_config(_config.path);
+        config_unlock();
+        return rc;
     }
 
+    config_unlock();
     return -1;
 }
 
 char *get_config_array_item_json(const char *key, const size_t index) {
+    config_lock();
     ensure_initialized();
 
     char *leaf = NULL;
     cJSON *array = resolve_array_parent(key, false, &leaf);
     free(leaf);
     if (array == NULL) {
+        config_unlock();
         return NULL;
     }
 
     const cJSON *item = cJSON_GetArrayItem(array, (int)index);
     if (item == NULL || !cJSON_IsObject(item)) {
+        config_unlock();
         return NULL;
     }
 
-    return cJSON_PrintUnformatted(item);
+    char *json = cJSON_PrintUnformatted(item);
+    config_unlock();
+    return json;
 }
 
 int replace_config_array_item_at(const char *key, const size_t index, const char *json_object) {
+    config_lock();
     ensure_initialized();
 
     if (key == NULL || json_object == NULL) {
+        config_unlock();
         return -1;
     }
 
     cJSON *parsed = cJSON_Parse(json_object);
     if (parsed == NULL || !cJSON_IsObject(parsed)) {
         cJSON_Delete(parsed);
+        config_unlock();
         return -1;
     }
 
@@ -709,22 +811,28 @@ int replace_config_array_item_at(const char *key, const size_t index, const char
     free(leaf);
     if (array == NULL) {
         cJSON_Delete(parsed);
+        config_unlock();
         return -1;
     }
 
     if (!cJSON_ReplaceItemInArray(array, (int)index, parsed)) {
         cJSON_Delete(parsed);
+        config_unlock();
         return -1;
     }
 
-    return persist_config(_config.path);
+    const int rc = persist_config(_config.path);
+    config_unlock();
+    return rc;
 }
 
 int remove_config_array_items_where(const char *key, const char *match_field,
                                     const char *match_value) {
+    config_lock();
     ensure_initialized();
 
     if (key == NULL || match_field == NULL || match_value == NULL) {
+        config_unlock();
         return -1;
     }
 
@@ -732,6 +840,7 @@ int remove_config_array_items_where(const char *key, const char *match_field,
     cJSON *array = resolve_array_parent(key, false, &leaf);
     free(leaf);
     if (array == NULL) {
+        config_unlock();
         return 0;
     }
 
@@ -755,11 +864,13 @@ int remove_config_array_items_where(const char *key, const char *match_field,
         removed++;
     }
 
+    int rc = removed;
     if (removed > 0 && persist_config(_config.path) != 0) {
-        return -1;
+        rc = -1;
     }
 
-    return removed;
+    config_unlock();
+    return rc;
 }
 
 #if defined(AVAR_TESTING)
@@ -767,6 +878,8 @@ int config_open_at(const char *config_file) {
     if (config_file == NULL) {
         return -1;
     }
+
+    config_lock();
 
     if (_config.initialized) {
         cJSON_Delete(_config.root);
@@ -777,6 +890,7 @@ int config_open_at(const char *config_file) {
 
     _config.path = strdup(config_file);
     if (_config.path == NULL) {
+        config_unlock();
         return -1;
     }
 
@@ -790,6 +904,7 @@ int config_open_at(const char *config_file) {
     if (_config.dir == NULL) {
         free(_config.path);
         _config.path = NULL;
+        config_unlock();
         return -1;
     }
 
@@ -801,11 +916,13 @@ int config_open_at(const char *config_file) {
             free(_config.dir);
             _config.path = NULL;
             _config.dir = NULL;
+            config_unlock();
             return -1;
         }
     }
 
     _config.initialized = true;
+    config_unlock();
     return 0;
 }
 #endif

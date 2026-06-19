@@ -50,6 +50,9 @@ typedef struct {
 static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data);
 static bool ipc_write_frame(int fd, const char *json);
 static bool ipc_read_frame(int fd, char **json_out);
+#if !defined(_WIN32)
+static bool ipc_read_frame_timeout(int fd, char **json_out, uint64_t deadline_ms);
+#endif
 static bool ipc_rpc_exchange(const char *endpoint, bool is_pipe, const char *request_json,
                              char **response_json_out, unsigned timeout_ms);
 
@@ -354,47 +357,26 @@ static const DaemonTransportVTable unix_vtable = {
 
 #else
 
-static bool ipc_server_loop(IpcTransportContext *ctx, bool is_pipe) {
+static bool ipc_server_loop(IpcTransportContext *ctx) {
     while (!ctx->stop) {
-        int client_fd = -1;
-        if (is_pipe) {
-            if (ctx->pipe_fd < 0) {
-                break;
-            }
-
-            struct pollfd pfd = {.fd = ctx->pipe_fd, .events = POLLIN};
-            const int ready = poll(&pfd, 1, 100);
-            if (ready < 0) {
-                if (errno == EINTR) {
-                    continue;
-                }
-                break;
-            }
-            if (ready == 0) {
+        struct pollfd pfd = {.fd = ctx->listen_fd, .events = POLLIN};
+        const int ready = poll(&pfd, 1, 100);
+        if (ready < 0) {
+            if (errno == EINTR) {
                 continue;
             }
+            break;
+        }
+        if (ready == 0) {
+            continue;
+        }
 
-            client_fd = ctx->pipe_fd;
-        } else {
-            struct pollfd pfd = {.fd = ctx->listen_fd, .events = POLLIN};
-            const int ready = poll(&pfd, 1, 100);
-            if (ready < 0) {
-                if (errno == EINTR) {
-                    continue;
-                }
+        const int client_fd = accept(ctx->listen_fd, NULL, NULL);
+        if (client_fd < 0) {
+            if (ctx->stop) {
                 break;
             }
-            if (ready == 0) {
-                continue;
-            }
-
-            client_fd = accept(ctx->listen_fd, NULL, NULL);
-            if (client_fd < 0) {
-                if (ctx->stop) {
-                    break;
-                }
-                continue;
-            }
+            continue;
         }
 
         char *request = NULL;
@@ -409,17 +391,14 @@ static bool ipc_server_loop(IpcTransportContext *ctx, bool is_pipe) {
         }
 
         ctx->active_fd = -1;
-        if (!is_pipe) {
-            close(client_fd);
-        }
+        close(client_fd);
     }
     return true;
 }
 
 static void *ipc_server_thread(void *arg) {
     IpcTransportContext *ctx = (IpcTransportContext *)arg;
-    const bool is_pipe = ctx->listen_fd < 0;
-    (void)ipc_server_loop(ctx, is_pipe);
+    (void)ipc_server_loop(ctx);
     return NULL;
 }
 
@@ -431,24 +410,34 @@ static bool pipe_start(DaemonTransport *self, const DaemonConfig *cfg) {
 
     snprintf(ctx->endpoint, sizeof ctx->endpoint, "%s", cfg->server.pipe.name);
     (void)unlink(ctx->endpoint);
-    if (mkfifo(ctx->endpoint, 0600) != 0 && errno != EEXIST) {
-        LOG_ERROR("Failed to create FIFO '%s'", ctx->endpoint);
+
+    ctx->listen_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (ctx->listen_fd < 0) {
+        LOG_ERROR("Failed to create pipe socket '%s'", ctx->endpoint);
         return false;
     }
 
-    ctx->pipe_fd = open(ctx->endpoint, O_RDWR);
-    if (ctx->pipe_fd < 0) {
-        LOG_ERROR("Failed to open FIFO '%s'", ctx->endpoint);
-        (void)unlink(ctx->endpoint);
+    struct sockaddr_un addr = {0};
+    addr.sun_family = AF_UNIX;
+    snprintf(addr.sun_path, sizeof addr.sun_path, "%s", ctx->endpoint);
+    if (bind(ctx->listen_fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
+        LOG_ERROR("Failed to bind pipe socket '%s'", ctx->endpoint);
+        close(ctx->listen_fd);
+        return false;
+    }
+
+    if (listen(ctx->listen_fd, 8) != 0) {
+        LOG_ERROR("Failed to listen on pipe socket '%s'", ctx->endpoint);
+        close(ctx->listen_fd);
         return false;
     }
 
     ctx->pipe_fd = -1;
-    ctx->listen_fd = -1;
     ctx->active_fd = -1;
     ctx->stop = false;
     if (pthread_create(&ctx->thread, NULL, ipc_server_thread, ctx) != 0) {
-        LOG_ERROR("Failed to start FIFO listener thread");
+        LOG_ERROR("Failed to start pipe listener thread");
+        close(ctx->listen_fd);
         return false;
     }
 
@@ -466,13 +455,13 @@ static void pipe_stop(DaemonTransport *self) {
     if (ctx->active_fd >= 0) {
         shutdown(ctx->active_fd, SHUT_RDWR);
     }
-    if (ctx->pipe_fd >= 0) {
-        shutdown(ctx->pipe_fd, SHUT_RDWR);
+    if (ctx->listen_fd >= 0) {
+        shutdown(ctx->listen_fd, SHUT_RDWR);
     }
     pthread_join(ctx->thread, NULL);
-    if (ctx->pipe_fd >= 0) {
-        close(ctx->pipe_fd);
-        ctx->pipe_fd = -1;
+    if (ctx->listen_fd >= 0) {
+        close(ctx->listen_fd);
+        ctx->listen_fd = -1;
     }
     unlink(ctx->endpoint);
     ctx->started = false;
@@ -969,6 +958,7 @@ static bool ipc_read_frame_timeout(int fd, char **json_out, uint64_t deadline_ms
 }
 
 static int ipc_open_endpoint(const char *endpoint, const bool is_pipe, const unsigned timeout_ms) {
+    (void)is_pipe;
     if (endpoint == NULL) {
         return -1;
     }
@@ -978,47 +968,32 @@ static int ipc_open_endpoint(const char *endpoint, const bool is_pipe, const uns
 
     while (mg_millis() < deadline) {
         int fd = -1;
-        if (is_pipe) {
-            fd = open(endpoint, O_RDWR | O_NONBLOCK);
-            if (fd < 0 && (errno == ENXIO || errno == ENOENT || errno == EAGAIN)) {
-                usleep(10000);
-                continue;
-            }
-        } else {
-            fd = socket(AF_UNIX, SOCK_STREAM, 0);
-            if (fd < 0) {
-                return -1;
-            }
-
-            const int flags = fcntl(fd, F_GETFL, 0);
-            if (flags >= 0) {
-                (void)fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-            }
-
-            struct sockaddr_un addr = {0};
-            addr.sun_family = AF_UNIX;
-            snprintf(addr.sun_path, sizeof addr.sun_path, "%s", endpoint);
-            if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
-                const int connect_err = errno;
-                close(fd);
-                if (connect_err == EINPROGRESS || connect_err == EAGAIN) {
-                    usleep(10000);
-                    continue;
-                }
-                return -1;
-            }
-        }
-
+        fd = socket(AF_UNIX, SOCK_STREAM, 0);
         if (fd < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
             return -1;
         }
 
         const int flags = fcntl(fd, F_GETFL, 0);
         if (flags >= 0) {
-            (void)fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+            (void)fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        }
+
+        struct sockaddr_un addr = {0};
+        addr.sun_family = AF_UNIX;
+        snprintf(addr.sun_path, sizeof addr.sun_path, "%s", endpoint);
+        if (connect(fd, (struct sockaddr *)&addr, sizeof addr) != 0) {
+            const int connect_err = errno;
+            close(fd);
+            if (connect_err == EINPROGRESS || connect_err == EAGAIN || connect_err == ENOENT) {
+                usleep(10000);
+                continue;
+            }
+            return -1;
+        }
+
+        const int blocking_flags = fcntl(fd, F_GETFL, 0);
+        if (blocking_flags >= 0) {
+            (void)fcntl(fd, F_SETFL, blocking_flags & ~O_NONBLOCK);
         }
 
         return fd;
@@ -1315,7 +1290,8 @@ static bool ping_transport_timeout(const AvarTransportKind kind, const DaemonCon
             char *resp = NULL;
             const char *req = "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"id\":1}";
             const bool ok =
-                ipc_rpc_exchange(cfg->server.pipe.name, true, req, &resp, wait_ms);
+                ipc_rpc_exchange(cfg->server.pipe.name, true, req, &resp, wait_ms) &&
+                resp != NULL && strstr(resp, "ok") != NULL;
             free(resp);
             return ok;
         }
