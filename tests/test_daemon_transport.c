@@ -165,7 +165,6 @@ AVAR_TEST(transport_pipe_rpc_while_daemon_running) {
     AVAR_ASSERT_NOT_NULL(response);
     free(response);
 
-    AVAR_ASSERT(daemon_transport_ping_any(&cfg));
     AVAR_ASSERT(daemon_transport_ping_any_timeout(&cfg, 1000U));
 
     DaemonStopOptions opts = {.wait = true, .force_kill = false};

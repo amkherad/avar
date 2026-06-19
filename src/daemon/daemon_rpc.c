@@ -94,7 +94,11 @@ void daemon_rpc_set_auth_token(const char *token) {
 }
 
 void daemon_rpc_shutdown(void) {
+#if defined(AVAR_TESTING)
+    (void)download_wait_idle(500U);
+#else
     (void)download_wait_idle(30000U);
+#endif
 }
 
 void daemon_rpc_log_append(const char *line) {

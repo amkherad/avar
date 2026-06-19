@@ -15,6 +15,7 @@
     #include <windows.h>
 #else
     #include <fcntl.h>
+    #include <poll.h>
     #include <pthread.h>
     #include <sys/socket.h>
     #include <sys/stat.h>
@@ -39,6 +40,7 @@ typedef struct {
     pthread_t thread;
     volatile bool stop;
     int listen_fd;
+    volatile int active_fd;
 #endif
 } IpcTransportContext;
 
@@ -367,6 +369,7 @@ static bool ipc_server_loop(IpcTransportContext *ctx, bool is_pipe) {
         }
 
         char *request = NULL;
+        ctx->active_fd = client_fd;
         if (ipc_read_frame(client_fd, &request) && request != NULL) {
             char *response = NULL;
             if (daemon_rpc_handle(request, &response) && response != NULL) {
@@ -376,6 +379,7 @@ static bool ipc_server_loop(IpcTransportContext *ctx, bool is_pipe) {
             free(request);
         }
 
+        ctx->active_fd = -1;
         close(client_fd);
     }
     return true;
@@ -402,6 +406,7 @@ static bool pipe_start(DaemonTransport *self, const DaemonConfig *cfg) {
     }
 
     ctx->listen_fd = -1;
+    ctx->active_fd = -1;
     ctx->stop = false;
     if (pthread_create(&ctx->thread, NULL, ipc_server_thread, ctx) != 0) {
         LOG_ERROR("Failed to start FIFO listener thread");
@@ -419,6 +424,9 @@ static void pipe_stop(DaemonTransport *self) {
         return;
     }
     ctx->stop = true;
+    if (ctx->active_fd >= 0) {
+        shutdown(ctx->active_fd, SHUT_RDWR);
+    }
     int probe = open(ctx->endpoint, O_WRONLY | O_NONBLOCK);
     if (probe >= 0) {
         close(probe);
@@ -485,6 +493,7 @@ static bool unix_start(DaemonTransport *self, const DaemonConfig *cfg) {
     }
 
     ctx->stop = false;
+    ctx->active_fd = -1;
     if (pthread_create(&ctx->thread, NULL, ipc_server_thread, ctx) != 0) {
         LOG_ERROR("Failed to start unix socket listener thread");
         close(ctx->listen_fd);
@@ -502,6 +511,9 @@ static void unix_stop(DaemonTransport *self) {
         return;
     }
     ctx->stop = true;
+    if (ctx->active_fd >= 0) {
+        shutdown(ctx->active_fd, SHUT_RDWR);
+    }
     shutdown(ctx->listen_fd, SHUT_RDWR);
     pthread_join(ctx->thread, NULL);
     close(ctx->listen_fd);
@@ -789,6 +801,76 @@ static bool ipc_rpc_exchange(const char *endpoint, const bool is_pipe, const cha
     return true;
 }
 #else
+static bool ipc_read_exact_timeout(int fd, void *buf, const size_t len, uint64_t deadline_ms) {
+    size_t total = 0U;
+    while (total < len) {
+        const uint64_t now = mg_millis();
+        if (now >= deadline_ms) {
+            return false;
+        }
+
+        unsigned wait_ms = (unsigned)(deadline_ms - now);
+        if (wait_ms > 200U) {
+            wait_ms = 200U;
+        }
+
+        struct pollfd pfd = {.fd = fd, .events = POLLIN};
+        const int ready = poll(&pfd, 1, (int)wait_ms);
+        if (ready < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+        if (ready == 0) {
+            continue;
+        }
+
+        const ssize_t n = read(fd, (char *)buf + total, len - total);
+        if (n <= 0) {
+            return false;
+        }
+        total += (size_t)n;
+    }
+
+    return true;
+}
+
+static bool ipc_read_frame_timeout(int fd, char **json_out, uint64_t deadline_ms) {
+    if (json_out != NULL) {
+        *json_out = NULL;
+    }
+
+    uint8_t header[4];
+    if (!ipc_read_exact_timeout(fd, header, sizeof header, deadline_ms)) {
+        return false;
+    }
+
+    const uint32_t len =
+        ((uint32_t)header[0] << 24) | ((uint32_t)header[1] << 16) | ((uint32_t)header[2] << 8) |
+        (uint32_t)header[3];
+    if (len == 0U || len >= AVAR_DAEMON_RPC_FRAME_MAX) {
+        return false;
+    }
+
+    char *buf = calloc((size_t)len + 1U, 1U);
+    if (buf == NULL) {
+        return false;
+    }
+
+    if (!ipc_read_exact_timeout(fd, buf, len, deadline_ms)) {
+        free(buf);
+        return false;
+    }
+
+    if (json_out != NULL) {
+        *json_out = buf;
+    } else {
+        free(buf);
+    }
+    return true;
+}
+
 static int ipc_open_endpoint(const char *endpoint, const bool is_pipe, const unsigned timeout_ms) {
     if (endpoint == NULL) {
         return -1;
@@ -860,7 +942,15 @@ static bool ipc_rpc_exchange(const char *endpoint, const bool is_pipe, const cha
         return false;
     }
 
-    const bool ok = ipc_write_frame(fd, request_json) && ipc_read_frame(fd, response_json_out);
+    const unsigned wait_ms = timeout_ms == 0U ? 5000U : timeout_ms;
+    const uint64_t deadline = mg_millis() + (uint64_t)wait_ms;
+
+    if (!ipc_write_frame(fd, request_json)) {
+        close(fd);
+        return false;
+    }
+
+    const bool ok = ipc_read_frame_timeout(fd, response_json_out, deadline);
     close(fd);
     return ok;
 }

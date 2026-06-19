@@ -736,6 +736,7 @@ int daemon_start(const DaemonConfig *cfg) {
     }
 
     LOG_INFO("Draining active downloads before shutdown");
+    daemon_release_pid_file(cfg->server.pid_file);
     daemon_rpc_shutdown();
 
     remove_ctrl_c_handler();
