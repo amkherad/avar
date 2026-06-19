@@ -117,19 +117,36 @@ static bool verify_segmented_file_contents(const char *path) {
     return ok;
 }
 
-static void setup_isolated_paths(void) {
+static bool setup_isolated_paths(void) {
     if (!g_fixture_ready) {
-        AVAR_ASSERT(test_guard_init(&g_guard, "avar-dl-test"));
+        if (!test_guard_init(&g_guard, "avar-dl-test")) {
+            fprintf(stderr, "integration setup: test_guard_init failed\n");
+            return false;
+        }
         snprintf(g_server_script, sizeof g_server_script, "%s/scripts/http_test_server.py",
                  AVAR_SOURCE_DIR);
         test_guard_http_server_init(&g_http_server);
-        AVAR_ASSERT(test_guard_http_server_start(&g_guard, g_server_script, &g_http_server));
-        AVAR_ASSERT(test_guard_http_url(&g_guard, "segmented.bin", g_segmented_url,
-                                        sizeof g_segmented_url));
+        if (!test_guard_http_server_start(&g_guard, g_server_script, &g_http_server)) {
+            fprintf(stderr, "integration setup: failed to start HTTP test server\n");
+            return false;
+        }
+        if (!test_guard_http_url(&g_guard, "segmented.bin", g_segmented_url,
+                                 sizeof g_segmented_url)) {
+            fprintf(stderr, "integration setup: failed to build segmented URL\n");
+            return false;
+        }
         g_fixture_ready = true;
     }
 
-    AVAR_ASSERT(test_guard_http_server_reset_stats(&g_guard));
+    if (!test_guard_http_server_is_ready(&g_guard)) {
+        fprintf(stderr, "integration setup: HTTP test server is not responding\n");
+        return false;
+    }
+
+    if (!test_guard_http_server_reset_stats(&g_guard)) {
+        fprintf(stderr, "integration setup: failed to reset HTTP test stats\n");
+        return false;
+    }
 
     snprintf(g_temp_dir, sizeof g_temp_dir, "%s%ctemp", g_guard.work_dir, PATH_SEPARATOR);
     snprintf(g_download_dir, sizeof g_download_dir, "%s%cdownload", g_guard.work_dir,
@@ -151,9 +168,17 @@ static void setup_isolated_paths(void) {
         free(temp);
     }
 
-    AVAR_ASSERT_EQ(config_open_at(g_guard.config_path), 0);
-    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_TEMP_PATH, g_temp_dir), 0);
-    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_DOWNLOAD_PATH, g_download_dir), 0);
+    if (config_open_at(g_guard.config_path) != 0) {
+        fprintf(stderr, "integration setup: config_open_at failed\n");
+        return false;
+    }
+    if (set_config(AVAR_CFG_DM_TEMP_PATH, g_temp_dir) != 0
+        || set_config(AVAR_CFG_DM_DOWNLOAD_PATH, g_download_dir) != 0) {
+        fprintf(stderr, "integration setup: failed to set download paths\n");
+        return false;
+    }
+
+    return true;
 }
 
 static void build_url(const char *path, char *out, size_t out_size) {
@@ -161,7 +186,7 @@ static void build_url(const char *path, char *out, size_t out_size) {
 }
 
 AVAR_TEST(download_integration_redirect_follow) {
-    setup_isolated_paths();
+    AVAR_ASSERT(setup_isolated_paths());
 
     char url[256];
     build_url("redirect.bin", url, sizeof url);
@@ -176,7 +201,7 @@ AVAR_TEST(download_integration_redirect_follow) {
 }
 
 AVAR_TEST(download_integration_attached_roundtrip) {
-    setup_isolated_paths();
+    AVAR_ASSERT(setup_isolated_paths());
 
     char url[256];
     build_url("plain.txt", url, sizeof url);
@@ -205,7 +230,7 @@ AVAR_TEST(download_integration_attached_roundtrip) {
 }
 
 AVAR_TEST(download_integration_small_file_skips_segmentation) {
-    setup_isolated_paths();
+    AVAR_ASSERT(setup_isolated_paths());
     configure_segmentation("1048576", "65536", "4", "true");
 
     char url[256];
@@ -222,7 +247,7 @@ AVAR_TEST(download_integration_small_file_skips_segmentation) {
 }
 
 AVAR_TEST(download_integration_segmented_parallel_completes) {
-    setup_isolated_paths();
+    AVAR_ASSERT(setup_isolated_paths());
     configure_segmentation("1024", "65536", "4", "true");
     remove_segmented_artifacts();
 
@@ -243,7 +268,7 @@ AVAR_TEST(download_integration_segmented_parallel_completes) {
 }
 
 AVAR_TEST(download_integration_segmented_disabled_uses_stream) {
-    setup_isolated_paths();
+    AVAR_ASSERT(setup_isolated_paths());
     configure_segmentation("1024", "65536", "4", "false");
     remove_segmented_artifacts();
 
@@ -264,7 +289,7 @@ AVAR_TEST(download_integration_segmented_disabled_uses_stream) {
 }
 
 AVAR_TEST(download_integration_segment_retry_recovers_from_drop) {
-    setup_isolated_paths();
+    AVAR_ASSERT(setup_isolated_paths());
     configure_segmentation("1024", "65536", "4", "true");
     remove_named_artifacts("flaky_segmented.bin");
 
@@ -284,7 +309,7 @@ AVAR_TEST(download_integration_segment_retry_recovers_from_drop) {
 }
 
 AVAR_TEST(download_integration_range_refused_falls_back_to_stream) {
-    setup_isolated_paths();
+    AVAR_ASSERT(setup_isolated_paths());
     configure_segmentation("1024", "65536", "4", "true");
     remove_named_artifacts("liesrange.bin");
 
@@ -301,7 +326,7 @@ AVAR_TEST(download_integration_range_refused_falls_back_to_stream) {
 }
 
 AVAR_TEST(download_integration_background_downloads_use_thread_pool) {
-    setup_isolated_paths();
+    AVAR_ASSERT(setup_isolated_paths());
     configure_segmentation("1024", "65536", "4", "true");
     remove_segmented_artifacts();
     thread_pool_reset_global();

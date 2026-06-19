@@ -44,4 +44,6 @@ void test_guard_http_server_stop(TestHttpServer *server);
 
 bool test_guard_http_server_reset_stats(const TestGuard *guard);
 
+bool test_guard_http_server_is_ready(const TestGuard *guard);
+
 #endif

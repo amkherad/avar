@@ -149,8 +149,14 @@
 
 #define DL_STATE_FILENAME "state.json"
 #define DL_CHUNK_SIZE (256U * AVAR_KIB)
+#if defined(AVAR_TESTING)
+#define DL_CONNECT_TIMEOUT_MS 5000U
+#define DL_IDLE_TIMEOUT_MS 20000U
+#define AVAR_TEST_DOWNLOAD_MAX_MS 90000U
+#else
 #define DL_CONNECT_TIMEOUT_MS 30000U
 #define DL_IDLE_TIMEOUT_MS 120000U
+#endif
 /* Allowed segment connection failures before the whole download is abandoned,
  * expressed as a multiple of the segment count (retries are per-segment). */
 #define DL_SEGMENT_MAX_RETRY_FACTOR 4U

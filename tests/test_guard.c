@@ -19,13 +19,16 @@
     #include <netinet/in.h>
     #include <signal.h>
     #include <sys/stat.h>
+#if defined(__linux__)
+    #include <sys/prctl.h>
+#endif
     #include <sys/socket.h>
     #include <sys/wait.h>
     #include <unistd.h>
 #endif
 
-#define TEST_GUARD_SERVER_READY_MS 10000
-#define TEST_GUARD_SERVER_POLL_MS 50
+#define TEST_GUARD_SERVER_READY_MS 30000
+#define TEST_GUARD_SERVER_POLL_MS 100
 
 static bool test_guard_tcp_connect(int port) {
     if (port <= 0) {
@@ -87,34 +90,6 @@ static bool test_guard_process_running(int pid) {
 }
 #endif
 
-static bool test_guard_wait_http_server(const TestGuard *guard, TestHttpServer *server) {
-    if (guard == NULL || server == NULL || guard->http_port <= 0) {
-        return false;
-    }
-
-    for (int elapsed = 0; elapsed < TEST_GUARD_SERVER_READY_MS; elapsed += TEST_GUARD_SERVER_POLL_MS) {
-#if defined(_WIN32)
-        if (!test_guard_process_running(server->process)) {
-            return false;
-        }
-#else
-        if (!test_guard_process_running(server->pid)) {
-            return false;
-        }
-#endif
-        if (test_guard_tcp_connect(guard->http_port)) {
-            return true;
-        }
-#if defined(_WIN32)
-        Sleep((DWORD)TEST_GUARD_SERVER_POLL_MS);
-#else
-        usleep((useconds_t)TEST_GUARD_SERVER_POLL_MS * 1000U);
-#endif
-    }
-
-    return test_guard_tcp_connect(guard->http_port);
-}
-
 static bool test_guard_http_request(const TestGuard *guard, const char *request,
                                     int *status_out) {
     if (guard == NULL || request == NULL || guard->http_port <= 0) {
@@ -172,6 +147,51 @@ static bool test_guard_http_request(const TestGuard *guard, const char *request,
     }
 
     return true;
+}
+
+static bool test_guard_http_get_status(const TestGuard *guard, const char *path, int expected_status) {
+    if (guard == NULL || path == NULL || guard->http_port <= 0) {
+        return false;
+    }
+
+    char request[256];
+    snprintf(request, sizeof request,
+             "GET %s HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", path);
+
+    int status = 0;
+    return test_guard_http_request(guard, request, &status) && status == expected_status;
+}
+
+static bool test_guard_http_server_ready(const TestGuard *guard) {
+    return test_guard_http_get_status(guard, "/plain.txt", 200);
+}
+
+static bool test_guard_wait_http_server(const TestGuard *guard, TestHttpServer *server) {
+    if (guard == NULL || server == NULL || guard->http_port <= 0) {
+        return false;
+    }
+
+    for (int elapsed = 0; elapsed < TEST_GUARD_SERVER_READY_MS; elapsed += TEST_GUARD_SERVER_POLL_MS) {
+#if defined(_WIN32)
+        if (!test_guard_process_running(server->process)) {
+            return false;
+        }
+#else
+        if (!test_guard_process_running(server->pid)) {
+            return false;
+        }
+#endif
+        if (test_guard_tcp_connect(guard->http_port) && test_guard_http_server_ready(guard)) {
+            return true;
+        }
+#if defined(_WIN32)
+        Sleep((DWORD)TEST_GUARD_SERVER_POLL_MS);
+#else
+        usleep((useconds_t)TEST_GUARD_SERVER_POLL_MS * 1000U);
+#endif
+    }
+
+    return test_guard_tcp_connect(guard->http_port) && test_guard_http_server_ready(guard);
 }
 
 static bool test_guard_make_dir(const char *path) {
@@ -373,6 +393,14 @@ bool test_guard_http_server_start(const TestGuard *guard, const char *script_pat
     }
 
     if (pid == 0) {
+#if defined(__linux__)
+        (void)prctl(PR_SET_PDEATHSIG, SIGTERM);
+#endif
+        const char *python = getenv("PYTHON");
+        if (python == NULL || python[0] == '\0') {
+            python = "python3";
+        }
+        execlp(python, python, script_path, (char *)NULL);
         execlp("python3", "python3", script_path, (char *)NULL);
         execlp("python", "python", script_path, (char *)NULL);
         _exit(127);
@@ -413,9 +441,9 @@ void test_guard_http_server_stop(TestHttpServer *server) {
 }
 
 bool test_guard_http_server_reset_stats(const TestGuard *guard) {
-    int status = 0;
-    char request[128];
-    snprintf(request, sizeof request,
-             "GET /test_reset HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n");
-    return test_guard_http_request(guard, request, &status) && status == 204;
+    return test_guard_http_get_status(guard, "/test_reset", 204);
+}
+
+bool test_guard_http_server_is_ready(const TestGuard *guard) {
+    return test_guard_http_server_ready(guard);
 }

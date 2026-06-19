@@ -2594,7 +2594,16 @@ static int run_download(DownloadJob *job) {
               job->segment_mode, job->seg_cfg.concurrency);
     schedule_next(job);
     active_jobs_register(job);
+#if defined(AVAR_TESTING)
+    const uint64_t test_deadline_ms = mg_millis() + AVAR_TEST_DOWNLOAD_MAX_MS;
+#endif
     while (!job->done && !job->failed) {
+#if defined(AVAR_TESTING)
+        if (mg_millis() > test_deadline_ms) {
+            set_error(job, "Download exceeded test time limit");
+            break;
+        }
+#endif
         if (job->cancel_requested) {
             job->done = true;
             (void)dm_item_upsert(job, AVAR_DL_STATUS_QUEUED);
