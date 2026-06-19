@@ -51,12 +51,6 @@ static void setup_daemon_test_config(void) {
     AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_CHANNELS_PIPE_NAME, g_pipe_path), 0);
     AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_SERVER_PID_FILE, g_pid_path), 0);
     AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_SERVER_DETACH, "false"), 0);
-    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_CHANNELS_HTTP_ENABLED, "true"), 0);
-    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_CHANNELS_HTTP_BIND, "127.0.0.1"), 0);
-
-    char http_port[16];
-    snprintf(http_port, sizeof http_port, "%d", g_guard.http_port);
-    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_CHANNELS_HTTP_PORT, http_port), 0);
 }
 
 #if defined(_WIN32)
@@ -92,7 +86,7 @@ AVAR_TEST(daemon_start_ping_stop) {
 
     bool ready = false;
     for (int i = 0; i < 50; ++i) {
-        if (daemon_transport_ping_any_timeout(&cfg, 100U)) {
+        if (daemon_transport_ping_remote_timeout(AvarTransportPipe, &cfg, 100U)) {
             ready = true;
             break;
         }

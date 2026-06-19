@@ -36,6 +36,7 @@ typedef struct {
 
 static DaemonRuntime _runtime = {0};
 static volatile bool _daemon_loop_active = false;
+static volatile bool _daemon_shutdown_complete = true;
 
 #if defined(_WIN32)
 static HANDLE g_pid_file_handle = INVALID_HANDLE_VALUE;
@@ -386,8 +387,8 @@ static int send_stop_signal(int pid, bool force_kill) {
 }
 
 static int wait_for_in_process_daemon_stop(void) {
-    for (int i = 0; i < 100; ++i) {
-        if (!daemon_is_running(NULL) && !_daemon_loop_active) {
+    for (int i = 0; i < 300; ++i) {
+        if (_daemon_shutdown_complete) {
             LOG_INFO("Daemon stopped");
             return EXIT_SUCCESS;
         }
@@ -679,11 +680,14 @@ int daemon_start(const DaemonConfig *cfg) {
         return EXIT_FAILURE;
     }
 
+    _daemon_shutdown_complete = false;
+
     (void)daemon_cleanup_stale_pid_file(cfg->server.pid_file);
 
     int existing_pid = 0;
     if (daemon_is_running(&existing_pid)) {
         LOG_ERROR("Daemon already running (pid %d)", existing_pid);
+        _daemon_shutdown_complete = true;
         return EXIT_FAILURE;
     }
 
@@ -698,6 +702,7 @@ int daemon_start(const DaemonConfig *cfg) {
     if (daemon_acquire_pid_file(cfg->server.pid_file) != 0) {
         _runtime.running = false;
         _daemon_loop_active = false;
+        _daemon_shutdown_complete = true;
         return EXIT_FAILURE;
     }
 
@@ -706,6 +711,7 @@ int daemon_start(const DaemonConfig *cfg) {
         _daemon_loop_active = false;
         daemon_release_pid_file(cfg->server.pid_file);
         destroy_runtime_transports();
+        _daemon_shutdown_complete = true;
         return EXIT_FAILURE;
     }
 
@@ -768,6 +774,7 @@ int daemon_start(const DaemonConfig *cfg) {
     destroy_runtime_transports();
     daemon_release_pid_file(cfg->server.pid_file);
     LOG_INFO("Daemon stopped");
+    _daemon_shutdown_complete = true;
     return EXIT_SUCCESS;
 }
 

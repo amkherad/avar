@@ -33,6 +33,9 @@ void daemon_transport_destroy(DaemonTransport *transport);
 
 bool daemon_transport_ping_remote(AvarTransportKind kind, const DaemonConfig *cfg);
 
+bool daemon_transport_ping_remote_timeout(AvarTransportKind kind, const DaemonConfig *cfg,
+                                          unsigned timeout_ms);
+
 bool daemon_transport_ping_any(const DaemonConfig *cfg);
 
 bool daemon_transport_ping_any_timeout(const DaemonConfig *cfg, unsigned timeout_ms);

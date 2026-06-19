@@ -40,6 +40,7 @@ typedef struct {
     pthread_t thread;
     volatile bool stop;
     int listen_fd;
+    int pipe_fd;
     volatile int active_fd;
 #endif
 } IpcTransportContext;
@@ -355,17 +356,43 @@ static bool ipc_server_loop(IpcTransportContext *ctx, bool is_pipe) {
     while (!ctx->stop) {
         int client_fd = -1;
         if (is_pipe) {
-            client_fd = open(ctx->endpoint, O_RDWR);
-        } else {
-            client_fd = accept(ctx->listen_fd, NULL, NULL);
-        }
-
-        if (client_fd < 0) {
-            if (ctx->stop) {
+            if (ctx->pipe_fd < 0) {
                 break;
             }
-            usleep(100000);
-            continue;
+
+            struct pollfd pfd = {.fd = ctx->pipe_fd, .events = POLLIN};
+            const int ready = poll(&pfd, 1, 100);
+            if (ready < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                break;
+            }
+            if (ready == 0) {
+                continue;
+            }
+
+            client_fd = ctx->pipe_fd;
+        } else {
+            struct pollfd pfd = {.fd = ctx->listen_fd, .events = POLLIN};
+            const int ready = poll(&pfd, 1, 100);
+            if (ready < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                break;
+            }
+            if (ready == 0) {
+                continue;
+            }
+
+            client_fd = accept(ctx->listen_fd, NULL, NULL);
+            if (client_fd < 0) {
+                if (ctx->stop) {
+                    break;
+                }
+                continue;
+            }
         }
 
         char *request = NULL;
@@ -380,7 +407,9 @@ static bool ipc_server_loop(IpcTransportContext *ctx, bool is_pipe) {
         }
 
         ctx->active_fd = -1;
-        close(client_fd);
+        if (!is_pipe) {
+            close(client_fd);
+        }
     }
     return true;
 }
@@ -405,6 +434,14 @@ static bool pipe_start(DaemonTransport *self, const DaemonConfig *cfg) {
         return false;
     }
 
+    ctx->pipe_fd = open(ctx->endpoint, O_RDWR);
+    if (ctx->pipe_fd < 0) {
+        LOG_ERROR("Failed to open FIFO '%s'", ctx->endpoint);
+        (void)unlink(ctx->endpoint);
+        return false;
+    }
+
+    ctx->pipe_fd = -1;
     ctx->listen_fd = -1;
     ctx->active_fd = -1;
     ctx->stop = false;
@@ -427,11 +464,14 @@ static void pipe_stop(DaemonTransport *self) {
     if (ctx->active_fd >= 0) {
         shutdown(ctx->active_fd, SHUT_RDWR);
     }
-    int probe = open(ctx->endpoint, O_WRONLY | O_NONBLOCK);
-    if (probe >= 0) {
-        close(probe);
+    if (ctx->pipe_fd >= 0) {
+        shutdown(ctx->pipe_fd, SHUT_RDWR);
     }
     pthread_join(ctx->thread, NULL);
+    if (ctx->pipe_fd >= 0) {
+        close(ctx->pipe_fd);
+        ctx->pipe_fd = -1;
+    }
     unlink(ctx->endpoint);
     ctx->started = false;
 }
@@ -1244,6 +1284,11 @@ static bool ping_transport(const AvarTransportKind kind, const DaemonConfig *cfg
 
 bool daemon_transport_ping_remote(const AvarTransportKind kind, const DaemonConfig *cfg) {
     return ping_transport(kind, cfg);
+}
+
+bool daemon_transport_ping_remote_timeout(const AvarTransportKind kind, const DaemonConfig *cfg,
+                                          const unsigned timeout_ms) {
+    return ping_transport_timeout(kind, cfg, timeout_ms);
 }
 
 bool daemon_transport_ping_any_timeout(const DaemonConfig *cfg, const unsigned timeout_ms) {

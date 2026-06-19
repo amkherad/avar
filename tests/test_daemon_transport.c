@@ -126,6 +126,7 @@ AVAR_TEST(transport_pipe_rpc_while_daemon_running) {
 
     AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_SESSION_MODE, AVAR_DAEMON_SESSION_MODE_REMOTE), 0);
     AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_SESSION_TRANSPORT, AVAR_DAEMON_TRANSPORT_PIPE), 0);
+    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_CHANNELS_HTTP_ENABLED, "false"), 0);
 
     DaemonConfig cfg;
     AVAR_ASSERT(load_cfg(&cfg));
@@ -142,7 +143,7 @@ AVAR_TEST(transport_pipe_rpc_while_daemon_running) {
 
     bool ready = false;
     for (int i = 0; i < 50; ++i) {
-        if (daemon_transport_ping_any_timeout(&cfg, 100U)) {
+        if (daemon_transport_ping_remote_timeout(AvarTransportPipe, &cfg, 100U)) {
             ready = true;
             break;
         }
