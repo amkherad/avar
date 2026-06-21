@@ -87,45 +87,52 @@ export function ShortcutsSettings() {
     <div className="avar-shortcuts-settings">
       <p className="avar-settings-hint">{t("shortcuts.hint")}</p>
 
-      <div className="avar-data-table-wrap">
-        <table className="avar-data-table avar-shortcuts-settings__table">
-          <thead>
-            <tr>
-              <th scope="col">{t("shortcuts.columnAction")}</th>
-              <th scope="col">{t("shortcuts.columnKeys")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) =>
-              row.type === "category" ? (
-                <tr key={`cat-${row.key}`} className="avar-shortcuts-settings__category-row">
-                  <th colSpan={2} scope="rowgroup">
-                    {t(row.key)}
-                  </th>
-                </tr>
-              ) : (
-                <tr key={row.id}>
-                  <td>{t(row.labelKey)}</td>
-                  <td>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      className="avar-shortcuts-settings__combo"
-                      onClick={() => handleRecord(row.id)}
-                    >
-                      {formatCombo(shortcuts[row.id])}
-                    </Button>
-                  </td>
-                </tr>
-              ),
-            )}
-          </tbody>
-        </table>
-      </div>
+      <div className="avar-shortcuts-settings__table-block">
+        <div className="avar-data-table-wrap">
+          <table className="avar-data-table avar-shortcuts-settings__table">
+            <thead>
+              <tr>
+                <th scope="col">{t("shortcuts.columnAction")}</th>
+                <th scope="col">{t("shortcuts.columnKeys")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) =>
+                row.type === "category" ? (
+                  <tr key={`cat-${row.key}`} className="avar-shortcuts-settings__category-row">
+                    <th colSpan={2} scope="rowgroup">
+                      {t(row.key)}
+                    </th>
+                  </tr>
+                ) : (
+                  <tr key={row.id}>
+                    <td>{t(row.labelKey)}</td>
+                    <td>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="avar-shortcuts-settings__combo"
+                        onClick={() => handleRecord(row.id)}
+                      >
+                        {formatCombo(shortcuts[row.id])}
+                      </Button>
+                    </td>
+                  </tr>
+                ),
+              )}
+            </tbody>
+          </table>
+        </div>
 
-      <Button size="sm" variant="ghost" onClick={resetAll}>
-        {t("shortcuts.resetAll")}
-      </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="avar-shortcuts-settings__reset"
+          onClick={resetAll}
+        >
+          {t("shortcuts.resetAll")}
+        </Button>
+      </div>
     </div>
   );
 }

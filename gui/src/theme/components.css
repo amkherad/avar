@@ -2543,6 +2543,23 @@
   min-height: 0;
 }
 
+.avar-shortcuts-settings__table-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: fit-content;
+  max-width: 100%;
+  min-width: min(100%, 28rem);
+}
+
+.avar-shortcuts-settings__table-block .avar-data-table-wrap {
+  width: 100%;
+}
+
+.avar-shortcuts-settings__reset {
+  align-self: stretch;
+}
+
 .avar-shortcuts-settings__table {
   table-layout: fixed;
   width: 100%;

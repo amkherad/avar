@@ -100,6 +100,7 @@ export function QueueTable({
         id: "status",
         header: t("queue.tableStatus"),
         sortKey: "status",
+        headerLayout: "stacked",
         width: columnWidths.status,
         minWidth: 80,
         maxWidth: 300,
