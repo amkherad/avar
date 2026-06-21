@@ -8,6 +8,7 @@ const CATEGORIES: SettingsCategory[] = [
   "daemon",
   "browser",
   "shortcuts",
+  "about",
 ];
 
 export interface SettingsSidebarNavProps {

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { useConfigStore } from "@/stores/configStore";
 import type { FooterMonitorSettings, LocaleId, SyncChannelId, ThemeId } from "@/config/defaults";
 import i18n, { isRtlLocale } from "@/i18n";
-import { getBuildInfo } from "@/lib/buildInfo";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { isPwaSupported } from "@/lib/pwa";
 import { requestNotificationPermission } from "@/lib/notificationService";
@@ -14,7 +13,6 @@ export function GeneralSettings() {
   const { t } = useTranslation();
   const config = useConfigStore((s) => s.config);
   const updateConfig = useConfigStore((s) => s.updateConfig);
-  const build = getBuildInfo();
   const pwa = usePwaInstall();
 
   function setLocale(locale: LocaleId) {
@@ -174,28 +172,6 @@ export function GeneralSettings() {
           )}
         </section>
       ) : null}
-
-      <section className="avar-settings-build">
-        <h3 className="avar-settings-build__heading">{t("settings.buildInfo")}</h3>
-        <dl className="avar-settings-build__list">
-          <div>
-            <dt>{t("settings.buildVersion")}</dt>
-            <dd>{build.version}</dd>
-          </div>
-          {build.date ? (
-            <div>
-              <dt>{t("settings.buildDate")}</dt>
-              <dd>{build.date}</dd>
-            </div>
-          ) : null}
-          {build.commit ? (
-            <div>
-              <dt>{t("settings.buildCommit")}</dt>
-              <dd className="avar-settings-build__mono">{build.commit}</dd>
-            </div>
-          ) : null}
-        </dl>
-      </section>
     </form>
   );
 }

@@ -61,4 +61,8 @@ Per-download proxy overrides are available in **Add download**. Global proxy set
 - **File logging** — Optionally write daemon logs to a file path.
 - **Remote file download** — When enabled, the daemon serves completed files at `GET /api/downloads/{id}/file`. Required for **Copy to local folder** on remote sessions. Disabled by default in `config.json` (`daemon.server.fileDownload.enabled`).
 
+### ✨ About
+
+The last item in the settings sidebar. Shows **front-end** and **back-end (daemon)** version numbers, author credits, open-source license link, sponsor invitation, and support buttons (GitHub Sponsors and Star).
+
 Settings (theme, language, server labels/URLs, and monitor toggles) are stored locally in the browser or Electron profile (`localStorage`). Auth tokens are kept separately.

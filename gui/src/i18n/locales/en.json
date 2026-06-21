@@ -220,12 +220,13 @@
       "localDownloadPath": "Local download folder"
     },
     "categories": {
-      "general": "General",
-      "downloads": "Downloads",
-      "queues": "Queues",
-      "daemon": "Daemon",
-      "browser": "Browser integration",
-      "shortcuts": "Shortcuts"
+      "general": "🌐 General",
+      "downloads": "📥 Downloads",
+      "queues": "📋 Queues",
+      "daemon": "🖥️ Daemon",
+      "browser": "🧩 Browser integration",
+      "shortcuts": "⌨️ Shortcuts",
+      "about": "✨ About"
     },
     "notifications": {
       "title": "Notifications",
@@ -308,6 +309,28 @@
       "remoteFileDownload": "Remote file download",
       "remoteFileDownloadHint": "Allow the GUI to fetch completed files from this daemon over HTTP (for copy to local folder on remote sessions). Disabled by default.",
       "fileDownloadEnabled": "Allow HTTP download of completed files"
+    },
+    "about": {
+      "intro": "Avar is a cross-platform download manager — fast, open, and built to stay out of your way. Thank you for being here. 💙",
+      "versionTitle": "📦 Version",
+      "frontendVersion": "Front-end",
+      "backendVersion": "Back-end (daemon)",
+      "backendDisconnected": "Connect to a session to see the daemon version",
+      "backendLoading": "Loading…",
+      "backendUnknown": "Unavailable",
+      "authorTitle": "👤 Author",
+      "authorText": "Created and maintained by Ali Kherad — crafting reliable download tooling in pure C and modern web tech.",
+      "authorButton": "🐙 GitHub @amkherad",
+      "licenseTitle": "📜 Open Source License",
+      "licenseText": "Avar is open source. You are free to use, study, modify, and share it under the project license.",
+      "licenseButton": "📄 View license on GitHub",
+      "sponsorsTitle": "🚀 Sponsors",
+      "sponsorsText": "Want to see Avar move faster? Become a sponsor and help fund development, testing, and cross-platform polish — your logo could shine right here. ✨",
+      "sponsorsButton": "⭐ Become a sponsor",
+      "donateTitle": "💝 Support the project",
+      "donateText": "Enjoying Avar? A small contribution — even the price of a coffee — keeps downloads flowing and features landing. Every bit of support means the world. ☕",
+      "donateButtonSponsor": "💖 Sponsor on GitHub",
+      "donateButtonStar": "🌟 Star on GitHub"
     }
   },
   "shortcuts": {

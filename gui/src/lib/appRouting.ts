@@ -18,6 +18,7 @@ const SETTINGS_CATEGORIES = new Set<SettingsCategory>([
   "daemon",
   "browser",
   "shortcuts",
+  "about",
 ]);
 
 const HELP_TOPIC_IDS = new Set(HELP_TOPICS.map((topic) => topic.id));

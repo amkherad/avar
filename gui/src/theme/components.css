@@ -2349,6 +2349,48 @@
   font-size: 0.85rem;
 }
 
+.avar-about {
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.avar-about__intro {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--avar-text);
+}
+
+.avar-about__section {
+  padding-top: 0.25rem;
+}
+
+.avar-about__section--highlight {
+  padding: 1rem 1.1rem;
+  border-radius: var(--avar-radius);
+  border: 1px solid var(--avar-border);
+  background: var(--avar-bg-muted);
+}
+
+.avar-about__heading {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.avar-about__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.avar-about__link-btn {
+  text-decoration: none;
+}
+
 .avar-settings-form {
   max-width: 420px;
   display: flex;

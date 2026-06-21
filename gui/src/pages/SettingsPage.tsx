@@ -5,8 +5,16 @@ import { DownloadSettings } from "@/components/settings/DownloadSettings";
 import { QueueDefaultsSettings } from "@/components/settings/QueueDefaultsSettings";
 import { DaemonSettings } from "@/components/settings/DaemonSettings";
 import { BrowserIntegrationSettings } from "@/components/settings/BrowserIntegrationSettings";
+import { AboutSettings } from "@/components/settings/AboutSettings";
 
-export type SettingsCategory = "general" | "downloads" | "queues" | "daemon" | "browser" | "shortcuts";
+export type SettingsCategory =
+  | "general"
+  | "downloads"
+  | "queues"
+  | "daemon"
+  | "browser"
+  | "shortcuts"
+  | "about";
 
 export interface SettingsPageProps {
   category: SettingsCategory;
@@ -24,6 +32,7 @@ export function SettingsPage({ category }: SettingsPageProps) {
       {category === "daemon" ? <DaemonSettings /> : null}
       {category === "browser" ? <BrowserIntegrationSettings /> : null}
       {category === "shortcuts" ? <ShortcutsSettings /> : null}
+      {category === "about" ? <AboutSettings /> : null}
     </div>
   );
 }
