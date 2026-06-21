@@ -8,7 +8,7 @@ on:
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -66,6 +66,14 @@ jobs:
           cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
           cmake --build build-gui --target avar-gui --parallel
 
+      - name: Install Electron build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libasound2t64 libxtst6
+
+      - name: Build all-in-one avar
+        run: python scripts/build_all.py --build-dir build-all --config Release --output-dir dist-all
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -73,13 +81,14 @@ jobs:
           path: |
             build/avar
             build-gui/avar-gui
+            dist-all/avar
             gui/dist
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: test-and-build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     permissions:
       contents: write
     steps:
@@ -115,13 +124,22 @@ jobs:
           cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
           cmake --build build-gui --target avar-gui --parallel
 
+      - name: Install Electron build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libasound2t64 libxtst6
+
+      - name: Build all-in-one avar
+        run: python scripts/build_all.py --build-dir build-all --config Release --output-dir dist-all
+
       - name: Package release assets
         run: |
           mkdir -p dist
           cp build/avar dist/avar
           cp build-gui/avar-gui dist/avar-gui
+          cp dist-all/avar dist/avar-all
           tar -czf avar-gui-dist.tar.gz -C gui dist
-          chmod +x dist/avar dist/avar-gui
+          chmod +x dist/avar dist/avar-gui dist/avar-all
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -129,5 +147,6 @@ jobs:
           files: |
             dist/avar
             dist/avar-gui
+            dist/avar-all
             avar-gui-dist.tar.gz
           generate_release_notes: true

@@ -51,6 +51,8 @@ function loadAppIcon() {
 }
 
 const DAEMON_TARGET = process.env.AVAR_DAEMON_URL || "http://127.0.0.1:8000";
+const BUNDLED_GUI_URL = process.env.AVAR_GUI_URL || "";
+const IS_BUNDLED = process.env.AVAR_BUNDLED === "1";
 const PROXY_HOST = "127.0.0.1";
 const PROXY_PORT = Number(process.env.AVAR_ELECTRON_PROXY_PORT || 18765);
 
@@ -356,7 +358,9 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  if (isDev && process.env.VITE_DEV_SERVER_URL) {
+  if (BUNDLED_GUI_URL) {
+    void win.loadURL(BUNDLED_GUI_URL);
+  } else if (isDev && process.env.VITE_DEV_SERVER_URL) {
     void win.loadURL(process.env.VITE_DEV_SERVER_URL);
     win.webContents.openDevTools({ mode: "detach" });
   } else {

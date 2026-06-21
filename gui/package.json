@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "build:desktop": "npm run build && electron-builder --mac --win --linux",
     "build:desktop:current": "npm run build && electron-builder",
+    "build:all": "python ../scripts/build_all.py",
     "icons": "node scripts/generate-icons.cjs"
   },
   "dependencies": {

@@ -21,6 +21,8 @@ cmake-build-test/
 /build-coverage-test/
 /build-coverage/
 /build-gui/
+/build-all/
+/dist-all/
 
 # VSCode #
 ###########
@@ -91,4 +93,3 @@ DerivedData/
 # General project files #
 ######################
 # Ignore all files except those explicitly included
-

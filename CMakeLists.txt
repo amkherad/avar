@@ -198,8 +198,9 @@ add_subdirectory(tests)
 set(DEBUG 1)
 
 option(AVAR_BUILD_GUI "Build avar-gui executable with embedded web UI" OFF)
+option(AVAR_BUILD_ALL "Build avar with embedded web UI and GUI launcher (all-in-one)" OFF)
 
-if(AVAR_BUILD_GUI)
+if(AVAR_BUILD_GUI OR AVAR_BUILD_ALL)
     find_program(NPM_EXECUTABLE npm REQUIRED)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
@@ -224,21 +225,35 @@ if(AVAR_BUILD_GUI)
         VERBATIM
     )
 
-    add_executable(avar-gui
-            "${SRC_DIR}/main.c"
-            "${GUI_EMBED_C}"
-    )
+    if(AVAR_BUILD_GUI)
+        add_executable(avar-gui
+                "${SRC_DIR}/main.c"
+                "${GUI_EMBED_C}"
+        )
 
-    target_link_libraries(avar-gui PRIVATE avar_cli)
-    target_include_directories(avar-gui PRIVATE
-            "${CMAKE_BINARY_DIR}/generated"
-    )
+        target_link_libraries(avar-gui PRIVATE avar_cli)
+        target_include_directories(avar-gui PRIVATE
+                "${CMAKE_BINARY_DIR}/generated"
+        )
 
-    target_compile_definitions(avar-gui PRIVATE AVAR_EMBED_GUI=1)
+        target_compile_definitions(avar-gui PRIVATE AVAR_EMBED_GUI=1)
 
-    set_target_properties(avar-gui PROPERTIES
-            C_STANDARD 23
-            C_STANDARD_REQUIRED ON
-    )
-    avar_apply_coverage(avar-gui)
+        set_target_properties(avar-gui PROPERTIES
+                C_STANDARD 23
+                C_STANDARD_REQUIRED ON
+        )
+        avar_apply_coverage(avar-gui)
+    endif()
+
+    if(AVAR_BUILD_ALL)
+        target_sources(avar PRIVATE
+                "${SRC_DIR}/cli/gui_launch.c"
+                "${SRC_DIR}/cli/electron_embed.c"
+                "${GUI_EMBED_C}"
+        )
+        target_include_directories(avar PRIVATE
+                "${CMAKE_BINARY_DIR}/generated"
+        )
+        target_compile_definitions(avar PRIVATE AVAR_EMBED_GUI=1 AVAR_EMBED_ELECTRON=1)
+    endif()
 endif()

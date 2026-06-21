@@ -119,6 +119,9 @@ bool daemon_server_file_download_enabled(void);
 
 int daemon_start(const DaemonConfig *cfg);
 
+/** Request a graceful shutdown of an in-process daemon loop (no-op when idle). */
+void daemon_request_shutdown(void);
+
 int daemon_spawn_detached(const DaemonConfig *cfg);
 
 int daemon_stop(const DaemonStopOptions *opts);

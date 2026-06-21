@@ -675,6 +675,12 @@ int daemon_reload_config(DaemonConfig *cfg) {
     return EXIT_SUCCESS;
 }
 
+void daemon_request_shutdown(void) {
+    if (_daemon_loop_active) {
+        _runtime.running = false;
+    }
+}
+
 int daemon_start(const DaemonConfig *cfg) {
     if (cfg == NULL) {
         return EXIT_FAILURE;
