@@ -3560,6 +3560,67 @@ static void purge_download_files(const char *item_id) {
     cleanup_download_artifacts(item_id, true);
 }
 
+int download_resolve_dest_path(const char *id, char **path_out) {
+    if (id == NULL || path_out == NULL) {
+        return EXIT_FAILURE;
+    }
+    *path_out = NULL;
+
+    const int index = find_download_item_index(id, true);
+    if (index < 0) {
+        return EXIT_FAILURE;
+    }
+
+    char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_STATUS);
+    if (status == NULL || strcmp(status, AVAR_DL_STATUS_COMPLETED) != 0) {
+        free(status);
+        return EXIT_FAILURE;
+    }
+    free(status);
+
+    char *temp_dir = default_temp_path();
+    char *job_dir = temp_dir != NULL ? build_job_dir(temp_dir, id) : NULL;
+    char *state_path = job_dir != NULL ? build_state_path(job_dir) : NULL;
+    DownloadState *state = state_path != NULL ? download_state_load(state_path) : NULL;
+
+    char *resolved = NULL;
+    if (state != NULL && state->dest_path != NULL && state->dest_path[0] != '\0') {
+        resolved = strdup(state->dest_path);
+    }
+
+    if (state != NULL) {
+        download_state_free(state);
+    }
+    free(state_path);
+    free(job_dir);
+    free(temp_dir);
+
+    if (resolved == NULL) {
+        char *filename =
+            get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_FILENAME);
+        char *download_dir = default_download_path();
+        if (filename == NULL || download_dir == NULL) {
+            free(filename);
+            free(download_dir);
+            return EXIT_FAILURE;
+        }
+        resolved = path_join(download_dir, filename);
+        free(filename);
+        free(download_dir);
+        if (resolved == NULL) {
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (!file_exists(resolved)) {
+        free(resolved);
+        return EXIT_FAILURE;
+    }
+
+    *path_out = resolved;
+    return EXIT_SUCCESS;
+}
+
 int download_remove(const char *target, const bool by_id, const bool purge_files, const bool force) {
     (void)force;
 

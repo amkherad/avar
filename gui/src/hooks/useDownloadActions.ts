@@ -5,6 +5,7 @@ import {
   deleteDownloads,
   pauseDownloads,
   resumeDownloads,
+  redownloadDownloads,
   startDownloads,
   stopDownloads,
   togglePauseResume,
@@ -15,17 +16,32 @@ import {
   canResume,
   canStart,
   canStop,
+  canRedownload,
   isPaused,
 } from "@/lib/downloadStatus";
+import { copyDownloadToLocal } from "@/lib/copyDownloadToLocal";
+import { isRemoteSession } from "@/lib/sessionRemote";
 import { showConfirmDialog } from "@/lib/popup";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { useConfigStore } from "@/stores/configStore";
 import { useDataStore } from "@/stores/dataStore";
 
 export function useDownloadActions() {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
+  const activeSession = useConnectionStore((s) => s.activeSession);
+  const localDownloadPath = useConfigStore((s) => s.config.localDownloadPath);
   const allDownloads = useDataStore((s) => s.downloads);
+  const fileDownloadEnabled = useDataStore((s) => s.health?.fileDownloadEnabled === true);
   const [busy, setBusy] = useState(false);
+
+  const remoteSessionActive =
+    activeSession !== null && isRemoteSession(activeSession);
+  const localCopyReady = localDownloadPath.trim().length > 0;
+  const copyToLocalAvailable =
+    remoteSessionActive && fileDownloadEnabled && localCopyReady;
+  const copyToLocalVisible =
+    remoteSessionActive && fileDownloadEnabled;
 
   const withBusy = useCallback(
     async (action: () => Promise<void>) => {
@@ -144,6 +160,46 @@ export function useDownloadActions() {
     [allDownloads, client, withBusy],
   );
 
+  const redownload = useCallback(
+    (items: DownloadInfo[]) =>
+      withBusy(async () => {
+        if (!client) {
+          return;
+        }
+        const result = await showConfirmDialog({
+          title: t("download.redownloadConfirmTitle"),
+          message:
+            items.length === 1
+              ? t("download.redownloadConfirm", { name: items[0].filename })
+              : t("download.redownloadConfirmBatch", { count: items.length }),
+          confirmLabel: t("download.redownload"),
+          cancelLabel: t("common.cancel"),
+        });
+        if (!result.confirmed) {
+          return;
+        }
+        await redownloadDownloads(client, items);
+      }),
+    [client, t, withBusy],
+  );
+
+  const copyToLocal = useCallback(
+    (items: DownloadInfo[]) =>
+      withBusy(async () => {
+        if (!activeSession || !copyToLocalAvailable) {
+          return;
+        }
+        for (const item of items) {
+          await copyDownloadToLocal({
+            session: activeSession,
+            download: item,
+            localDownloadPath: localDownloadPath.trim(),
+          });
+        }
+      }),
+    [activeSession, copyToLocalAvailable, localDownloadPath, withBusy],
+  );
+
   return {
     busy,
     pause,
@@ -152,12 +208,20 @@ export function useDownloadActions() {
     stop,
     remove,
     removeWithConfirm,
+    redownload,
+    copyToLocal,
+    remoteSessionActive,
+    fileDownloadEnabled,
+    localCopyReady,
+    copyToLocalAvailable,
+    copyToLocalVisible,
     togglePause,
     toggleStart,
     canPause,
     canResume,
     canStart,
     canStop,
+    canRedownload,
     isPaused,
   };
 }

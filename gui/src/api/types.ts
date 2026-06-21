@@ -90,6 +90,7 @@ export interface HealthInfo {
   queueCount: number;
   activeDownloads: number;
   uptimeSeconds: number;
+  fileDownloadEnabled?: boolean;
   downloads: Array<{
     id: string;
     filename: string;

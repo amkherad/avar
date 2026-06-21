@@ -234,8 +234,6 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             selectedQueues={selectedQueues}
-            showCheckboxes={showCheckboxes}
-            onToggleCheckboxes={() => setShowCheckboxes((value) => !value)}
             batchBusy={batchBusy}
             onBatchStart={(ids) =>
               void runBatchQueueAction(ids, (id) => client!.startQueue(id))
@@ -256,6 +254,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             onDelete={(id) => void confirmDelete([id])}
             onToggleSelect={handleToggleSelect}
             onSelectAll={handleSelectAll}
+            onToggleCheckboxes={() => setShowCheckboxes((value) => !value)}
             onContextMenu={handleContextMenu}
             busyId={busyId}
             batchBusy={batchBusy}

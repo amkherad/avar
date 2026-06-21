@@ -95,6 +95,7 @@ void daemon_config_apply_defaults(DaemonConfig *cfg) {
              AVAR_DAEMON_AUTO_SHUTDOWN_NEVER);
     cfg->server.auto_shutdown_idle_seconds = AVAR_DAEMON_AUTO_SHUTDOWN_IDLE_SECONDS_DEFAULT;
     cfg->server.auth_token[0] = '\0';
+    cfg->server.file_download_enabled = false;
     cfg->server.cors.enabled = true;
     snprintf(cfg->server.cors.allow_origin, sizeof cfg->server.cors.allow_origin, "%s", "*");
     default_pid_file_path(cfg->server.pid_file, sizeof cfg->server.pid_file);
@@ -224,6 +225,9 @@ bool daemon_config_load(DaemonConfig *out) {
     load_string_key(AVAR_CFG_DAEMON_SERVER_AUTH_TOKEN, out->server.auth_token,
                     sizeof out->server.auth_token);
 
+    load_bool_key(AVAR_CFG_DAEMON_SERVER_FILE_DOWNLOAD_ENABLED,
+                  &out->server.file_download_enabled);
+
     load_bool_key(AVAR_CFG_DAEMON_SERVER_CORS_ENABLED, &out->server.cors.enabled);
     load_string_key(AVAR_CFG_DAEMON_SERVER_CORS_ALLOW_ORIGIN, out->server.cors.allow_origin,
                     sizeof out->server.cors.allow_origin);
@@ -295,4 +299,12 @@ void daemon_config_apply_start_options(DaemonConfig *cfg, const DaemonStartOptio
     if (opts->pid_file != NULL && opts->pid_file[0] != '\0') {
         snprintf(cfg->server.pid_file, sizeof cfg->server.pid_file, "%s", opts->pid_file);
     }
+}
+
+bool daemon_server_file_download_enabled(void) {
+    char *value = get_config_or_default(AVAR_CFG_DAEMON_SERVER_FILE_DOWNLOAD_ENABLED, "false");
+    const bool enabled =
+        value != NULL && (strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
+    free(value);
+    return enabled;
 }

@@ -1,13 +1,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faCopy } from "@fortawesome/free-solid-svg-icons";
+import { faCopy, faDownload, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
 import type { DownloadInfo } from "@/api/types";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import { canRedownload, isCompleted } from "@/lib/downloadStatus";
 import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
+import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { formatBytePair, progressPercent } from "./format";
 import { DownloadProgressBar } from "./DownloadProgressBar";
 
@@ -34,6 +36,8 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
 
 export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadDetailViewProps) {
   const { t } = useTranslation();
+  const { busy, redownload, copyToLocal, copyToLocalAvailable, copyToLocalVisible, localCopyReady } =
+    useDownloadActions();
   const percent = progressPercent(download.bytesDownloaded, download.totalBytes);
   const [copied, setCopied] = useState(false);
 
@@ -129,6 +133,30 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
       </dl>
 
       <div className="avar-download-detail__actions">
+        {canRedownload(download.status) && download.url ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={busy}
+            onClick={() => void redownload([download])}
+          >
+            <FontAwesomeIcon icon={faRotateRight} />
+            {t("download.redownload")}
+          </Button>
+        ) : null}
+        {copyToLocalVisible && isCompleted(download.status) ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={busy}
+            disabled={!copyToLocalAvailable}
+            title={!localCopyReady ? t("download.copyToLocalNeedsPath") : undefined}
+            onClick={() => void copyToLocal([download])}
+          >
+            <FontAwesomeIcon icon={faDownload} />
+            {t("download.copyToLocal")}
+          </Button>
+        ) : null}
         {download.url ? (
           <Button size="sm" variant="secondary" onClick={() => void handleCopyCurl()}>
             <FontAwesomeIcon icon={faCopy} />

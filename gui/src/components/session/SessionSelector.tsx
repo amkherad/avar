@@ -38,6 +38,7 @@ export function SessionSelector() {
   const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8000");
   const [authToken, setAuthToken] = useState("");
   const [useRelativeApi, setUseRelativeApi] = useState(false);
+  const [forceRemote, setForceRemote] = useState(false);
   const [testResult, setTestResult] = useState<"idle" | "ok" | "fail">("idle");
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -83,6 +84,7 @@ export function SessionSelector() {
     setBaseUrl("http://127.0.0.1:8000");
     setAuthToken("");
     setUseRelativeApi(false);
+    setForceRemote(false);
     setTestResult("idle");
     setMenuOpen(false);
     setModalOpen(true);
@@ -100,6 +102,7 @@ export function SessionSelector() {
     setBaseUrl(session.baseUrl);
     setAuthToken(session.authToken ?? "");
     setUseRelativeApi(session.useRelativeApi ?? false);
+    setForceRemote(session.forceRemote ?? false);
     setTestResult("idle");
     setMenuOpen(false);
     setModalOpen(true);
@@ -112,6 +115,7 @@ export function SessionSelector() {
       label: label.trim() || "Session",
       baseUrl: baseUrl.trim(),
       useRelativeApi,
+      forceRemote,
     };
 
     const sessions = editingId
@@ -292,6 +296,15 @@ export function SessionSelector() {
           />
           {t("session.useProxy")}
         </label>
+        <label className="avar-checkbox-row">
+          <input
+            type="checkbox"
+            checked={forceRemote}
+            onChange={(e) => setForceRemote(e.target.checked)}
+          />
+          {t("session.forceRemote")}
+        </label>
+        <p className="avar-settings-hint">{t("session.forceRemoteHint")}</p>
         {testResult === "ok" ? (
           <span style={{ color: "var(--avar-success)" }}>{t("session.connected")}</span>
         ) : null}

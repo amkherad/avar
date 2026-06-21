@@ -16,6 +16,7 @@ Use the inner sidebar to switch between setting groups.
   - *WebSockets* — bidirectional WebSocket channel.
 - **Refresh interval** — Poll frequency when using periodic sync (seconds).
 - **Connection check interval** — How often the GUI pings the daemon (seconds).
+- **Remote downloads** — **Local download folder** used when you copy completed files from a remote daemon to your computer (see **Copy to local folder** in the downloads panel). Ignored for local sessions.
 - **Footer monitors** — Toggle disk, memory, CPU, and network stats in the footer (collected from the daemon when connected). Choose **Text values** or **Histogram + values** to show sparkline-style history for memory, CPU, and network. Histogram mode keeps labels inline with semi-transparent values overlaid on the chart.
 - **Notifications** — Toggle desktop notifications for download status changes, queue start/stop, and connection alerts. In the browser, you may still need to grant notification permission separately.
 - **Install web app** — Install Avar as a standalone PWA (when your browser supports it).
@@ -58,5 +59,6 @@ Per-download proxy overrides are available in **Add download**. Global proxy set
 
 - **Auto shutdown** — Never, or when idle (no active downloads). When idle shutdown is enabled, set **Idle time before shutdown** in seconds.
 - **File logging** — Optionally write daemon logs to a file path.
+- **Remote file download** — When enabled, the daemon serves completed files at `GET /api/downloads/{id}/file`. Required for **Copy to local folder** on remote sessions. Disabled by default in `config.json` (`daemon.server.fileDownload.enabled`).
 
 Settings (theme, language, server labels/URLs, and monitor toggles) are stored locally in the browser or Electron profile (`localStorage`). Auth tokens are kept separately.

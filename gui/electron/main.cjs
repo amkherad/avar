@@ -9,6 +9,7 @@ const {
   nativeImage,
 } = require("electron");
 const http = require("node:http");
+const fs = require("node:fs");
 const path = require("node:path");
 const {
   setExtensionBridgeEnabled,
@@ -417,6 +418,30 @@ ipcMain.handle("notification:show", (_event, options) => {
 
 ipcMain.handle("daemon:getProxyBaseUrl", () => {
   return `http://${PROXY_HOST}:${PROXY_PORT}`;
+});
+
+ipcMain.handle("download:saveRemoteFile", async (_event, options) => {
+  const fileUrl = options?.fileUrl;
+  const destDir = options?.destDir;
+  const filename = options?.filename;
+  if (!fileUrl || !destDir || !filename) {
+    throw new Error("Missing download copy parameters");
+  }
+
+  const headers = {};
+  if (options.authToken?.trim()) {
+    headers.Authorization = `Bearer ${options.authToken.trim()}`;
+  }
+
+  const response = await fetch(fileUrl, { headers });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch remote file (${response.status})`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  fs.mkdirSync(destDir, { recursive: true });
+  const destPath = path.join(destDir, path.basename(filename));
+  fs.writeFileSync(destPath, buffer);
 });
 
 ipcMain.handle("extensionBridge:setEnabled", (_event, enabled) => {

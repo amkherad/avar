@@ -1,18 +1,13 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { FontAwesomeIcon } from "@/icons";
-import { faCheckSquare } from "@fortawesome/free-solid-svg-icons";
 import type { QueueInfo } from "@/api/types";
 import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
 import { QueueControls } from "@/components/queue/QueueControls";
 
 export interface QueueToolbarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   selectedQueues: QueueInfo[];
-  showCheckboxes: boolean;
-  onToggleCheckboxes: () => void;
   batchBusy?: boolean;
   onBatchStart: (ids: string[]) => void;
   onBatchStop: (ids: string[]) => void;
@@ -23,8 +18,6 @@ export function QueueToolbar({
   searchQuery,
   onSearchChange,
   selectedQueues,
-  showCheckboxes,
-  onToggleCheckboxes,
   batchBusy = false,
   onBatchStart,
   onBatchStop,
@@ -50,18 +43,6 @@ export function QueueToolbar({
             />
           </div>
         ) : null}
-
-        <div className="avar-download-toolbar__group">
-          <Button
-            size="sm"
-            variant={showCheckboxes ? "secondary" : "ghost"}
-            aria-pressed={showCheckboxes}
-            title={t("queue.toggleCheckboxes")}
-            onClick={onToggleCheckboxes}
-          >
-            <FontAwesomeIcon icon={faCheckSquare} />
-          </Button>
-        </div>
       </div>
 
       <Input

@@ -1,8 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import {
+  faDownload,
   faPause,
   faPlay,
+  faRotateRight,
   faStop,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
@@ -14,6 +16,8 @@ import {
   canResume,
   canStart,
   canStop,
+  canRedownload,
+  isCompleted,
 } from "@/lib/downloadStatus";
 
 export interface DownloadControlsProps {
@@ -23,7 +27,18 @@ export interface DownloadControlsProps {
 
 export function DownloadControls({ downloads, className = "" }: DownloadControlsProps) {
   const { t } = useTranslation();
-  const { busy, pause, resume, start, stop, removeWithConfirm } = useDownloadActions();
+  const {
+    busy,
+    pause,
+    resume,
+    start,
+    stop,
+    removeWithConfirm,
+    redownload,
+    copyToLocal,
+    copyToLocalAvailable,
+    copyToLocalVisible,
+  } = useDownloadActions();
 
   const ids = downloads.map((item) => item.id);
 
@@ -31,6 +46,11 @@ export function DownloadControls({ downloads, className = "" }: DownloadControls
   const anyResumable = downloads.some((item) => canResume(item.status));
   const anyStartable = downloads.some((item) => canStart(item.status));
   const anyStoppable = downloads.some((item) => canStop(item.status));
+  const anyRedownloadable = downloads.some(
+    (item) => canRedownload(item.status) && Boolean(item.url),
+  );
+  const anyCopyToLocal =
+    copyToLocalVisible && downloads.some((item) => isCompleted(item.status));
 
   return (
     <div className={`avar-download-controls ${className}`.trim()}>
@@ -84,6 +104,31 @@ export function DownloadControls({ downloads, className = "" }: DownloadControls
           onClick={() => void resume(ids)}
         >
           <FontAwesomeIcon icon={faPlay} />
+        </ShortcutButton>
+      ) : null}
+      {anyRedownloadable ? (
+        <ShortcutButton
+          size="sm"
+          variant="secondary"
+          loading={busy}
+          registerShortcut={false}
+          aria-label={t("download.redownload")}
+          onClick={() => void redownload(downloads)}
+        >
+          <FontAwesomeIcon icon={faRotateRight} />
+        </ShortcutButton>
+      ) : null}
+      {anyCopyToLocal ? (
+        <ShortcutButton
+          size="sm"
+          variant="secondary"
+          loading={busy}
+          registerShortcut={false}
+          disabled={!copyToLocalAvailable}
+          aria-label={t("download.copyToLocal")}
+          onClick={() => void copyToLocal(downloads.filter((item) => isCompleted(item.status)))}
+        >
+          <FontAwesomeIcon icon={faDownload} />
         </ShortcutButton>
       ) : null}
       <ShortcutButton

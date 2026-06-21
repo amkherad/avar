@@ -2,15 +2,17 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   faCircleInfo,
+  faDownload,
   faPause,
   faPlay,
+  faRotateRight,
   faStop,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import type { DownloadInfo } from "@/api/types";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
-import { canPause, canResume, canStart, canStop } from "@/lib/downloadStatus";
+import { canPause, canResume, canStart, canStop, canRedownload, isCompleted } from "@/lib/downloadStatus";
 import { openDownloadPopup } from "@/lib/popup";
 
 export interface DownloadContextMenuProps {
@@ -57,6 +59,27 @@ export function DownloadContextMenu({ download, position, onClose }: DownloadCon
         disabled: !canResume(download.status) || actions.busy,
         onClick: () => void actions.resume([download.id]),
       },
+      {
+        id: "redownload",
+        label: t("download.redownload"),
+        icon: faRotateRight,
+        disabled: !canRedownload(download.status) || !download.url || actions.busy,
+        onClick: () => void actions.redownload([download]),
+      },
+      ...(actions.copyToLocalVisible && isCompleted(download.status)
+        ? [
+            {
+              id: "copyToLocal",
+              label: t("download.copyToLocal"),
+              icon: faDownload,
+              disabled: !actions.copyToLocalAvailable || actions.busy,
+              title: !actions.localCopyReady
+                ? t("download.copyToLocalNeedsPath")
+                : undefined,
+              onClick: () => void actions.copyToLocal([download]),
+            } satisfies ContextMenuItem,
+          ]
+        : []),
       {
         id: "details",
         label: t("download.detailsTitle"),

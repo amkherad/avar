@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { useDataStore } from "@/stores/dataStore";
 import { appLogger } from "@/lib/appLogger";
 
 const CONFIG_DEFAULTS = {
@@ -11,6 +12,7 @@ const CONFIG_DEFAULTS = {
   autoShutdownIdleSeconds: "60",
   logEnabled: "false",
   logPath: "",
+  fileDownloadEnabled: "false",
 } as const;
 
 export function DaemonSettings() {
@@ -22,6 +24,7 @@ export function DaemonSettings() {
   );
   const [logEnabled, setLogEnabled] = useState(false);
   const [logPath, setLogPath] = useState("");
+  const [fileDownloadEnabled, setFileDownloadEnabled] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +52,12 @@ export function DaemonSettings() {
         (await client.getConfig("log.file.path", CONFIG_DEFAULTS.logPath)) ??
           CONFIG_DEFAULTS.logPath,
       );
+      setFileDownloadEnabled(
+        (await client.getConfig(
+          "daemon.server.fileDownload.enabled",
+          CONFIG_DEFAULTS.fileDownloadEnabled,
+        )) === "true",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
     }
@@ -72,7 +81,12 @@ export function DaemonSettings() {
       );
       await client.setConfig("log.file.enabled", logEnabled ? "true" : "false");
       await client.setConfig("log.file.path", logPath);
+      await client.setConfig(
+        "daemon.server.fileDownload.enabled",
+        fileDownloadEnabled ? "true" : "false",
+      );
       appLogger.gui.info("Daemon settings saved");
+      await useDataStore.getState().refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
     } finally {
@@ -118,6 +132,19 @@ export function DaemonSettings() {
           onChange={(e) => setLogPath(e.target.value)}
           disabled={!logEnabled}
         />
+      </section>
+
+      <section className="avar-settings-group">
+        <h3 className="avar-settings-group__heading">{t("settings.daemon.remoteFileDownload")}</h3>
+        <p className="avar-settings-hint">{t("settings.daemon.remoteFileDownloadHint")}</p>
+        <label className="avar-checkbox-row">
+          <input
+            type="checkbox"
+            checked={fileDownloadEnabled}
+            onChange={(e) => setFileDownloadEnabled(e.target.checked)}
+          />
+          {t("settings.daemon.fileDownloadEnabled")}
+        </label>
       </section>
 
       {error ? <p className="avar-field__error">{error}</p> : null}

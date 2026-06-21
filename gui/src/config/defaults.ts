@@ -28,6 +28,8 @@ export interface GuiSession {
   authToken?: string;
   useRelativeApi?: boolean;
   useElectronProxy?: boolean;
+  /** Override auto-detection and treat this session as remote. */
+  forceRemote?: boolean;
   /** Built-in sessions cannot be removed (e.g. Electron tunnel). */
   builtin?: boolean;
 }
@@ -47,11 +49,13 @@ export interface GuiConfig {
   showDownloadCheckboxes: boolean;
   browserExtensionEnabled: boolean;
   notificationsEnabled: boolean;
+  /** Local folder for copying files from a remote daemon (GUI-only). */
+  localDownloadPath: string;
 }
 
 export const GUI_CONFIG_KEY = "avar.gui.config";
 export const GUI_SECRETS_KEY = "avar.gui.secrets";
-export const GUI_CONFIG_VERSION = 8;
+export const GUI_CONFIG_VERSION = 9;
 
 export const defaultFooterMonitors = (): FooterMonitorSettings => ({
   disk: true,
@@ -95,4 +99,5 @@ export const defaultGuiConfig = (): GuiConfig => ({
   showDownloadCheckboxes: true,
   browserExtensionEnabled: true,
   notificationsEnabled: true,
+  localDownloadPath: "",
 });

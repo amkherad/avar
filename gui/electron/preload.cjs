@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("avar", {
   openPopup: (options) => ipcRenderer.invoke("popup:open", options),
   showNotification: (options) => ipcRenderer.invoke("notification:show", options),
   getProxyBaseUrl: () => ipcRenderer.invoke("daemon:getProxyBaseUrl"),
+  saveRemoteDownloadFile: (options) =>
+    ipcRenderer.invoke("download:saveRemoteFile", options),
   setExtensionBridgeEnabled: (enabled) =>
     ipcRenderer.invoke("extensionBridge:setEnabled", enabled),
   setExtensionBridgeConfig: (config) =>

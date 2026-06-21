@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { QueueInfo } from "@/api/types";
 import { FontAwesomeIcon } from "@/icons";
 import { faPenToSquare, faPlay, faStop, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { ResizeHandle } from "@/components/ui/ResizeHandle";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Select } from "@/components/ui/Select";
-import { Spinner } from "@/components/ui/Spinner";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import { QueueContextMenu } from "@/components/queue/QueueContextMenu";
 import { useLayoutStore } from "@/stores/layoutStore";
@@ -32,6 +31,7 @@ export interface QueueTableProps {
   onModify?: (id: string) => void;
   onToggleSelect: (id: string) => void;
   onSelectAll: (checked: boolean) => void;
+  onToggleCheckboxes: () => void;
   onContextMenu?: (id: string, event: React.MouseEvent) => void;
   busyId: string | null;
   batchBusy?: boolean;
@@ -56,12 +56,13 @@ export function QueueTable({
   onModify,
   onToggleSelect,
   onSelectAll,
+  onToggleCheckboxes,
   onContextMenu,
   busyId,
   batchBusy = false,
 }: QueueTableProps) {
   const { t } = useTranslation();
-  const columns = useLayoutStore((s) => s.queueTableColumns);
+  const columnWidths = useLayoutStore((s) => s.queueTableColumns);
   const setColumn = useLayoutStore((s) => s.setQueueTableColumn);
   const [contextMenu, setContextMenu] = useState<{
     queue: QueueInfo;
@@ -69,285 +70,181 @@ export function QueueTable({
     y: number;
   } | null>(null);
 
-  const checkboxCol = showCheckboxes ? "2.25rem " : "";
-  const gridTemplate = `${checkboxCol}${columns.name}px ${columns.description}px ${columns.status}px ${columns.downloads}px 3rem`;
-  const tableMinWidth =
-    (showCheckboxes ? 36 : 0) +
-    columns.name +
-    columns.description +
-    columns.status +
-    columns.downloads +
-    48;
-  const allSelected = queues.length > 0 && queues.every((queue) => selectedIds.includes(queue.id));
+  const columns = useMemo((): DataTableColumn<QueueInfo>[] => {
+    return [
+      {
+        id: "name",
+        header: t("queue.name"),
+        sortKey: "name",
+        width: columnWidths.name,
+        minWidth: 60,
+        maxWidth: 400,
+        onResize: (width) => setColumn("name", width),
+        render: (queue) => (
+          <TruncateWithTooltip text={queue.name} className="avar-list__title" />
+        ),
+      },
+      {
+        id: "description",
+        header: t("queue.tableDescription"),
+        sortKey: "description",
+        width: columnWidths.description,
+        minWidth: 60,
+        maxWidth: 600,
+        onResize: (width) => setColumn("description", width),
+        render: (queue) => (
+          <TruncateWithTooltip text={queue.description || "—"} className="avar-list__meta" />
+        ),
+      },
+      {
+        id: "status",
+        header: t("queue.tableStatus"),
+        sortKey: "status",
+        width: columnWidths.status,
+        minWidth: 80,
+        maxWidth: 300,
+        onResize: (width) => setColumn("status", width),
+        headerAddon: (
+          <Select
+            compact
+            className="avar-data-table__header-filter"
+            value={statusFilter}
+            aria-label={t("queue.statusFilter")}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onStatusFilterChange(e.target.value as QueueStatusFilter)}
+          >
+            <option value="all">{t("queue.statusFilterAll")}</option>
+            <option value="running">{t("queue.running")}</option>
+            <option value="stopped">{t("queue.stopped")}</option>
+          </Select>
+        ),
+        render: (queue) => {
+          if (queue.readonly) {
+            return <span className="avar-list__meta">—</span>;
+          }
+          const statusLabel = queue.running ? t("queue.running") : t("queue.stopped");
+          return <Badge tone={queue.running ? "success" : "default"}>{statusLabel}</Badge>;
+        },
+      },
+      {
+        id: "downloads",
+        header: t("queue.tableDownloads"),
+        sortKey: "downloads",
+        width: columnWidths.downloads,
+        minWidth: 60,
+        maxWidth: 200,
+        onResize: (width) => setColumn("downloads", width),
+        render: (queue) => {
+          const count = downloadCounts[queue.id] ?? 0;
+          return <Badge tone="info">{t("queue.downloads", { count })}</Badge>;
+        },
+      },
+    ];
+  }, [columnWidths, downloadCounts, onStatusFilterChange, setColumn, statusFilter, t]);
 
-  function toggleSort(key: NonNullable<QueueSort["key"]>) {
-    if (sort.key !== key) {
-      onSortChange({ key, direction: "asc" });
-      return;
-    }
-    if (sort.direction === "asc") {
-      onSortChange({ key, direction: "desc" });
-      return;
-    }
-    onSortChange({ key: null, direction: "asc" });
-  }
-
-  function sortIndicator(key: NonNullable<QueueSort["key"]>): string {
-    if (sort.key !== key) {
-      return "";
-    }
-    return sort.direction === "asc" ? " ▲" : " ▼";
-  }
-
-  function openContextMenu(queue: QueueInfo, event: React.MouseEvent) {
+  function renderActions(queue: QueueInfo) {
     if (queue.readonly) {
-      return;
+      return null;
     }
-    event.preventDefault();
-    onContextMenu?.(queue.id, event);
-    setContextMenu({
-      queue,
-      x: event.clientX,
-      y: event.clientY,
-    });
+    const busy = busyId === queue.id || batchBusy;
+    return (
+      <div className="avar-queue-actions avar-queue-actions--table">
+        {queue.running ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="avar-btn--icon-only"
+            loading={busy}
+            aria-label={t("queue.stop")}
+            title={t("queue.stop")}
+            onClick={() => onStop(queue.id)}
+          >
+            <FontAwesomeIcon icon={faStop} />
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="avar-btn--icon-only"
+            loading={busy}
+            aria-label={t("queue.start")}
+            title={t("queue.start")}
+            onClick={() => onStart(queue.id)}
+          >
+            <FontAwesomeIcon icon={faPlay} />
+          </Button>
+        )}
+        {showModify && onModify ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="avar-btn--icon-only"
+            aria-label={t("queue.modify")}
+            title={t("queue.modify")}
+            onClick={() => onModify(queue.id)}
+          >
+            <FontAwesomeIcon icon={faPenToSquare} />
+          </Button>
+        ) : null}
+        {showDelete ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="avar-btn--icon-only"
+            loading={busy}
+            aria-label={t("queue.delete")}
+            title={t("queue.delete")}
+            onClick={() => onDelete(queue.id)}
+          >
+            <FontAwesomeIcon icon={faTrash} />
+          </Button>
+        ) : null}
+      </div>
+    );
   }
 
   return (
     <>
-      <div className="avar-queue-table">
-        <div className="avar-queue-table__scroll">
-          <div className="avar-queue-table__inner" style={{ minWidth: tableMinWidth }}>
-            <div
-              className="avar-queue-table__header"
-              style={{ gridTemplateColumns: gridTemplate }}
-              role="row"
-            >
-              {showCheckboxes ? (
-                <div
-                  className="avar-queue-table__th avar-queue-table__th--checkbox"
-                  role="columnheader"
-                >
-                  <input
-                    type="checkbox"
-                    aria-label={t("queue.selectAll")}
-                    checked={allSelected}
-                    onChange={(e) => onSelectAll(e.target.checked)}
-                  />
-                </div>
-              ) : null}
-              <div className="avar-queue-table__th avar-queue-table__th--sortable" role="columnheader">
-                <button
-                  type="button"
-                  className="avar-queue-table__sort-btn"
-                  onClick={() => toggleSort("name")}
-                >
-                  {t("queue.name")}
-                  {sortIndicator("name")}
-                </button>
-                <ResizeHandle
-                  axis="horizontal"
-                  min={60}
-                  max={400}
-                  className="avar-queue-table__col-resize"
-                  onResize={(delta) => setColumn("name", columns.name + delta)}
-                />
-              </div>
-              <div className="avar-queue-table__th avar-queue-table__th--sortable" role="columnheader">
-                <button
-                  type="button"
-                  className="avar-queue-table__sort-btn"
-                  onClick={() => toggleSort("description")}
-                >
-                  {t("queue.tableDescription")}
-                  {sortIndicator("description")}
-                </button>
-                <ResizeHandle
-                  axis="horizontal"
-                  min={60}
-                  max={600}
-                  className="avar-queue-table__col-resize"
-                  onResize={(delta) => setColumn("description", columns.description + delta)}
-                />
-              </div>
-              <div className="avar-queue-table__th avar-queue-table__th--sortable" role="columnheader">
-                <div className="avar-queue-table__th-main">
-                  <button
-                    type="button"
-                    className="avar-queue-table__sort-btn"
-                    onClick={() => toggleSort("status")}
-                  >
-                    {t("queue.tableStatus")}
-                    {sortIndicator("status")}
-                  </button>
-                  <Select
-                    compact
-                    className="avar-queue-table__header-filter"
-                    value={statusFilter}
-                    aria-label={t("queue.statusFilter")}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => onStatusFilterChange(e.target.value as QueueStatusFilter)}
-                  >
-                    <option value="all">{t("queue.statusFilterAll")}</option>
-                    <option value="running">{t("queue.running")}</option>
-                    <option value="stopped">{t("queue.stopped")}</option>
-                  </Select>
-                </div>
-                <ResizeHandle
-                  axis="horizontal"
-                  min={80}
-                  max={300}
-                  className="avar-queue-table__col-resize"
-                  onResize={(delta) => setColumn("status", columns.status + delta)}
-                />
-              </div>
-              <div className="avar-queue-table__th avar-queue-table__th--sortable" role="columnheader">
-                <button
-                  type="button"
-                  className="avar-queue-table__sort-btn"
-                  onClick={() => toggleSort("downloads")}
-                >
-                  {t("queue.tableDownloads")}
-                  {sortIndicator("downloads")}
-                </button>
-                <ResizeHandle
-                  axis="horizontal"
-                  min={60}
-                  max={200}
-                  className="avar-queue-table__col-resize"
-                  onResize={(delta) => setColumn("downloads", columns.downloads + delta)}
-                />
-              </div>
-              <div
-                className="avar-queue-table__th avar-queue-table__th--actions"
-                role="columnheader"
-              />
-            </div>
-
-            <div className="avar-queue-table__body" role="rowgroup">
-              {loading ? (
-                <div className="avar-queue-table__empty">
-                  <Spinner />
-                </div>
-              ) : queues.length === 0 ? (
-                <div className="avar-queue-table__empty">
-                  <p className="avar-empty">{emptyMessage ?? t("queue.empty")}</p>
-                </div>
-              ) : (
-                queues.map((queue) => {
-                  const busy = busyId === queue.id || batchBusy;
-                  const count = downloadCounts[queue.id] ?? 0;
-                  const statusLabel = queue.running ? t("queue.running") : t("queue.stopped");
-                  const selected = selectedIds.includes(queue.id);
-
-                  return (
-                    <div
-                      key={queue.id}
-                      className={`avar-queue-table__row ${selected ? "avar-queue-table__row--selected" : ""}`}
-                      style={{ gridTemplateColumns: gridTemplate }}
-                      role="row"
-                      onContextMenu={(event) => openContextMenu(queue, event)}
-                    >
-                      {showCheckboxes ? (
-                        <div
-                          className="avar-queue-table__cell avar-queue-table__cell--checkbox"
-                          role="cell"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            aria-label={queue.name}
-                            checked={selected}
-                            disabled={queue.readonly}
-                            onChange={() => onToggleSelect(queue.id)}
-                          />
-                        </div>
-                      ) : null}
-                      <div className="avar-queue-table__cell" role="cell">
-                        <TruncateWithTooltip text={queue.name} className="avar-list__title" />
-                      </div>
-                      <div className="avar-queue-table__cell" role="cell">
-                        <TruncateWithTooltip
-                          text={queue.description || "—"}
-                          className="avar-list__meta"
-                        />
-                      </div>
-                      <div className="avar-queue-table__cell" role="cell">
-                        {queue.readonly ? (
-                          <span className="avar-list__meta">—</span>
-                        ) : (
-                          <Badge tone={queue.running ? "success" : "default"}>{statusLabel}</Badge>
-                        )}
-                      </div>
-                      <div className="avar-queue-table__cell" role="cell">
-                        <Badge tone="info">{t("queue.downloads", { count })}</Badge>
-                      </div>
-                      <div
-                        className="avar-queue-table__cell avar-queue-table__cell--actions"
-                        role="cell"
-                      >
-                        {!queue.readonly ? (
-                          <div className="avar-queue-actions avar-queue-actions--table">
-                            {queue.running ? (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="avar-btn--icon-only"
-                                loading={busy}
-                                aria-label={t("queue.stop")}
-                                title={t("queue.stop")}
-                                onClick={() => onStop(queue.id)}
-                              >
-                                <FontAwesomeIcon icon={faStop} />
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                className="avar-btn--icon-only"
-                                loading={busy}
-                                aria-label={t("queue.start")}
-                                title={t("queue.start")}
-                                onClick={() => onStart(queue.id)}
-                              >
-                                <FontAwesomeIcon icon={faPlay} />
-                              </Button>
-                            )}
-                            {showModify && onModify ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="avar-btn--icon-only"
-                                aria-label={t("queue.modify")}
-                                title={t("queue.modify")}
-                                onClick={() => onModify(queue.id)}
-                              >
-                                <FontAwesomeIcon icon={faPenToSquare} />
-                              </Button>
-                            ) : null}
-                            {showDelete ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="avar-btn--icon-only"
-                                loading={busy}
-                                aria-label={t("queue.delete")}
-                                title={t("queue.delete")}
-                                onClick={() => onDelete(queue.id)}
-                              >
-                                <FontAwesomeIcon icon={faTrash} />
-                              </Button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <DataTable
+        rows={queues}
+        columns={columns}
+        getRowId={(queue) => queue.id}
+        selectedIds={selectedIds}
+        showCheckboxes={showCheckboxes}
+        selectAllLabel={t("queue.selectAll")}
+        isRowSelectable={(queue) => !queue.readonly}
+        getCheckboxLabel={(queue) => queue.name}
+        onToggleSelect={onToggleSelect}
+        onSelectAll={onSelectAll}
+        sort={sort}
+        onSortChange={(next) =>
+          onSortChange({
+            key: next.key as QueueSort["key"],
+            direction: next.direction,
+          })
+        }
+        loading={loading}
+        emptyMessage={emptyMessage ?? t("queue.empty")}
+        trailing={{ width: 48, variant: "actions", render: renderActions }}
+        onRowContextMenu={(queue, event) => {
+          if (queue.readonly) {
+            return;
+          }
+          onContextMenu?.(queue.id, event);
+          setContextMenu({
+            queue,
+            x: event.clientX,
+            y: event.clientY,
+          });
+        }}
+        variant="bordered"
+        chrome={{
+          showCheckboxes,
+          onToggleCheckboxes,
+          toggleCheckboxesLabel: t("queue.toggleCheckboxes"),
+          settingsLabel: t("table.settings"),
+        }}
+      />
 
       <QueueContextMenu
         queue={contextMenu?.queue ?? null}

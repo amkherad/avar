@@ -1,12 +1,12 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { faTableCells, faTableList } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Select } from "@/components/ui/Select";
-import { ResizeHandle } from "@/components/ui/ResizeHandle";
-import { Spinner } from "@/components/ui/Spinner";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import type { DownloadInfo } from "@/api/types";
-import { useLayoutStore } from "@/stores/layoutStore";
-import { formatBytePair, progressPercent } from "./format";
+import { useLayoutStore, type DownloadViewMode } from "@/stores/layoutStore";import { formatBytePair, progressPercent } from "./format";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import type { DownloadSort, DownloadStatusFilter } from "@/lib/downloadFilterSort";
 
@@ -33,6 +33,9 @@ export interface DownloadTableProps {
   onSelectAll: (checked: boolean) => void;
   onOpen: (id: string) => void;
   onContextMenu?: (id: string, event: React.MouseEvent) => void;
+  viewMode: DownloadViewMode;
+  onViewModeChange: (mode: DownloadViewMode) => void;
+  onToggleCheckboxes: () => void;
 }
 
 function statusTone(status: string): "default" | "success" | "warning" | "danger" | "info" {
@@ -72,246 +75,156 @@ export function DownloadTable({
   onSelectAll,
   onOpen,
   onContextMenu,
+  viewMode,
+  onViewModeChange,
+  onToggleCheckboxes,
 }: DownloadTableProps) {
   const { t } = useTranslation();
-  const columns = useLayoutStore((s) => s.downloadTableColumns);
+  const columnWidths = useLayoutStore((s) => s.downloadTableColumns);
   const setColumn = useLayoutStore((s) => s.setDownloadTableColumn);
-
-  const checkboxCol = showCheckboxes ? "2.25rem " : "";
-  const gridTemplate = `${checkboxCol}${columns.filename}px ${columns.status}px ${columns.progress}px ${columns.url}px 3rem`;
-  const tableMinWidth =
-    (showCheckboxes ? 36 : 0) +
-    columns.filename +
-    columns.status +
-    columns.progress +
-    columns.url +
-    48;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const showPaging = totalPages > 1;
-  const allSelected = downloads.length > 0 && downloads.every((item) => selectedIds.includes(item.id));
 
-  function toggleSort(key: NonNullable<DownloadSort["key"]>) {
-    if (sort.key !== key) {
-      onSortChange({ key, direction: "asc" });
-      return;
-    }
-    if (sort.direction === "asc") {
-      onSortChange({ key, direction: "desc" });
-      return;
-    }
-    onSortChange({ key: null, direction: "asc" });
-  }
-
-  function sortIndicator(key: NonNullable<DownloadSort["key"]>): string {
-    if (sort.key !== key) {
-      return "";
-    }
-    return sort.direction === "asc" ? " ▲" : " ▼";
-  }
+  const columns = useMemo((): DataTableColumn<DownloadInfo>[] => {
+    return [
+      {
+        id: "filename",
+        header: t("download.filename"),
+        width: columnWidths.filename,
+        minWidth: 60,
+        maxWidth: 800,
+        onResize: (width) => setColumn("filename", width),
+        render: (item) => (
+          <TruncateWithTooltip text={item.filename} className="avar-list__title" />
+        ),
+      },
+      {
+        id: "status",
+        header: t("download.status"),
+        sortKey: "status",
+        width: columnWidths.status,
+        minWidth: 60,
+        maxWidth: 400,
+        onResize: (width) => setColumn("status", width),
+        headerLayout: "stacked",
+        headerAddon: (
+          <Select
+            compact
+            className="avar-data-table__header-filter"
+            value={statusFilter}
+            aria-label={t("download.statusFilter")}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onStatusFilterChange(e.target.value as DownloadStatusFilter)}
+          >
+            <option value="all">{t("download.statusFilterAll")}</option>
+            {availableStatuses.map((status) => (
+              <option key={status} value={status}>
+                {formatDownloadStatus(status, t)}
+              </option>
+            ))}
+          </Select>
+        ),
+        render: (item) => (
+          <Badge tone={statusTone(item.status)}>
+            {formatDownloadStatus(item.status, t)}
+          </Badge>
+        ),
+      },
+      {
+        id: "progress",
+        header: t("download.progress"),
+        sortKey: "progress",
+        width: columnWidths.progress,
+        minWidth: 60,
+        maxWidth: 400,
+        onResize: (width) => setColumn("progress", width),
+        render: (item) => {
+          const percent = progressPercent(item.bytesDownloaded, item.totalBytes);
+          const progressText = `${formatBytePair(item.bytesDownloaded, item.totalBytes)} (${percent}%)`;
+          return <TruncateWithTooltip text={progressText} className="avar-list__meta" />;
+        },
+      },
+      {
+        id: "url",
+        header: t("download.url"),
+        width: columnWidths.url,
+        minWidth: 60,
+        maxWidth: 800,
+        onResize: (width) => setColumn("url", width),
+        render: (item) => (
+          <TruncateWithTooltip text={item.url ?? "—"} className="avar-list__meta" />
+        ),
+      },
+    ];
+  }, [
+    availableStatuses,
+    columnWidths,
+    onStatusFilterChange,
+    setColumn,
+    statusFilter,
+    t,
+  ]);
 
   return (
-    <div className="avar-download-table">
-      <div className="avar-download-table__scroll">
-        <div className="avar-download-table__inner" style={{ minWidth: tableMinWidth }}>
-          <div
-            className="avar-download-table__header"
-            style={{ gridTemplateColumns: gridTemplate }}
-            role="row"
-          >
-        {showCheckboxes ? (
-          <div className="avar-download-table__th avar-download-table__th--checkbox" role="columnheader">
-            <input
-              type="checkbox"
-              aria-label={t("download.selectAll")}
-              checked={allSelected}
-              onChange={(e) => onSelectAll(e.target.checked)}
-            />
-          </div>
-        ) : null}
-        <div className="avar-download-table__th" role="columnheader">
-          {t("download.filename")}
-          <ResizeHandle
-            axis="horizontal"
-            min={60}
-            max={800}
-            className="avar-download-table__col-resize"
-            onResize={(delta) => setColumn("filename", columns.filename + delta)}
-          />
-        </div>
-        <div className="avar-download-table__th avar-download-table__th--sortable" role="columnheader">
-          <div className="avar-download-table__th-main">
-            <button
-              type="button"
-              className="avar-download-table__sort-btn"
-              onClick={() => toggleSort("status")}
-            >
-              {t("download.status")}
-              {sortIndicator("status")}
-            </button>
-            <Select
-              compact
-              className="avar-download-table__header-filter"
-              value={statusFilter}
-              aria-label={t("download.statusFilter")}
-              onClick={(e) => e.stopPropagation()}
-              onChange={(e) => onStatusFilterChange(e.target.value as DownloadStatusFilter)}
-            >
-              <option value="all">{t("download.statusFilterAll")}</option>
-              {availableStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {formatDownloadStatus(status, t)}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <ResizeHandle
-            axis="horizontal"
-            min={60}
-            max={400}
-            className="avar-download-table__col-resize"
-            onResize={(delta) => setColumn("status", columns.status + delta)}
-          />
-        </div>
-        <div className="avar-download-table__th avar-download-table__th--sortable" role="columnheader">
-          <button
-            type="button"
-            className="avar-download-table__sort-btn"
-            onClick={() => toggleSort("progress")}
-          >
-            {t("download.progress")}
-            {sortIndicator("progress")}
-          </button>
-          <ResizeHandle
-            axis="horizontal"
-            min={60}
-            max={400}
-            className="avar-download-table__col-resize"
-            onResize={(delta) => setColumn("progress", columns.progress + delta)}
-          />
-        </div>
-        <div className="avar-download-table__th" role="columnheader">
-          {t("download.url")}
-          <ResizeHandle
-            axis="horizontal"
-            min={60}
-            max={800}
-            className="avar-download-table__col-resize"
-            onResize={(delta) => setColumn("url", columns.url + delta)}
-          />
-        </div>
-        <div className="avar-download-table__th avar-download-table__th--fill" role="columnheader" />
-          </div>
-
-          <div className="avar-download-table__body" role="rowgroup">
-        {loading ? (
-          <div className="avar-download-table__empty">
-            <Spinner />
-          </div>
-        ) : downloads.length === 0 ? (
-          <div className="avar-download-table__empty">
-            <p className="avar-empty">{emptyMessage ?? t("download.empty")}</p>
-          </div>
-        ) : (
-          downloads.map((item) => {
-            const percent = progressPercent(item.bytesDownloaded, item.totalBytes);
-            const selected = selectedIds.includes(item.id);
-            const progressText = `${formatBytePair(item.bytesDownloaded, item.totalBytes)} (${percent}%)`;
-            const urlText = item.url ?? "—";
-
-            return (
-              <div
-                key={item.id || item.filename}
-                className={`avar-download-table__row ${selected ? "avar-download-table__row--selected" : ""}`}
-                style={{ gridTemplateColumns: gridTemplate }}
-                role="row"
-                tabIndex={0}
-                onClick={(event) => onSelect(item.id, event)}
-                onDoubleClick={() => onOpen(item.id)}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  onContextMenu?.(item.id, event);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    onSelect(item.id);
-                  }
-                }}
-              >
-                {showCheckboxes ? (
-                  <div
-                    className="avar-download-table__cell avar-download-table__cell--checkbox"
-                    role="cell"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <input
-                      type="checkbox"
-                      aria-label={item.filename}
-                      checked={selected}
-                      onChange={() => onToggleSelect(item.id)}
-                    />
-                  </div>
-                ) : null}
-                <div className="avar-download-table__cell" role="cell">
-                  <TruncateWithTooltip text={item.filename} className="avar-list__title" />
-                </div>
-                <div className="avar-download-table__cell" role="cell">
-                  <Badge tone={statusTone(item.status)}>
-                    {formatDownloadStatus(item.status, t)}
-                  </Badge>
-                </div>
-                <div className="avar-download-table__cell" role="cell">
-                  <TruncateWithTooltip text={progressText} className="avar-list__meta" />
-                </div>
-                <div className="avar-download-table__cell" role="cell">
-                  <TruncateWithTooltip text={urlText} className="avar-list__meta" />
-                </div>
-                <div className="avar-download-table__cell avar-download-table__cell--fill" role="cell" />
-              </div>
-            );
-          })
-        )}
-          </div>
-        </div>
-      </div>
-
-      {showPaging ? (
-        <div className="avar-download-table__pager">
-          <label className="avar-download-table__page-size">
-            <Select
-              label={t("download.pageSize")}
-              value={String(pageSize)}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            >
-              {DOWNLOAD_PAGE_SIZES.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <div className="avar-download-table__page-nav">
-            <button
-              type="button"
-              className="avar-btn avar-btn--sm avar-btn--ghost"
-              disabled={page <= 1}
-              onClick={() => onPageChange(page - 1)}
-            >
-              {t("download.prevPage")}
-            </button>
-            <span className="avar-download-table__page-label">
-              {t("download.pageLabel", { page, total: totalPages })}
-            </span>
-            <button
-              type="button"
-              className="avar-btn avar-btn--sm avar-btn--ghost"
-              disabled={page >= totalPages}
-              onClick={() => onPageChange(page + 1)}
-            >
-              {t("download.nextPage")}
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
+    <DataTable
+      rows={downloads}
+      columns={columns}
+      getRowId={(item) => item.id || item.filename}
+      selectedIds={selectedIds}
+      showCheckboxes={showCheckboxes}
+      selectAllLabel={t("download.selectAll")}
+      getCheckboxLabel={(item) => item.filename}
+      onToggleSelect={onToggleSelect}
+      onSelectAll={onSelectAll}
+      sort={sort}
+      onSortChange={(next) =>
+        onSortChange({
+          key: next.key as DownloadSort["key"],
+          direction: next.direction,
+        })
+      }
+      loading={loading}
+      emptyMessage={emptyMessage ?? t("download.empty")}
+      trailing={{ width: 48, variant: "fill" }}
+      onRowClick={(item, event) => onSelect(item.id, event)}
+      onRowDoubleClick={(item) => onOpen(item.id)}
+      onRowContextMenu={(item, event) => onContextMenu?.(item.id, event)}
+      variant="flex"
+      interactive
+      chrome={{
+        viewModeLabel: t("download.viewMode"),
+        viewButtons: [
+          {
+            id: "grid",
+            label: t("download.viewGrid"),
+            icon: faTableCells,
+            active: viewMode === "grid",
+            onClick: () => onViewModeChange("grid"),
+          },
+          {
+            id: "compact",
+            label: t("download.viewCompact"),
+            icon: faTableList,
+            active: viewMode === "compact",
+            onClick: () => onViewModeChange("compact"),
+          },
+        ],
+        showCheckboxes,
+        onToggleCheckboxes,
+        toggleCheckboxesLabel: t("download.toggleCheckboxes"),
+        settingsLabel: t("table.settings"),
+      }}
+      pagination={{
+        page,
+        pageSize,
+        totalItems,
+        pageSizes: DOWNLOAD_PAGE_SIZES,
+        pageSizeLabel: t("download.pageSize"),
+        prevLabel: t("download.prevPage"),
+        nextLabel: t("download.nextPage"),
+        pageLabel: t("download.pageLabel", { page, total: totalPages }),
+        onPageChange,
+        onPageSizeChange,
+      }}
+    />
   );
 }

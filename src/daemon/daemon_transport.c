@@ -1,5 +1,7 @@
+#include <daemon/daemon.h>
 #include <daemon/daemon_rpc.h>
 #include <daemon/daemon_transport.h>
+#include <download.h>
 #include <gui_embed.h>
 #include <logger.h>
 
@@ -641,6 +643,57 @@ static void http_reply_json(struct mg_connection *c, int status, const char *bod
     mg_http_reply(c, status, headers, "%s", body);
 }
 
+static bool http_try_serve_download_file(struct mg_connection *c, struct mg_http_message *hm,
+                                         const DaemonCorsConfig *cors) {
+    if (c == NULL || hm == NULL) {
+        return false;
+    }
+    if (mg_strcasecmp(hm->method, mg_str("GET")) != 0) {
+        return false;
+    }
+
+    struct mg_str caps[4];
+    if (!mg_match(hm->uri, mg_str("/api/downloads/#/file"), caps)) {
+        return false;
+    }
+
+    char id[AVAR_DL_ID_BUF_SIZE];
+    const int id_len = (int)caps[0].len;
+    if (id_len <= 0 || id_len >= (int)sizeof id) {
+        http_reply_json(c, 400, "{\"error\":\"invalid download id\"}\n", cors, hm);
+        return true;
+    }
+    snprintf(id, sizeof id, "%.*s", id_len, caps[0].buf);
+
+    if (!daemon_server_file_download_enabled()) {
+        http_reply_json(c, 403, "{\"error\":\"file download disabled\"}\n", cors, hm);
+        return true;
+    }
+
+    char *path = NULL;
+    if (download_resolve_dest_path(id, &path) != EXIT_SUCCESS || path == NULL) {
+        http_reply_json(c, 404, "{\"error\":\"download file not found\"}\n", cors, hm);
+        return true;
+    }
+
+    char *filename =
+        strrchr(path, PATH_SEPARATOR);
+    const char *basename = filename != NULL ? filename + 1 : path;
+
+    char extra[512];
+    (void)snprintf(extra, sizeof extra,
+                   "Content-Disposition: attachment; filename=\"%s\"\r\n", basename);
+
+    char headers[768];
+    size_t off = http_write_cors_headers(headers, sizeof headers, cors, hm);
+    (void)snprintf(headers + off, sizeof headers - off, "%s", extra);
+
+    struct mg_http_serve_opts opts = {.extra_headers = headers};
+    mg_http_serve_file(c, hm, path, &opts);
+    free(path);
+    return true;
+}
+
 static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_CLOSE) {
         daemon_rpc_stream_detach(c);
@@ -708,6 +761,10 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
 
     if (mg_match(hm->uri, mg_str("/api/ws"), NULL)) {
         mg_ws_upgrade(c, hm, NULL);
+        return;
+    }
+
+    if (http_try_serve_download_file(c, hm, cors)) {
         return;
     }
 

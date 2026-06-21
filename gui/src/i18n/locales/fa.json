@@ -28,7 +28,9 @@
     "connected": "متصل",
     "disconnected": "قطع",
     "connecting": "در حال اتصال…",
-    "test": "آزمایش اتصال"
+    "test": "آزمایش اتصال",
+    "forceRemote": "در نظر گرفتن به‌عنوان نشست دور",
+    "forceRemoteHint": "تشخیص خودکار نشست محلی را نادیده بگیرد وقتی این نشست از طریق localhost به دیمن دور متصل است (مثلاً تونل SSH)."
   },
   "queue": {
     "title": "صف‌ها",
@@ -145,7 +147,13 @@
     "errorMessage": "خطا",
     "filenameSource": "منبع نام فایل",
     "filenameInferred": "استنتاج خودکار",
-    "filenameUser": "تعیین‌شده توسط کاربر"
+    "filenameUser": "تعیین‌شده توسط کاربر",
+    "redownload": "دانلود مجدد",
+    "redownloadConfirmTitle": "دانلود مجدد فایل",
+    "redownloadConfirm": "فایل تکمیل‌شده «{{name}}» حذف و دوباره دانلود شود؟",
+    "redownloadConfirmBatch": "{{count}} فایل تکمیل‌شده حذف و دوباره دانلود شوند؟",
+    "copyToLocal": "کپی به پوشه محلی",
+    "copyToLocalNeedsPath": "پوشه دانلود محلی را در تنظیمات → عمومی مشخص کنید"
   },
   "console": {
     "title": "کنسول",
@@ -205,6 +213,11 @@
       "memory": "مصرف حافظه",
       "cpu": "مصرف پردازنده",
       "network": "توان شبکه"
+    },
+    "remoteCopy": {
+      "title": "دانلودهای دور",
+      "hint": "وقتی به دیمن دور متصل هستید، فایل‌های تکمیل‌شده می‌توانند به این پوشه روی رایانه شما کپی شوند.",
+      "localDownloadPath": "پوشه دانلود محلی"
     },
     "categories": {
       "general": "عمومی",
@@ -291,7 +304,10 @@
       "autoShutdownIdleSeconds": "زمان بیکاری قبل از خاموش شدن (ثانیه)",
       "fileLogging": "ثبت لاگ در فایل",
       "logEnabled": "نوشتن لاگ‌های avar در فایل",
-      "logPath": "مسیر فایل لاگ"
+      "logPath": "مسیر فایل لاگ",
+      "remoteFileDownload": "دانلود فایل از راه دور",
+      "remoteFileDownloadHint": "به رابط اجازه می‌دهد فایل‌های تکمیل‌شده را از این دیمن از طریق HTTP دریافت کند (برای کپی به پوشه محلی در نشست‌های دور). به‌طور پیش‌فرض غیرفعال است.",
+      "fileDownloadEnabled": "اجازه دانلود HTTP فایل‌های تکمیل‌شده"
     }
   },
   "shortcuts": {
@@ -340,6 +356,9 @@
     "resumeAll": "ادامه همه",
     "stopAll": "توقف همه",
     "activeDownloads": "دانلودهای فعال"
+  },
+  "table": {
+    "settings": "تنظیمات جدول"
   },
   "common": {
     "save": "ذخیره",

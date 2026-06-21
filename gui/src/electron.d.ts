@@ -46,11 +46,19 @@ export interface AvarExtensionBridgeState {
   host: string;
 }
 
+export interface AvarSaveRemoteDownloadFileOptions {
+  fileUrl: string;
+  authToken?: string;
+  destDir: string;
+  filename: string;
+}
+
 export interface AvarElectronApi {
   isElectron: true;
   openPopup: (options: AvarPopupOptions) => Promise<number | null>;
   showNotification: (options: AvarNotificationOptions) => Promise<boolean>;
   getProxyBaseUrl: () => Promise<string>;
+  saveRemoteDownloadFile: (options: AvarSaveRemoteDownloadFileOptions) => Promise<void>;
   setExtensionBridgeEnabled: (enabled: boolean) => Promise<void>;
   setExtensionBridgeConfig: (config: AvarExtensionBridgeConfig) => Promise<void>;
   getExtensionBridgeState: () => Promise<AvarExtensionBridgeState>;

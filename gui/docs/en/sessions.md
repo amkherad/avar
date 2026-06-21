@@ -14,6 +14,13 @@ Use the session selector at the bottom of the sidebar to pick the active connect
 | **Server URL** | Base URL of the daemon HTTP API (e.g. `http://127.0.0.1:8000`) |
 | **Auth token** | Optional bearer token when the daemon HTTP channel requires authentication (stored separately from other settings) |
 | **Use dev proxy** | Route `/api` through the Vite dev server (for `npm run dev` only) |
+| **Treat as remote session** | Override auto-detection when the daemon is remote but reached via a local address (for example an SSH tunnel to `127.0.0.1`) |
+
+## 🌐 Local vs remote sessions
+
+The GUI treats a session as **local** when its server URL uses a local address (`localhost`, `127.0.0.1`, `::1`, or other loopback forms). Built-in **Electron** and **dev proxy** sessions are always local.
+
+Mark **Treat as remote session** when you connect through localhost to a daemon that runs on another machine. Remote sessions unlock **Copy to local folder** for completed downloads (see **Settings → General**).
 
 ## ➕ Adding, editing, and removing
 

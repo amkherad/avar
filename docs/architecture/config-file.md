@@ -136,6 +136,7 @@ With `AVAR_INSTANCE=<name>`: `avar-<name>` subdirectory.
 | `autoShutdownIdleSeconds` | number | Idle timeout before shutdown |
 | `cors.enabled` | boolean | Enable CORS headers |
 | `cors.allowOrigin` | string | Allowed origin(s) |
+| `fileDownload.enabled` | boolean | Allow `GET /api/downloads/{id}/file` for completed files (default `false`) |
 | `channels.*` | — | Listen channel configuration |
 
 ### `log` — Logging

@@ -26,3 +26,11 @@ export function canPause(status: string): boolean {
 export function canResume(status: string): boolean {
   return isPaused(status);
 }
+
+export function isCompleted(status: string): boolean {
+  return status === "completed";
+}
+
+export function canRedownload(status: string): boolean {
+  return isCompleted(status);
+}

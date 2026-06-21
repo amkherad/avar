@@ -54,10 +54,14 @@ export class DaemonClient {
   private readonly eventsUrl: string;
   private readonly wsUrl: string;
   private readonly authToken?: string;
+  private readonly baseUrlTrimmed: string;
+  private readonly useRelativeApi: boolean;
 
   constructor(options: DaemonClientOptions) {
     const trimmed = options.baseUrl.replace(/\/+$/, "");
     const useRelative = options.useRelativeApi ?? false;
+    this.baseUrlTrimmed = trimmed;
+    this.useRelativeApi = useRelative;
 
     if (useRelative) {
       this.rpcUrl = "/api/rpc";
@@ -307,6 +311,17 @@ export class DaemonClient {
     }
   }
 
+  getDownloadFileUrl(id: string): string {
+    return `${this.fileBaseUrl()}/api/downloads/${encodeURIComponent(id)}/file`;
+  }
+
+  private fileBaseUrl(): string {
+    if (this.useRelativeApi) {
+      return "";
+    }
+    return this.baseUrlTrimmed;
+  }
+
   async getConfig(key: string, defaultValue?: string): Promise<string | null> {
     const argv = ["avar", "config", "get", key];
     if (defaultValue !== undefined) {
@@ -349,4 +364,12 @@ export function createDaemonClient(session: {
   useRelativeApi?: boolean;
 }): DaemonClient {
   return new DaemonClient(session);
+}
+
+export function buildDownloadFileUrl(
+  session: { baseUrl: string; useRelativeApi?: boolean },
+  downloadId: string,
+): string {
+  const client = createDaemonClient(session);
+  return client.getDownloadFileUrl(downloadId);
 }

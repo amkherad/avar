@@ -6,6 +6,7 @@ import {
   canResume,
   canStart,
   canStop,
+  canRedownload,
   isPaused,
 } from "@/lib/downloadStatus";
 import { useDataStore } from "@/stores/dataStore";
@@ -120,6 +121,41 @@ export async function deleteDownloads(
     }
   }
   return result;
+}
+
+export async function redownloadDownloads(
+  client: DaemonClient,
+  items: DownloadInfo[],
+): Promise<DownloadActionResult> {
+  const eligible = items.filter((item) => item.url && canRedownload(item.status));
+  const succeeded: string[] = [];
+  const failed: string[] = [];
+
+  for (const item of eligible) {
+    try {
+      await client.removeDownload(item.id, true);
+      await client.addDownload({
+        url: item.url!,
+        queue: item.queueId,
+        name: item.filename,
+        startNow: true,
+      });
+      succeeded.push(item.id);
+      appLogger.gui.debug("Download redownloaded", item.id);
+    } catch (err) {
+      failed.push(item.id);
+      appLogger.gui.error(
+        "redownload",
+        err instanceof Error ? err.message : undefined,
+      );
+    }
+  }
+
+  if (succeeded.length > 0) {
+    await useDataStore.getState().refresh();
+  }
+
+  return { succeeded, failed };
 }
 
 export function togglePauseResume(

@@ -10,6 +10,7 @@ export interface ContextMenuItem {
   icon?: IconDefinition;
   disabled?: boolean;
   danger?: boolean;
+  checked?: boolean;
 }
 
 export interface ContextMenuProps {
@@ -82,7 +83,13 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
             >
               {item.icon ? (
                 <FontAwesomeIcon icon={item.icon} className="avar-context-menu__icon" />
-              ) : null}
+              ) : item.checked ? (
+                <span className="avar-context-menu__icon" aria-hidden="true">
+                  ✓
+                </span>
+              ) : (
+                <span className="avar-context-menu__icon avar-context-menu__icon--spacer" aria-hidden="true" />
+              )}
               <span className="avar-context-menu__label">{item.label}</span>
             </button>
           </li>

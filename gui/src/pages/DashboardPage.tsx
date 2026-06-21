@@ -306,10 +306,6 @@ function DownloadPanel({
               viewMode={downloadViewMode}
               onViewModeChange={setDownloadViewMode}
               selectedDownloads={selectedDownloads}
-              showCheckboxes={showCheckboxes}
-              onToggleCheckboxes={() =>
-                updateConfig({ showDownloadCheckboxes: !showCheckboxes })
-              }
             />
 
             <div
@@ -363,6 +359,11 @@ function DownloadPanel({
                   onSelectAll={handleSelectAll}
                   onOpen={(id) => handleOpen(id)}
                   onContextMenu={handleContextMenu}
+                  viewMode={downloadViewMode}
+                  onViewModeChange={setDownloadViewMode}
+                  onToggleCheckboxes={() =>
+                    updateConfig({ showDownloadCheckboxes: !showCheckboxes })
+                  }
                 />
               )}
             </div>

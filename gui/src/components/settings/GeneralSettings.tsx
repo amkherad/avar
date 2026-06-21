@@ -96,6 +96,16 @@ export function GeneralSettings() {
       />
 
       <section className="avar-settings-group">
+        <h3 className="avar-settings-group__heading">{t("settings.remoteCopy.title")}</h3>
+        <p className="avar-settings-hint">{t("settings.remoteCopy.hint")}</p>
+        <Input
+          label={t("settings.remoteCopy.localDownloadPath")}
+          value={config.localDownloadPath}
+          onChange={(e) => updateConfig({ localDownloadPath: e.target.value })}
+        />
+      </section>
+
+      <section className="avar-settings-group">
         <h3 className="avar-settings-group__heading">{t("settings.footerMonitors")}</h3>
         <p className="avar-settings-hint">{t("settings.footerMonitorsHint")}</p>
         <Select

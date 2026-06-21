@@ -69,6 +69,7 @@ typedef struct {
     unsigned auto_shutdown_idle_seconds;
     char pid_file[AVAR_CONFIG_PATH_MAX];
     char auth_token[128];
+    bool file_download_enabled;
     DaemonCorsConfig cors;
     DaemonHttpChannel http;
     DaemonHttpsChannel https;
@@ -108,6 +109,9 @@ bool daemon_config_load(DaemonConfig *out);
 void daemon_config_apply_defaults(DaemonConfig *cfg);
 
 void daemon_config_apply_start_options(DaemonConfig *cfg, const DaemonStartOptions *opts);
+
+/** Reads daemon.server.fileDownload.enabled (default false). */
+bool daemon_server_file_download_enabled(void);
 
 /* -------------------------------------------------------------------------- */
 /* Server lifecycle                                                           */

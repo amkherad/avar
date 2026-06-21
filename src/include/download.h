@@ -57,6 +57,12 @@ int download_resume(const char *id);
 int download_start(const char *id);
 int download_stop(const char *id);
 
+/**
+ * Resolves the on-disk path of a completed download item.
+ * Writes a newly allocated path to path_out on success. Caller must free(*path_out).
+ */
+int download_resolve_dest_path(const char *id, char **path_out);
+
 #if defined(AVAR_TESTING)
 char *download_test_choose_filename(const char *url, const char *header_value, size_t header_len);
 

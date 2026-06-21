@@ -385,6 +385,7 @@ static cJSON *handle_health(void) {
     cJSON_AddNumberToObject(result, "activeDownloads", (double)download_active_count());
     cJSON_AddNumberToObject(result, "uptimeSeconds",
                             (double)(_daemon_started_at > 0 ? time(NULL) - _daemon_started_at : 0));
+    cJSON_AddBoolToObject(result, "fileDownloadEnabled", daemon_server_file_download_enabled());
     return result;
 }
 

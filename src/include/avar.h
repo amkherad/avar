@@ -266,6 +266,7 @@
 #define AVAR_CFG_DAEMON_SERVER_AUTH_TOKEN "daemon.server.authToken"
 #define AVAR_CFG_DAEMON_SERVER_CORS_ENABLED "daemon.server.cors.enabled"
 #define AVAR_CFG_DAEMON_SERVER_CORS_ALLOW_ORIGIN "daemon.server.cors.allowOrigin"
+#define AVAR_CFG_DAEMON_SERVER_FILE_DOWNLOAD_ENABLED "daemon.server.fileDownload.enabled"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTP "daemon.server.channels.http"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTPS "daemon.server.channels.https"
 #define AVAR_CFG_DAEMON_CHANNELS_HTTPS_ENABLED "daemon.server.channels.https.enabled"

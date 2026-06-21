@@ -28,7 +28,9 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "connecting": "Connecting…",
-    "test": "Test connection"
+    "test": "Test connection",
+    "forceRemote": "Treat as remote session",
+    "forceRemoteHint": "Override local-address detection when this session reaches a remote daemon through localhost (for example an SSH tunnel)."
   },
   "queue": {
     "title": "Queues",
@@ -145,7 +147,13 @@
     "errorMessage": "Error",
     "filenameSource": "Filename source",
     "filenameInferred": "Inferred automatically",
-    "filenameUser": "Set by user"
+    "filenameUser": "Set by user",
+    "redownload": "Redownload",
+    "redownloadConfirmTitle": "Redownload file",
+    "redownloadConfirm": "Remove the completed file for \"{{name}}\" and download it again?",
+    "redownloadConfirmBatch": "Remove {{count}} completed file(s) and download them again?",
+    "copyToLocal": "Copy to local folder",
+    "copyToLocalNeedsPath": "Set a local download folder in Settings → General"
   },
   "console": {
     "title": "Console",
@@ -205,6 +213,11 @@
       "memory": "Memory usage",
       "cpu": "CPU usage",
       "network": "Network throughput"
+    },
+    "remoteCopy": {
+      "title": "Remote downloads",
+      "hint": "When connected to a remote daemon, completed files can be copied to this folder on your computer.",
+      "localDownloadPath": "Local download folder"
     },
     "categories": {
       "general": "General",
@@ -291,7 +304,10 @@
       "autoShutdownIdleSeconds": "Idle time before shutdown (seconds)",
       "fileLogging": "File logging",
       "logEnabled": "Write avar logs to file",
-      "logPath": "Log file path"
+      "logPath": "Log file path",
+      "remoteFileDownload": "Remote file download",
+      "remoteFileDownloadHint": "Allow the GUI to fetch completed files from this daemon over HTTP (for copy to local folder on remote sessions). Disabled by default.",
+      "fileDownloadEnabled": "Allow HTTP download of completed files"
     }
   },
   "shortcuts": {
@@ -357,6 +373,9 @@
     "bundledVersion": "Bundled extension",
     "notConnected": "—",
     "updateAvailable": "A newer extension version is available. Reinstall from Settings → Browser integration."
+  },
+  "table": {
+    "settings": "Table settings"
   },
   "common": {
     "save": "Save",
