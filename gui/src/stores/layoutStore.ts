@@ -12,6 +12,13 @@ export interface DownloadTableColumns {
   url: number;
 }
 
+export interface QueueTableColumns {
+  name: number;
+  description: number;
+  status: number;
+  downloads: number;
+}
+
 interface LayoutState {
   sidebarWidth: number;
   consoleHeight: number;
@@ -19,6 +26,7 @@ interface LayoutState {
   detailPanelOpen: boolean;
   downloadViewMode: DownloadViewMode;
   downloadTableColumns: DownloadTableColumns;
+  queueTableColumns: QueueTableColumns;
   setSidebarWidth: (width: number) => void;
   adjustSidebarWidth: (delta: number) => void;
   setConsoleHeight: (height: number) => void;
@@ -29,6 +37,7 @@ interface LayoutState {
   toggleDetailPanel: () => void;
   setDownloadViewMode: (mode: DownloadViewMode) => void;
   setDownloadTableColumn: (key: keyof DownloadTableColumns, width: number) => void;
+  setQueueTableColumn: (key: keyof QueueTableColumns, width: number) => void;
 }
 
 const SIDEBAR_MIN = 180;
@@ -46,6 +55,13 @@ const defaultTableColumns: DownloadTableColumns = {
   url: 180,
 };
 
+const defaultQueueTableColumns: QueueTableColumns = {
+  name: 160,
+  description: 200,
+  status: 100,
+  downloads: 100,
+};
+
 export const useLayoutStore = create<LayoutState>()(
   persist(
     (set, get) => ({
@@ -55,6 +71,7 @@ export const useLayoutStore = create<LayoutState>()(
       detailPanelOpen: false,
       downloadViewMode: "grid",
       downloadTableColumns: defaultTableColumns,
+      queueTableColumns: defaultQueueTableColumns,
 
       setSidebarWidth: (width) =>
         set({ sidebarWidth: clampSize(width, SIDEBAR_MIN, SIDEBAR_MAX) }),
@@ -93,6 +110,14 @@ export const useLayoutStore = create<LayoutState>()(
             [key]: clampSize(width, TABLE_COL_MIN, 800),
           },
         })),
+
+      setQueueTableColumn: (key, width) =>
+        set((s) => ({
+          queueTableColumns: {
+            ...s.queueTableColumns,
+            [key]: clampSize(width, TABLE_COL_MIN, 800),
+          },
+        })),
     }),
     {
       name: `${GUI_CONFIG_KEY}.layout`,
@@ -103,6 +128,7 @@ export const useLayoutStore = create<LayoutState>()(
         detailPanelOpen: state.detailPanelOpen,
         downloadViewMode: state.downloadViewMode,
         downloadTableColumns: state.downloadTableColumns,
+        queueTableColumns: state.queueTableColumns,
       }),
     },
   ),

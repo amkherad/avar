@@ -51,7 +51,15 @@
     "downloads": "{{count}} دانلود",
     "tableDescription": "توضیحات",
     "tableStatus": "وضعیت",
-    "tableDownloads": "دانلودها"
+    "tableDownloads": "دانلودها",
+    "searchPlaceholder": "جستجوی صف‌ها…",
+    "searchEmpty": "صفی با این جستجو یافت نشد",
+    "statusFilter": "فیلتر وضعیت",
+    "statusFilterAll": "همه وضعیت‌ها",
+    "selectedCount": "{{count}} انتخاب‌شده",
+    "toggleCheckboxes": "نمایش چک‌باکس انتخاب",
+    "selectAll": "انتخاب همه صف‌ها",
+    "deleteConfirmBatch": "{{count}} صف حذف شوند؟ دانلودها از صف جدا می‌شوند."
   },
   "download": {
     "title": "دانلودها",

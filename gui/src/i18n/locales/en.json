@@ -51,7 +51,15 @@
     "downloads": "{{count}} download(s)",
     "tableDescription": "Description",
     "tableStatus": "Status",
-    "tableDownloads": "Downloads"
+    "tableDownloads": "Downloads",
+    "searchPlaceholder": "Search queues…",
+    "searchEmpty": "No queues match your search",
+    "statusFilter": "Status filter",
+    "statusFilterAll": "All statuses",
+    "selectedCount": "{{count}} selected",
+    "toggleCheckboxes": "Show selection checkboxes",
+    "selectAll": "Select all queues",
+    "deleteConfirmBatch": "Remove {{count}} queue(s)? Downloads will be detached."
   },
   "download": {
     "title": "Downloads",
