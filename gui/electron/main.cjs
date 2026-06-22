@@ -14,6 +14,7 @@ const path = require("node:path");
 const {
   setExtensionBridgeEnabled,
   setExtensionBridgeConfig,
+  setBatchPopupOpener,
   getExtensionBridgeState,
   createExtensionBridgeServer,
   ELECTRON_EXTENSION_BRIDGE_URL,
@@ -405,6 +406,15 @@ function createPopupWindow(options) {
 
 ipcMain.handle("popup:open", (_event, options) => {
   return createPopupWindow(options ?? {});
+});
+
+setBatchPopupOpener((batchId, title) => {
+  createPopupWindow({
+    url: resolveAppUrl(`#/popup/batch-add/${encodeURIComponent(batchId)}`),
+    title,
+    width: 960,
+    height: 640,
+  });
 });
 
 ipcMain.handle("notification:show", (_event, options) => {

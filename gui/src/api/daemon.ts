@@ -21,6 +21,8 @@ export interface AddDownloadParams {
   outputPath?: string;
   group?: string;
   proxy?: ProxySettings;
+  referer?: string;
+  streamKind?: string;
 }
 
 let requestId = 1;
@@ -249,6 +251,8 @@ export class DaemonClient {
             ...(options.outputPath ? { outputPath: options.outputPath } : {}),
             ...(options.group ? { group: options.group } : {}),
             ...(options.proxy ? { proxy: proxySettingsToRpcParams(options.proxy) } : {}),
+            ...(options.referer ? { referer: options.referer } : {}),
+            ...(options.streamKind ? { streamKind: options.streamKind } : {}),
           };
 
     const controller = new AbortController();

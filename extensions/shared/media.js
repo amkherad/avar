@@ -897,11 +897,50 @@ function collectMediaUrls(doc) {
   return collectMediaItems(doc).map((item) => item.url);
 }
 
+function collectSelectedLinkItems(doc) {
+  const view = doc.defaultView;
+  const selection = view?.getSelection?.();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return [];
+  }
+
+  const ranges = [];
+  for (let i = 0; i < selection.rangeCount; i += 1) {
+    ranges.push(selection.getRangeAt(i));
+  }
+
+  const urls = new Set();
+  doc.querySelectorAll("a[href]").forEach((anchor) => {
+    const href = anchor.href;
+    if (!href || href.startsWith("javascript:")) {
+      return;
+    }
+    for (const range of ranges) {
+      try {
+        if (range.intersectsNode(anchor)) {
+          urls.add(href);
+          break;
+        }
+      } catch {
+        // intersectsNode can throw for detached nodes.
+      }
+    }
+  });
+
+  const items = [];
+  for (const url of urls) {
+    const classified = classifyMediaUrl(url);
+    items.push(classified || { url, kind: classifyStreamKind(url) || "direct" });
+  }
+  return sortMediaItems(items);
+}
+
 // eslint-disable-next-line no-undef
 if (typeof globalThis !== "undefined") {
   globalThis.AvarMedia = {
     collectMediaUrls,
     collectMediaItems,
+    collectSelectedLinkItems,
     collectDomVideoItems,
     collectPerformanceMediaItems,
     mergeMediaItems,

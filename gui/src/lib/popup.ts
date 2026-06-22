@@ -1,4 +1,8 @@
 import type { DownloadInfo } from "@/api/types";
+import {
+  stashBatchAddPayload,
+  type BatchAddDownloadsPayload,
+} from "@/lib/batchAddDownloads";
 import { usePopupStore } from "@/stores/popupStore";
 
 const POPUP_STORAGE_PREFIX = "avar.popup.download.";
@@ -58,7 +62,11 @@ export function readStashedDownload(id: string): DownloadInfo | null {
 
 export function parsePopupHash(
   hash: string,
-): { type: "download"; id: string } | { type: "confirm"; id: string } | null {
+):
+  | { type: "download"; id: string }
+  | { type: "confirm"; id: string }
+  | { type: "batch-add"; id: string }
+  | null {
   const downloadMatch = /^#\/popup\/download\/(.+)$/.exec(hash);
   if (downloadMatch) {
     return { type: "download", id: decodeURIComponent(downloadMatch[1]) };
@@ -66,6 +74,10 @@ export function parsePopupHash(
   const confirmMatch = /^#\/popup\/confirm\/(.+)$/.exec(hash);
   if (confirmMatch) {
     return { type: "confirm", id: decodeURIComponent(confirmMatch[1]) };
+  }
+  const batchMatch = /^#\/popup\/batch-add\/(.+)$/.exec(hash);
+  if (batchMatch) {
+    return { type: "batch-add", id: decodeURIComponent(batchMatch[1]) };
   }
   return null;
 }
@@ -120,6 +132,22 @@ export function openPopupWindow(
       height,
       resolve,
     });
+  });
+}
+
+export function openBatchAddPopup(
+  payload: BatchAddDownloadsPayload,
+  title: string,
+  options: PopupWindowOptions = {},
+): Promise<void> {
+  const id = nextPopupId();
+  stashBatchAddPayload(id, payload);
+  const hash = `#/popup/batch-add/${encodeURIComponent(id)}`;
+  return openPopupWindow(hash, {
+    width: 960,
+    height: 640,
+    ...options,
+    title,
   });
 }
 

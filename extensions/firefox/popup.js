@@ -10,17 +10,22 @@ const bridgeUrlInput = document.getElementById("bridgeUrl");
 const statusEl = document.getElementById("status");
 const bridgeStatusEl = document.getElementById("bridgeStatus");
 const mediaList = document.getElementById("mediaList");
+const selectedSection = document.getElementById("selectedSection");
+const selectedLinksList = document.getElementById("selectedLinksList");
+const downloadSelectedBtn = document.getElementById("downloadSelected");
 const downloadAllBtn = document.getElementById("downloadAll");
 const settingsPanel = document.getElementById("settingsPanel");
 const settingsBtn = document.getElementById("settingsBtn");
 const refreshBtn = document.getElementById("refreshBtn");
 const defaultQueueSelect = document.getElementById("defaultQueue");
 const defaultMediaFilterSelect = document.getElementById("defaultMediaFilter");
+const showSelectionWidgetInput = document.getElementById("showSelectionWidget");
 const mediaTypeFilterSelect = document.getElementById("mediaTypeFilter");
 const mediaSortSelect = document.getElementById("mediaSort");
 const queueManagementEl = document.getElementById("queueManagement");
 
 let lastMediaItems = [];
+let lastSelectedItems = [];
 let knownQueues = [];
 let pageReferer = null;
 let pageTitle = "";
@@ -105,11 +110,17 @@ function appendStreamBadge(nameEl, item) {
 function updateScanStatus(totalCount) {
   const filter = getActiveMediaFilter();
   const filtered = AvarMedia.filterMediaItems(lastMediaItems, filter);
-  if (filter === "all" || filtered.length === totalCount) {
-    setStatus(`${totalCount} media URL(s) found.`);
-  } else {
-    setStatus(`${filtered.length} of ${totalCount} media URL(s) shown.`);
+  const selectedCount = lastSelectedItems.length;
+  let status = "";
+  if (selectedCount > 0) {
+    status = `${selectedCount} selected link(s). `;
   }
+  if (filter === "all" || filtered.length === totalCount) {
+    status += `${totalCount} media URL(s) found.`;
+  } else {
+    status += `${filtered.length} of ${totalCount} media URL(s) shown.`;
+  }
+  setStatus(status.trim());
 }
 
 function queueNameForId(queueId) {
@@ -247,12 +258,26 @@ function shouldProbeItemSize(item) {
   return getItemSize(item) === undefined;
 }
 
+function findMediaItemSubelement(url, subselector) {
+  for (const root of [selectedLinksList, mediaList]) {
+    const el = root.querySelector(`.media-item[data-url="${CSS.escape(url)}"] ${subselector}`);
+    if (el) {
+      return el;
+    }
+  }
+  return null;
+}
+
+function findMediaItem(url) {
+  return lastSelectedItems.find((entry) => entry.url === url) || lastMediaItems.find((entry) => entry.url === url);
+}
+
 function updateItemSizeElement(url) {
-  const sizeEl = mediaList.querySelector(`.media-item[data-url="${CSS.escape(url)}"] .media-item__size`);
+  const sizeEl = findMediaItemSubelement(url, ".media-item__size");
   if (!sizeEl) {
     return;
   }
-  const item = lastMediaItems.find((entry) => entry.url === url);
+  const item = findMediaItem(url);
   if (!item) {
     return;
   }
@@ -337,11 +362,11 @@ function createSizeElement(item) {
 }
 
 function updateItemNameElement(url) {
-  const nameEl = mediaList.querySelector(`.media-item[data-url="${CSS.escape(url)}"] .media-item__name`);
+  const nameEl = findMediaItemSubelement(url, ".media-item__name");
   if (!nameEl) {
     return;
   }
-  const item = lastMediaItems.find((entry) => entry.url === url);
+  const item = findMediaItem(url);
   if (!item) {
     return;
   }
@@ -351,28 +376,58 @@ function updateItemNameElement(url) {
   nameEl.title = filename;
 }
 
+function buildBatchItem(item) {
+  const linkName = AvarMedia.itemDisplayFilename(item, pageTitle);
+  const probedFilename = probedFilenames.get(item.url);
+  const filename =
+    typeof probedFilename === "string" && probedFilename.trim()
+      ? probedFilename.trim()
+      : linkName;
+  return {
+    url: item.url,
+    streamKind: item.kind,
+    filename,
+    linkName,
+    fileType: AvarMedia.classifyMediaCategory(item),
+    fileSize: getItemSize(item) ?? null,
+    originalUrl: pageReferer,
+    referer: pageReferer,
+  };
+}
+
+async function openBatchAddDialog(items) {
+  if (!bridgeConnected) {
+    setStatus("Cannot reach Avar bridge.");
+    return;
+  }
+  if (!items.length) {
+    return;
+  }
+
+  const response = await api.runtime.sendMessage({
+    type: "avar-open-batch-add",
+    items: items.map(buildBatchItem),
+    pageUrl: pageReferer,
+    pageTitle,
+    defaultQueueId: defaultQueueSelect.value || null,
+  });
+  if (response?.ok) {
+    setStatus(`Review ${items.length} download(s) in Avar.`);
+  } else {
+    setStatus(response?.error || "Failed to open batch add.");
+  }
+}
+
 function createDownloadButton(item) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "media-item__download";
   btn.setAttribute("aria-label", "Download");
-  btn.title = bridgeConnected ? "Download" : "Connect to Avar to download";
+  btn.title = bridgeConnected ? "Review in Avar" : "Connect to Avar to download";
   btn.disabled = !bridgeConnected;
   btn.innerHTML = DOWNLOAD_ICON;
   btn.addEventListener("click", async () => {
-    if (!bridgeConnected) {
-      setStatus("Cannot reach Avar bridge.");
-      return;
-    }
-    const queue = queueNameForId(defaultQueueSelect.value);
-    const result = await api.runtime.sendMessage({
-      type: "avar-add-download",
-      url: item.url,
-      streamKind: item.kind,
-      queue,
-    });
-    const name = displayFilename(item);
-    setStatus(result?.ok ? `Queued: ${name}` : result?.error || "Failed");
+    await openBatchAddDialog([item]);
   });
   return btn;
 }
@@ -395,70 +450,95 @@ function createCopyButton(url) {
   return btn;
 }
 
+function appendMediaItemRow(listRoot, item) {
+  const li = document.createElement("li");
+  li.className = "media-item";
+  li.dataset.url = item.url;
+
+  const category = AvarMedia.classifyMediaCategory(item);
+  const typeIcon = document.createElement("span");
+  typeIcon.className = "media-item__type-icon";
+  typeIcon.title = category;
+  typeIcon.innerHTML = MEDIA_TYPE_ICONS[category] || MEDIA_TYPE_ICONS.binary;
+
+  const typeSep = document.createElement("span");
+  typeSep.className = "media-item__sep";
+  typeSep.setAttribute("aria-hidden", "true");
+
+  const info = document.createElement("div");
+  info.className = "media-item__info";
+
+  const name = document.createElement("div");
+  name.className = "media-item__name";
+  const filename = displayFilename(item);
+  name.textContent = filename;
+  name.title = filename;
+  appendStreamBadge(name, item);
+
+  const metaRow = document.createElement("div");
+  metaRow.className = "media-item__meta";
+  metaRow.appendChild(createSizeElement(item));
+
+  const urlRow = document.createElement("div");
+  urlRow.className = "media-item__url-row";
+  urlRow.appendChild(createCopyButton(item.url));
+
+  const urlLine = document.createElement("span");
+  urlLine.className = "media-item__url";
+  urlLine.textContent = AvarMedia.formatDisplayUrl(item.url);
+  urlLine.title = item.url;
+  urlRow.appendChild(urlLine);
+
+  metaRow.appendChild(urlRow);
+
+  info.appendChild(name);
+  info.appendChild(metaRow);
+
+  const actions = document.createElement("div");
+  actions.className = "media-item__actions";
+
+  const actionSep = document.createElement("span");
+  actionSep.className = "media-item__sep";
+  actionSep.setAttribute("aria-hidden", "true");
+
+  actions.appendChild(actionSep);
+  actions.appendChild(createDownloadButton(item));
+
+  li.appendChild(typeIcon);
+  li.appendChild(typeSep);
+  li.appendChild(info);
+  li.appendChild(actions);
+  listRoot.appendChild(li);
+}
+
+function renderSelectedLinksList(items) {
+  lastSelectedItems = items;
+  selectedLinksList.innerHTML = "";
+
+  if (items.length === 0) {
+    selectedSection.setAttribute("hidden", "");
+    downloadSelectedBtn.hidden = true;
+    return;
+  }
+
+  selectedSection.removeAttribute("hidden");
+  downloadSelectedBtn.hidden = false;
+
+  for (const item of items) {
+    appendMediaItemRow(selectedLinksList, item);
+  }
+
+  queueSizeProbes(items);
+}
+
 function renderMediaList(items) {
   lastMediaItems = items;
-  const visibleItems = getVisibleMediaItems(lastMediaItems);
+  const selectedUrls = new Set(lastSelectedItems.map((item) => item.url));
+  const visibleItems = getVisibleMediaItems(lastMediaItems).filter((item) => !selectedUrls.has(item.url));
   mediaList.innerHTML = "";
 
   for (const item of visibleItems) {
-    const li = document.createElement("li");
-    li.className = "media-item";
-    li.dataset.url = item.url;
-
-    const category = AvarMedia.classifyMediaCategory(item);
-    const typeIcon = document.createElement("span");
-    typeIcon.className = "media-item__type-icon";
-    typeIcon.title = category;
-    typeIcon.innerHTML = MEDIA_TYPE_ICONS[category] || MEDIA_TYPE_ICONS.binary;
-
-    const typeSep = document.createElement("span");
-    typeSep.className = "media-item__sep";
-    typeSep.setAttribute("aria-hidden", "true");
-
-    const info = document.createElement("div");
-    info.className = "media-item__info";
-
-    const name = document.createElement("div");
-    name.className = "media-item__name";
-    const filename = displayFilename(item);
-    name.textContent = filename;
-    name.title = filename;
-    appendStreamBadge(name, item);
-
-    const metaRow = document.createElement("div");
-    metaRow.className = "media-item__meta";
-    metaRow.appendChild(createSizeElement(item));
-
-    const urlRow = document.createElement("div");
-    urlRow.className = "media-item__url-row";
-    urlRow.appendChild(createCopyButton(item.url));
-
-    const urlLine = document.createElement("span");
-    urlLine.className = "media-item__url";
-    urlLine.textContent = AvarMedia.formatDisplayUrl(item.url);
-    urlLine.title = item.url;
-    urlRow.appendChild(urlLine);
-
-    metaRow.appendChild(urlRow);
-
-    info.appendChild(name);
-    info.appendChild(metaRow);
-
-    const actions = document.createElement("div");
-    actions.className = "media-item__actions";
-
-    const actionSep = document.createElement("span");
-    actionSep.className = "media-item__sep";
-    actionSep.setAttribute("aria-hidden", "true");
-
-    actions.appendChild(actionSep);
-    actions.appendChild(createDownloadButton(item));
-
-    li.appendChild(typeIcon);
-    li.appendChild(typeSep);
-    li.appendChild(info);
-    li.appendChild(actions);
-    mediaList.appendChild(li);
+    appendMediaItemRow(mediaList, item);
   }
 
   downloadAllBtn.hidden = visibleItems.length === 0;
@@ -474,7 +554,10 @@ async function refreshBridgeStatus() {
   if (response?.bridgeUrl && bridgeUrlInput.value !== response.bridgeUrl) {
     bridgeUrlInput.value = response.bridgeUrl;
   }
-  if (wasConnected !== bridgeConnected && lastMediaItems.length > 0) {
+  if (wasConnected !== bridgeConnected && (lastMediaItems.length > 0 || lastSelectedItems.length > 0)) {
+    if (lastSelectedItems.length > 0) {
+      renderSelectedLinksList(lastSelectedItems);
+    }
     renderMediaList(lastMediaItems);
     if (bridgeConnected) {
       void expandHlsInBackground(lastMediaItems);
@@ -494,6 +577,7 @@ async function loadConfig() {
     "mediaSort",
     "popupWidth",
     "popupHeight",
+    "showSelectionWidget",
   ]);
   bridgeUrlInput.value =
     AvarExtensionProtocol.normalizeBridgeUrl(
@@ -504,6 +588,7 @@ async function loadConfig() {
   defaultMediaFilterSelect.value = defaultFilter;
   mediaTypeFilterSelect.value = defaultFilter;
   mediaSortSelect.value = stored.mediaSort || DEFAULT_MEDIA_SORT;
+  showSelectionWidgetInput.checked = Boolean(stored.showSelectionWidget);
 
   applyPopupSize(stored.popupWidth, stored.popupHeight);
   installPopupResizePersistence();
@@ -544,25 +629,32 @@ async function expandHlsInBackground(items) {
 async function scanPage() {
   setStatus("Scanning…");
   mediaList.innerHTML = "";
+  selectedLinksList.innerHTML = "";
+  selectedSection.setAttribute("hidden", "");
+  downloadSelectedBtn.hidden = true;
   downloadAllBtn.hidden = true;
   pageReferer = null;
   pageTitle = "";
   hlsExpandGeneration += 1;
+  lastSelectedItems = [];
 
   const response = await api.runtime.sendMessage({ type: "avar-list-media" });
   if (!response?.ok) {
     setStatus(response?.error || "Scan failed.");
+    renderSelectedLinksList([]);
     renderMediaList([]);
     return;
   }
 
   pageReferer = response.pageUrl || null;
   pageTitle = response.pageTitle || "";
+  const selectedItems = response.selectedItems || [];
   const items = response.items || (response.urls || []).map((url) => ({
     url,
     kind: AvarMedia.classifyStreamKind(url),
   }));
 
+  renderSelectedLinksList(selectedItems);
   renderMediaList(items);
 
   const hlsCount = items.filter((item) => item.kind === "hls").length;
@@ -606,6 +698,7 @@ document.getElementById("save").addEventListener("click", async () => {
     bridgeUrl,
     defaultQueueId: defaultQueueSelect.value,
     defaultMediaFilter,
+    showSelectionWidget: showSelectionWidgetInput.checked,
   });
   mediaTypeFilterSelect.value = defaultMediaFilter;
   renderMediaList(lastMediaItems);
@@ -615,29 +708,13 @@ document.getElementById("save").addEventListener("click", async () => {
 });
 
 downloadAllBtn.addEventListener("click", async () => {
-  if (!bridgeConnected) {
-    setStatus("Cannot reach Avar bridge.");
-    return;
-  }
-  const items = getVisibleMediaItems(lastMediaItems);
-  if (items.length === 0) {
-    return;
-  }
+  const selectedUrls = new Set(lastSelectedItems.map((item) => item.url));
+  const items = getVisibleMediaItems(lastMediaItems).filter((item) => !selectedUrls.has(item.url));
+  await openBatchAddDialog(items);
+});
 
-  const queue = queueNameForId(defaultQueueSelect.value);
-  let count = 0;
-  for (const item of items) {
-    const result = await api.runtime.sendMessage({
-      type: "avar-add-download",
-      url: item.url,
-      streamKind: item.kind,
-      queue,
-    });
-    if (result?.ok) {
-      count += 1;
-    }
-  }
-  setStatus(`Queued ${count} download(s).`);
+downloadSelectedBtn.addEventListener("click", async () => {
+  await openBatchAddDialog(lastSelectedItems);
 });
 
 void (async () => {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faPlus } from "@fortawesome/free-solid-svg-icons";
+import { faListUl, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ShortcutButton } from "@/components/ui/ShortcutButton";
@@ -14,6 +14,7 @@ import { DownloadToolbar } from "@/components/download/DownloadToolbar";
 import { DownloadDetailPanel } from "@/components/download/DownloadDetailPanel";
 import { DownloadContextMenu } from "@/components/download/DownloadContextMenu";
 import { AddDownloadModal } from "@/components/download/AddDownloadModal";
+import { BatchAddDownloadModal } from "@/components/download/BatchAddDownloadModal";
 import { Footer } from "@/components/layout/Footer";
 import { ConsolePanel } from "@/components/console/ConsolePanel";
 import { useConnectionStore } from "@/stores/connectionStore";
@@ -83,6 +84,7 @@ function DownloadPanel({
     openModal: () => onAddDownloadOpenChange(true),
     closeModal: () => onAddDownloadOpenChange(false),
   };
+  const [batchAddOpen, setBatchAddOpen] = useState(false);
   const downloadActions = useDownloadActions();
 
   const [contextMenu, setContextMenu] = useState<{
@@ -265,6 +267,7 @@ function DownloadPanel({
   return (
     <div className="avar-dashboard">
       <AddDownloadModal open={open} onClose={closeModal} />
+      <BatchAddDownloadModal open={batchAddOpen} onClose={() => setBatchAddOpen(false)} />
       <DownloadContextMenu
         download={contextMenu?.download ?? null}
         position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
@@ -280,17 +283,21 @@ function DownloadPanel({
                 : t("download.title")
             }
             actions={
-              <ShortcutButton
-                size="sm"
-                variant="primary"
-                className="avar-btn--icon-only"
-                shortcut="download.add"
-                aria-label={t("download.add")}
-                title={t("download.add")}
-                onClick={openModal}
-              >
-                <FontAwesomeIcon icon={faPlus} />
-              </ShortcutButton>
+              <>
+                <Button size="sm" variant="secondary" onClick={() => setBatchAddOpen(true)}>
+                  <FontAwesomeIcon icon={faListUl} />
+                  {t("download.batchAdd.button")}
+                </Button>
+                <ShortcutButton
+                  size="sm"
+                  variant="primary"
+                  shortcut="download.add"
+                  onClick={openModal}
+                >
+                  <FontAwesomeIcon icon={faPlus} />
+                  {t("download.add")}
+                </ShortcutButton>
+              </>
             }
           >
             {staleBanner}

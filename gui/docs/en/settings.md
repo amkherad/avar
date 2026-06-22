@@ -31,7 +31,7 @@ Install the Avar browser extension to queue media from web pages through the Ava
 4. Extract the ZIP and load it as an unpacked extension (Developer mode).
 5. The extension auto-detects the Electron bridge (`http://127.0.0.1:18766`). Paste the **bridge URL** from settings if auto-detection fails.
 
-The extension popup shows a green/red dot for bridge connectivity. Downloads are forwarded from the extension to the bridge, then to the daemon.
+The extension popup shows a green/red dot for bridge connectivity. Use **Download selected**, **Download all**, or the per-item download button to open the **Add downloads** batch dialog in Avar (a separate window in Electron). Review each file, choose a target queue, then **Queue download** or **Queue and start**.
 
 ### 🖥️ Desktop tray (Electron)
 

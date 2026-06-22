@@ -153,7 +153,39 @@
     "redownloadConfirm": "فایل تکمیل‌شده «{{name}}» حذف و دوباره دانلود شود؟",
     "redownloadConfirmBatch": "{{count}} فایل تکمیل‌شده حذف و دوباره دانلود شوند؟",
     "copyToLocal": "کپی به پوشه محلی",
-    "copyToLocalNeedsPath": "پوشه دانلود محلی را در تنظیمات → عمومی مشخص کنید"
+    "copyToLocalNeedsPath": "پوشه دانلود محلی را در تنظیمات → عمومی مشخص کنید",
+    "batchAdd": {
+      "title": "افزودن دانلودها",
+      "button": "افزودن دسته‌ای",
+      "inputTitle": "افزودن دسته‌ای دانلودها",
+      "inputLabel": "نشانی‌ها",
+      "inputPlaceholder": "https://example.com/file1.zip\nhttps://example.com/file2.mp4",
+      "inputHint": "هر نشانی را در یک خط وارد کنید.",
+      "inputEmpty": "حداقل یک نشانی وارد کنید.",
+      "continue": "بررسی دانلودها",
+      "linkName": "نام پیوند",
+      "link": "پیوند",
+      "fileType": "نوع فایل",
+      "originalUrl": "نشانی اصلی",
+      "fileSize": "اندازه فایل",
+      "queueAndStart": "صف و شروع",
+      "notFound": "دانلودی برای افزودن نیست",
+      "empty": "موردی در این دسته نیست",
+      "selectAll": "انتخاب همه موارد",
+      "selectedCount": "{{count}} انتخاب‌شده",
+      "addSuccess": "{{count}} دانلود افزوده شد",
+      "addPartial": "{{succeeded}} دانلود افزوده شد؛ {{failed}} ناموفق",
+      "queueStartFailed": "دانلودها در صف قرار گرفتند اما صف شروع نشد",
+      "fileTypes": {
+        "video": "ویدیو",
+        "audio": "صوت",
+        "image": "تصویر",
+        "binary": "باینری",
+        "hls": "HLS",
+        "dash": "DASH",
+        "direct": "مستقیم"
+      }
+    }
   },
   "console": {
     "title": "کنسول",

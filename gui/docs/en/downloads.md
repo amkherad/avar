@@ -9,6 +9,8 @@ Click **Add download** next to the search field (or press **Ctrl+N**). Enter a U
 - **Queue download** — adds the item to the active queue without starting it immediately.
 - **Start now** — adds the item and begins downloading right away.
 
+Use **Batch add** (beside **Add download** in the downloads panel header) to paste multiple URLs (one per line), review them in the batch dialog, then queue or start them together.
+
 The dialog closes after either action succeeds.
 
 ## 🔍 Search and filters

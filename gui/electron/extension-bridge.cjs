@@ -13,12 +13,19 @@ const {
 } = require("./extension-protocol.cjs");
 
 const EXTENSION_PING_TTL_MS = 30_000;
+const BATCH_STASH_TTL_MS = 10 * 60 * 1000;
 
 const bridgeState = {
   enabled: true,
   lastPingAt: null,
   lastExtensionVersion: null,
 };
+
+/** @type {Map<string, { createdAt: number, payload: Record<string, unknown> }>} */
+const batchStash = new Map();
+
+/** @type {((batchId: string, title: string) => void) | null} */
+let batchPopupOpener = null;
 
 let bridgeConfig = {
   daemonUrl: process.env.AVAR_DAEMON_URL || "http://127.0.0.1:8000",
@@ -34,6 +41,99 @@ function setExtensionBridgeConfig(config) {
     daemonUrl: String(config.daemonUrl).replace(/\/+$/, ""),
     authToken: config.authToken,
   };
+}
+
+function setBatchPopupOpener(opener) {
+  batchPopupOpener = typeof opener === "function" ? opener : null;
+}
+
+function pruneBatchStash() {
+  const now = Date.now();
+  for (const [id, entry] of batchStash.entries()) {
+    if (now - entry.createdAt > BATCH_STASH_TTL_MS) {
+      batchStash.delete(id);
+    }
+  }
+}
+
+function stashBatchPayload(payload) {
+  pruneBatchStash();
+  const batchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  batchStash.set(batchId, { createdAt: Date.now(), payload });
+  return batchId;
+}
+
+function readBatchPayload(batchId) {
+  const entry = batchStash.get(batchId);
+  if (!entry) {
+    return null;
+  }
+  if (Date.now() - entry.createdAt > BATCH_STASH_TTL_MS) {
+    batchStash.delete(batchId);
+    return null;
+  }
+  return entry.payload;
+}
+
+function normalizeBatchItems(items, pageUrl) {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  const seen = new Set();
+  const normalized = [];
+
+  for (const [index, raw] of items.entries()) {
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+    const url = typeof raw.url === "string" ? raw.url.trim() : "";
+    if (!url || seen.has(url)) {
+      continue;
+    }
+    seen.add(url);
+
+    const fileSize =
+      typeof raw.fileSize === "number" && raw.fileSize >= 0 ? raw.fileSize : null;
+
+    normalized.push({
+      id: typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : url || `item-${index}`,
+      url,
+      filename: typeof raw.filename === "string" ? raw.filename.trim() : undefined,
+      linkName: typeof raw.linkName === "string" ? raw.linkName.trim() : undefined,
+      fileType:
+        typeof raw.fileType === "string"
+          ? raw.fileType.trim()
+          : typeof raw.streamKind === "string"
+            ? raw.streamKind.trim()
+            : undefined,
+      originalUrl:
+        typeof raw.originalUrl === "string"
+          ? raw.originalUrl.trim()
+          : typeof raw.referer === "string"
+            ? raw.referer.trim()
+            : typeof pageUrl === "string"
+              ? pageUrl.trim()
+              : undefined,
+      referer:
+        typeof raw.referer === "string"
+          ? raw.referer.trim()
+          : typeof raw.originalUrl === "string"
+            ? raw.originalUrl.trim()
+            : typeof pageUrl === "string"
+              ? pageUrl.trim()
+              : undefined,
+      fileSize,
+      streamKind:
+        typeof raw.streamKind === "string"
+          ? raw.streamKind.trim()
+          : typeof raw.fileType === "string"
+            ? raw.fileType.trim()
+            : undefined,
+    });
+  }
+
+  return normalized;
 }
 
 function getExtensionBridgeState() {
@@ -422,6 +522,52 @@ async function handleProtocolMessage(message, origin, res) {
     return;
   }
 
+  if (type === "download.batch.open") {
+    try {
+      const pageUrl = typeof payload.pageUrl === "string" ? payload.pageUrl : undefined;
+      const items = normalizeBatchItems(payload.items, pageUrl);
+      if (items.length === 0) {
+        sendJson(res, 400, createErrorResponse("download.batch.open", id, "No items"), origin);
+        return;
+      }
+
+      const batchPayload = {
+        items,
+        defaultQueueId:
+          typeof payload.defaultQueueId === "string" ? payload.defaultQueueId : null,
+        pageTitle: typeof payload.pageTitle === "string" ? payload.pageTitle : undefined,
+      };
+      const batchId = stashBatchPayload(batchPayload);
+      const title =
+        typeof payload.title === "string" && payload.title.trim()
+          ? payload.title.trim()
+          : "Add downloads";
+
+      if (batchPopupOpener) {
+        batchPopupOpener(batchId, title);
+      }
+
+      sendJson(
+        res,
+        200,
+        createResponse("download.batch.open", id, { batchId, title }),
+        origin,
+      );
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "download.batch.open",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
   if (type === "url.probe") {
     try {
       const url = typeof payload.url === "string" ? payload.url : "";
@@ -610,6 +756,17 @@ async function handleExtensionBridgeRequest(req, res) {
     return true;
   }
 
+  if (req.method === "GET" && urlPath.startsWith("/extension/batch/")) {
+    const batchId = decodeURIComponent(urlPath.slice("/extension/batch/".length));
+    const payload = readBatchPayload(batchId);
+    if (!payload) {
+      sendJson(res, 404, { ok: false, error: "Batch not found" }, origin);
+      return true;
+    }
+    sendJson(res, 200, { ok: true, payload }, origin);
+    return true;
+  }
+
   if (req.method === "POST" && urlPath === "/extension/download") {
     try {
       const raw = await readBody(req);
@@ -651,6 +808,7 @@ module.exports = {
   handleExtensionBridgeRequest,
   setExtensionBridgeEnabled,
   setExtensionBridgeConfig,
+  setBatchPopupOpener,
   getExtensionBridgeState,
   createExtensionBridgeServer,
   DEFAULT_EXTENSION_GUI_URL: "http://127.0.0.1:5173",

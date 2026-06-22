@@ -153,7 +153,39 @@
     "redownloadConfirm": "Remove the completed file for \"{{name}}\" and download it again?",
     "redownloadConfirmBatch": "Remove {{count}} completed file(s) and download them again?",
     "copyToLocal": "Copy to local folder",
-    "copyToLocalNeedsPath": "Set a local download folder in Settings → General"
+    "copyToLocalNeedsPath": "Set a local download folder in Settings → General",
+    "batchAdd": {
+      "title": "Add downloads",
+      "button": "Batch add",
+      "inputTitle": "Add downloads in batch",
+      "inputLabel": "URLs",
+      "inputPlaceholder": "https://example.com/file1.zip\nhttps://example.com/file2.mp4",
+      "inputHint": "Enter one URL per line.",
+      "inputEmpty": "Enter at least one URL.",
+      "continue": "Review downloads",
+      "linkName": "Link name",
+      "link": "Link",
+      "fileType": "File type",
+      "originalUrl": "Original URL",
+      "fileSize": "File size",
+      "queueAndStart": "Queue and start",
+      "notFound": "No downloads to add",
+      "empty": "No items in this batch",
+      "selectAll": "Select all items",
+      "selectedCount": "{{count}} selected",
+      "addSuccess": "Added {{count}} download(s)",
+      "addPartial": "Added {{succeeded}} download(s); {{failed}} failed",
+      "queueStartFailed": "Downloads were queued but the queue could not be started",
+      "fileTypes": {
+        "video": "Video",
+        "audio": "Audio",
+        "image": "Image",
+        "binary": "Binary",
+        "hls": "HLS",
+        "dash": "DASH",
+        "direct": "Direct"
+      }
+    }
   },
   "console": {
     "title": "Console",

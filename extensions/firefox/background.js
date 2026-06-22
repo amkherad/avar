@@ -51,6 +51,31 @@ async function addDownload(payload) {
   await sendMessage(bridgeUrl, "download.add", body);
 }
 
+async function openBatchAdd(payload) {
+  const bridgeUrl = await resolveBridgeUrl();
+  return sendMessage(bridgeUrl, "download.batch.open", {
+    items: payload.items,
+    pageUrl: payload.pageUrl,
+    pageTitle: payload.pageTitle,
+    defaultQueueId: payload.defaultQueueId,
+    title: payload.title || "Add downloads",
+  });
+}
+
+function buildBatchItemFromMedia(item, pageTitle, pageUrl) {
+  const linkName = AvarMedia.itemDisplayFilename(item, pageTitle);
+  return {
+    url: item.url,
+    streamKind: item.kind,
+    filename: linkName,
+    linkName,
+    fileType: AvarMedia.classifyMediaCategory(item),
+    fileSize: typeof item.size === "number" && item.size >= 0 ? item.size : null,
+    originalUrl: pageUrl,
+    referer: pageUrl,
+  };
+}
+
 async function probeUrlSize(url, referer) {
   const bridgeUrl = await resolveBridgeUrl();
   return sendMessage(bridgeUrl, "url.probe", { url, referer });
@@ -86,6 +111,7 @@ async function collectFromTab(tabId) {
     return {
       urls: items.map((item) => item.url),
       items,
+      selectedItems: response?.selectedItems || [],
       pageUrl: null,
       pageTitle: response?.pageTitle || null,
     };
@@ -95,6 +121,7 @@ async function collectFromTab(tabId) {
     return {
       urls: items.map((item) => item.url),
       items,
+      selectedItems: [],
       pageUrl: null,
       pageTitle: null,
     };
@@ -138,11 +165,20 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
     }
 
     if (info.menuItemId === "avar-download-page-media") {
-      const { items, urls } = await collectFromTab(tab.id);
+      const { items, urls, pageTitle } = await collectFromTab(tab.id);
       const media = items.length > 0 ? items : urls.map((url) => ({ url, kind: "direct" }));
-      for (const item of media) {
-        await addDownload({ url: item.url, streamKind: item.kind, referer: tab.url, autoStart: true });
+      const listed = media.filter((item) => AvarMedia.shouldListMediaItem(item));
+      if (listed.length === 0) {
+        return;
       }
+      const stored = await api.storage.local.get(["defaultQueueId"]);
+      await openBatchAdd({
+        items: listed.map((item) => buildBatchItemFromMedia(item, pageTitle, tab.url)),
+        pageUrl: tab.url,
+        pageTitle: pageTitle || tab.title || "",
+        defaultQueueId: stored.defaultQueueId || null,
+      });
+      return;
     }
   } catch (error) {
     console.error("Avar extension:", error);
@@ -150,6 +186,18 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "avar-open-batch-add" && Array.isArray(message.items)) {
+    openBatchAdd({
+      items: message.items,
+      pageUrl: message.pageUrl,
+      pageTitle: message.pageTitle,
+      defaultQueueId: message.defaultQueueId,
+    })
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+
   if (message?.type === "avar-add-download" && message.url) {
     const referer = message.referer || sender.tab?.url || null;
     addDownload({
@@ -212,6 +260,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ok: true,
           urls: result.urls,
           items: result.items,
+          selectedItems: result.selectedItems,
           pageUrl: result.pageUrl,
           pageTitle: result.pageTitle,
         }),
@@ -242,6 +291,9 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (typeof message.defaultMediaFilter === "string") {
       storageUpdate.defaultMediaFilter = message.defaultMediaFilter;
+    }
+    if (typeof message.showSelectionWidget === "boolean") {
+      storageUpdate.showSelectionWidget = message.showSelectionWidget;
     }
     api.storage.local
       .set(storageUpdate)

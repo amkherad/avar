@@ -6,6 +6,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { HelpPage } from "@/pages/HelpPage";
 import { ConfirmDialogPopupPage } from "@/pages/ConfirmDialogPopupPage";
+import { BatchAddDownloadsPopupPage } from "@/pages/BatchAddDownloadsPopupPage";
 import { DownloadDetailPopupPage } from "@/pages/DownloadDetailPopupPage";
 import { useConfigStore } from "@/stores/configStore";
 import { useConsoleStore } from "@/stores/consoleStore";
@@ -130,6 +131,10 @@ function PopupContent() {
 
   if (popupRoute?.type === "confirm") {
     return <ConfirmDialogPopupPage confirmId={popupRoute.id} />;
+  }
+
+  if (popupRoute?.type === "batch-add") {
+    return <BatchAddDownloadsPopupPage batchId={popupRoute.id} />;
   }
 
   return null;

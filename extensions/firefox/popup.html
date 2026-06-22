@@ -271,12 +271,9 @@
       }
 
       ul {
-        margin: 8px 0 0;
+        margin: 0;
         padding: 0;
         list-style: none;
-        flex: 1;
-        min-height: 0;
-        overflow-y: auto;
       }
 
       .media-item {
@@ -409,6 +406,64 @@
         color: #7dd3fc;
         vertical-align: middle;
       }
+
+      .media-scroll {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        margin-top: 8px;
+      }
+
+      #selectedSection[hidden] {
+        display: none;
+      }
+
+      .section-label {
+        margin: 0 0 4px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: #cbd5e1;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      #selectedLinksList {
+        flex: none;
+        overflow: visible;
+      }
+
+      #mediaList {
+        margin: 0;
+      }
+
+      .list-separator {
+        margin: 16px 0;
+        border: none;
+        border-top: 1px solid #475569;
+        flex-shrink: 0;
+      }
+
+      #downloadSelected {
+        margin-top: 8px;
+        margin-bottom: 0;
+      }
+
+      .settings-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        font-size: 0.75rem;
+        color: #94a3b8;
+        cursor: pointer;
+      }
+
+      .settings-checkbox input {
+        width: auto;
+        margin: 0;
+      }
     </style>
   </head>
   <body>
@@ -452,6 +507,11 @@
           </select>
         </label>
 
+        <label class="settings-checkbox">
+          <input id="showSelectionWidget" type="checkbox" />
+          Show download widget when multiple links are selected
+        </label>
+
         <p class="settings-section-title">Queue management</p>
         <div id="queueManagement" class="queue-management">
           <p class="queue-management__empty">Connect to Avar to load queues.</p>
@@ -483,7 +543,15 @@
         </select>
       </div>
 
-      <ul id="mediaList"></ul>
+      <div class="media-scroll">
+        <section id="selectedSection" hidden>
+          <p class="section-label">Selected links</p>
+          <ul id="selectedLinksList"></ul>
+          <button id="downloadSelected" class="secondary" type="button">Download all selected</button>
+          <hr class="list-separator" aria-hidden="true" />
+        </section>
+        <ul id="mediaList"></ul>
+      </div>
       <button id="downloadAll" class="secondary" type="button" hidden>Download all on page</button>
     </div>
 
