@@ -12,7 +12,14 @@ import {
 import type { DownloadInfo } from "@/api/types";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
-import { canPause, canResume, canStart, canStop, canRedownload, isCompleted } from "@/lib/downloadStatus";
+import {
+  canPause,
+  canResume,
+  canStart,
+  canStop,
+  canRedownload,
+  isCompleted,
+} from "@/lib/downloadStatus";
 import { openDownloadPopup } from "@/lib/popup";
 
 export interface DownloadContextMenuProps {
@@ -30,56 +37,69 @@ export function DownloadContextMenu({ download, position, onClose }: DownloadCon
       return [];
     }
 
-    return [
-      {
+    const menuItems: ContextMenuItem[] = [];
+
+    if (canStart(download.status)) {
+      menuItems.push({
         id: "start",
         label: t("download.start"),
         icon: faPlay,
-        disabled: !canStart(download.status) || actions.busy,
+        disabled: actions.busy,
         onClick: () => void actions.start([download.id]),
-      },
-      {
+      });
+    }
+
+    if (canStop(download.status)) {
+      menuItems.push({
         id: "stop",
         label: t("download.stop"),
         icon: faStop,
-        disabled: !canStop(download.status) || actions.busy,
+        disabled: actions.busy,
         onClick: () => void actions.stop([download.id]),
-      },
-      {
+      });
+    }
+
+    if (canPause(download.status)) {
+      menuItems.push({
         id: "pause",
         label: t("download.pause"),
         icon: faPause,
-        disabled: !canPause(download.status) || actions.busy,
+        disabled: actions.busy,
         onClick: () => void actions.pause([download.id]),
-      },
-      {
+      });
+    }
+
+    if (canResume(download.status)) {
+      menuItems.push({
         id: "resume",
         label: t("download.resume"),
         icon: faPlay,
-        disabled: !canResume(download.status) || actions.busy,
+        disabled: actions.busy,
         onClick: () => void actions.resume([download.id]),
-      },
-      {
+      });
+    }
+
+    if (canRedownload(download.status) && download.url) {
+      menuItems.push({
         id: "redownload",
         label: t("download.redownload"),
         icon: faRotateRight,
-        disabled: !canRedownload(download.status) || !download.url || actions.busy,
+        disabled: actions.busy,
         onClick: () => void actions.redownload([download]),
-      },
-      ...(actions.copyToLocalVisible && isCompleted(download.status)
-        ? [
-            {
-              id: "copyToLocal",
-              label: t("download.copyToLocal"),
-              icon: faDownload,
-              disabled: !actions.copyToLocalAvailable || actions.busy,
-              title: !actions.localCopyReady
-                ? t("download.copyToLocalNeedsPath")
-                : undefined,
-              onClick: () => void actions.copyToLocal([download]),
-            } satisfies ContextMenuItem,
-          ]
-        : []),
+      });
+    }
+
+    if (actions.copyToLocalVisible && isCompleted(download.status)) {
+      menuItems.push({
+        id: "copyToLocal",
+        label: t("download.copyToLocal"),
+        icon: faDownload,
+        disabled: !actions.copyToLocalAvailable || actions.busy,
+        onClick: () => void actions.copyToLocal([download]),
+      });
+    }
+
+    menuItems.push(
       {
         id: "details",
         label: t("download.detailsTitle"),
@@ -94,7 +114,9 @@ export function DownloadContextMenu({ download, position, onClose }: DownloadCon
         danger: true,
         onClick: () => void actions.removeWithConfirm([download]),
       },
-    ];
+    );
+
+    return menuItems;
   }, [actions, download, t]);
 
   if (!download || !position) {

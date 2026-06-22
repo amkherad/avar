@@ -1171,6 +1171,15 @@
   font-weight: 700;
 }
 
+.avar-download-panel__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 8rem;
+  padding: 2rem 0;
+}
+
 .avar-download-detail__header {
   display: flex;
   flex-direction: column;
@@ -2594,18 +2603,23 @@
 
 .avar-directory-path-input {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.avar-directory-path-input__row {
+  display: flex;
+  align-items: stretch;
   gap: 0.5rem;
 }
 
-.avar-directory-path-input > .avar-field {
+.avar-directory-path-input__row .avar-input {
   flex: 1;
   min-width: 0;
 }
 
 .avar-directory-path-input__browse {
   flex-shrink: 0;
-  margin-bottom: 0.15rem;
 }
 
 .avar-remote-dir-browser {

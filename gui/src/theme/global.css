@@ -17,6 +17,8 @@ body {
   font-family: var(--avar-font);
   background: var(--avar-bg);
   color: var(--avar-text);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 button,
@@ -24,6 +26,17 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+input,
+textarea,
+select,
+.avar-markdown,
+.avar-markdown *,
+.avar-console__output,
+.avar-console__output * {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 a {

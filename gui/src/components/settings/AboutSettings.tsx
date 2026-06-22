@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getBuildInfo } from "@/lib/buildInfo";
+import { getProjectUrls } from "@/lib/projectUrls";
 import { useConnectionStore } from "@/stores/connectionStore";
-
-const GITHUB_REPO = "https://github.com/amkherad/avar";
-const GITHUB_AUTHOR = "https://github.com/amkherad";
-const GITHUB_SPONSORS = "https://github.com/sponsors/amkherad";
 
 function parseBackendVersion(output: string | undefined): string | null {
   if (!output) {
@@ -25,6 +22,7 @@ interface VersionRow {
 export function AboutSettings() {
   const { t } = useTranslation();
   const build = getBuildInfo();
+  const urls = getProjectUrls();
   const client = useConnectionStore((s) => s.client);
   const connection = useConnectionStore((s) => s.connection);
   const [backendVersion, setBackendVersion] = useState<string | null>(null);
@@ -112,7 +110,7 @@ export function AboutSettings() {
         <div className="avar-about__actions">
           <a
             className="avar-btn avar-btn--secondary avar-btn--md avar-about__link-btn"
-            href={GITHUB_AUTHOR}
+            href={urls.author}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -127,7 +125,7 @@ export function AboutSettings() {
         <div className="avar-about__actions">
           <a
             className="avar-btn avar-btn--secondary avar-btn--md avar-about__link-btn"
-            href={`${GITHUB_REPO}#license`}
+            href={urls.license}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -142,7 +140,7 @@ export function AboutSettings() {
         <div className="avar-about__actions">
           <a
             className="avar-btn avar-btn--primary avar-btn--md avar-about__link-btn"
-            href={GITHUB_SPONSORS}
+            href={urls.sponsors}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -157,7 +155,7 @@ export function AboutSettings() {
         <div className="avar-about__actions">
           <a
             className="avar-btn avar-btn--primary avar-btn--md avar-about__link-btn"
-            href={GITHUB_SPONSORS}
+            href={urls.sponsors}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -165,11 +163,26 @@ export function AboutSettings() {
           </a>
           <a
             className="avar-btn avar-btn--secondary avar-btn--md avar-about__link-btn"
-            href={GITHUB_REPO}
+            href={urls.repo}
             target="_blank"
             rel="noopener noreferrer"
           >
             {t("settings.about.donateButtonStar")}
+          </a>
+        </div>
+      </section>
+
+      <section className="avar-about__section">
+        <h3 className="avar-about__heading">{t("settings.about.reportBugTitle")}</h3>
+        <p className="avar-settings-hint">{t("settings.about.reportBugText")}</p>
+        <div className="avar-about__actions">
+          <a
+            className="avar-btn avar-btn--secondary avar-btn--md avar-about__link-btn"
+            href={urls.issues}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t("settings.about.reportBugButton")}
           </a>
         </div>
       </section>

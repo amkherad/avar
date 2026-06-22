@@ -108,6 +108,7 @@
     "queue": "Queue",
     "detailsTitle": "Download details",
     "selectHint": "Select a download to view details",
+    "detailsLoading": "Loading details…",
     "openWindow": "Open in window",
     "togglePanelMode": "Toggle detail panel layout",
     "notFound": "Download not found",
@@ -369,7 +370,10 @@
       "donateTitle": "💝 Support the project",
       "donateText": "Enjoying Avar? A small contribution — even the price of a coffee — keeps downloads flowing and features landing. Every bit of support means the world. ☕",
       "donateButtonSponsor": "💖 Sponsor on GitHub",
-      "donateButtonStar": "🌟 Star on GitHub"
+      "donateButtonStar": "🌟 Star on GitHub",
+      "reportBugTitle": "🐛 Report a bug",
+      "reportBugText": "Found something broken or confusing? Open an issue on GitHub and we'll take a look.",
+      "reportBugButton": "📝 Report on GitHub"
     }
   },
   "shortcuts": {

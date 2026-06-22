@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useDeferredValue, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faListUl, faPlus } from "@fortawesome/free-solid-svg-icons";
@@ -96,10 +96,13 @@ function DownloadPanel({
     () => selectDownloadsForQueue(downloads, queueId),
     [downloads, queueId],
   );
-  const selectedDownload = useMemo(
-    () => selectSelectedDownload(queueDownloads, selectedDownloadId),
-    [queueDownloads, selectedDownloadId],
+  const deferredDownloadId = useDeferredValue(selectedDownloadId);
+  const detailPanelDownload = useMemo(
+    () => selectSelectedDownload(queueDownloads, deferredDownloadId),
+    [queueDownloads, deferredDownloadId],
   );
+  const detailPanelLoading =
+    selectedDownloadId !== null && deferredDownloadId !== selectedDownloadId;
   const selectedDownloads = useMemo(
     () => selectSelectedDownloads(queueDownloads, selectedDownloadIds),
     [queueDownloads, selectedDownloadIds],
@@ -249,10 +252,14 @@ function DownloadPanel({
   }
 
   const showPinnedPanel =
-    detailPanelMode === "pinned" && detailPanelOpen && selectedDownload !== null;
+    detailPanelMode === "pinned" && detailPanelOpen && selectedDownloadId !== null;
   const inlinePanel =
-    detailPanelMode === "inline" && detailPanelOpen && selectedDownload ? (
-      <DownloadDetailPanel download={selectedDownload} pinned={false} />
+    detailPanelMode === "inline" && detailPanelOpen && selectedDownloadId ? (
+      <DownloadDetailPanel
+        download={detailPanelDownload}
+        loading={detailPanelLoading}
+        pinned={false}
+      />
     ) : null;
 
   return (
@@ -382,7 +389,11 @@ function DownloadPanel({
               className="avar-download-panel-wrap"
               style={{ width: detailPanelWidth }}
             >
-              <DownloadDetailPanel download={selectedDownload} pinned />
+              <DownloadDetailPanel
+                download={detailPanelDownload}
+                loading={detailPanelLoading}
+                pinned
+              />
             </div>
           </>
         ) : null}

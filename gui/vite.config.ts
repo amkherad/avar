@@ -32,6 +32,15 @@ export default defineConfig(({ mode }) => {
       ),
       "import.meta.env.VITE_BUILD_DATE": JSON.stringify(buildDate),
       "import.meta.env.VITE_BUILD_COMMIT": JSON.stringify(env.VITE_BUILD_COMMIT || ""),
+      "import.meta.env.VITE_GITHUB_REPO": JSON.stringify(
+        env.VITE_GITHUB_REPO || "https://github.com/amkherad/avar",
+      ),
+      "import.meta.env.VITE_GITHUB_AUTHOR": JSON.stringify(
+        env.VITE_GITHUB_AUTHOR || "https://github.com/amkherad",
+      ),
+      "import.meta.env.VITE_GITHUB_SPONSORS": JSON.stringify(
+        env.VITE_GITHUB_SPONSORS || "https://github.com/sponsors/amkherad",
+      ),
     },
     server: {
       proxy: {

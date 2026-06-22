@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faThumbtack } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 import type { DownloadInfo } from "@/api/types";
 import { useConfigStore } from "@/stores/configStore";
 import { DownloadDetailView } from "./DownloadDetailView";
@@ -12,14 +13,19 @@ import { appLogger } from "@/lib/appLogger";
 export interface DownloadDetailPanelProps {
   download: DownloadInfo | null;
   pinned?: boolean;
+  loading?: boolean;
 }
 
-export function DownloadDetailPanel({ download, pinned = true }: DownloadDetailPanelProps) {
+export function DownloadDetailPanel({
+  download,
+  pinned = true,
+  loading = false,
+}: DownloadDetailPanelProps) {
   const { t } = useTranslation();
   const detailPanelMode = useConfigStore((s) => s.config.detailPanelMode);
   const updateConfig = useConfigStore((s) => s.updateConfig);
 
-  if (!download) {
+  if (!download && !loading) {
     return (
       <aside className={`avar-download-panel ${pinned ? "avar-download-panel--pinned" : ""}`}>
         <p className="avar-empty">{t("download.selectHint")}</p>
@@ -28,8 +34,11 @@ export function DownloadDetailPanel({ download, pinned = true }: DownloadDetailP
   }
 
   function handleOpenPopup() {
-    appLogger.gui.debug("Open download popup from detail panel", download!.id);
-    void openDownloadPopup(download!, t("download.detailsTitle"));
+    if (!download) {
+      return;
+    }
+    appLogger.gui.debug("Open download popup from detail panel", download.id);
+    void openDownloadPopup(download, t("download.detailsTitle"));
   }
 
   function toggleMode() {
@@ -44,7 +53,7 @@ export function DownloadDetailPanel({ download, pinned = true }: DownloadDetailP
       <header className="avar-download-panel__header">
         <h2 className="avar-download-panel__title">{t("download.detailsTitle")}</h2>
         <div className="avar-download-panel__header-actions">
-          <DownloadControls downloads={[download]} />
+          {!loading && download ? <DownloadControls downloads={[download]} /> : null}
           <Button
             size="sm"
             variant="ghost"
@@ -56,7 +65,13 @@ export function DownloadDetailPanel({ download, pinned = true }: DownloadDetailP
           </Button>
         </div>
       </header>
-      <DownloadDetailView download={download} onOpenPopup={handleOpenPopup} />
+      {loading ? (
+        <div className="avar-download-panel__loading">
+          <Spinner label={t("download.detailsLoading")} />
+        </div>
+      ) : download ? (
+        <DownloadDetailView download={download} onOpenPopup={handleOpenPopup} />
+      ) : null}
     </aside>
   );
 }
