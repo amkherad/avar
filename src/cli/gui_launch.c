@@ -21,6 +21,7 @@
     #include <shellapi.h>
     #include <process.h>
 #else
+    #include <netdb.h>
     #include <pthread.h>
     #include <spawn.h>
     #include <sys/socket.h>
