@@ -153,8 +153,8 @@ export function openBatchAddPopup(
   stashBatchAddPayload(id, payload);
   const hash = `#/popup/batch-add/${encodeURIComponent(id)}`;
   return openPopupWindow(hash, {
-    width: 960,
-    height: 640,
+    width: 1920,
+    height: 960,
     ...options,
     title,
   });

@@ -281,6 +281,7 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
 
         <div className="avar-batch-add-popup__table">
           <DataTable
+            className="avar-batch-add-popup__data-table"
             rows={items}
             columns={columns}
             getRowId={(row) => row.id}

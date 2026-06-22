@@ -395,12 +395,14 @@ function createPopupWindow(options) {
   const popupId = ++popupCounter;
   const width = options.width ?? 520;
   const height = options.height ?? 640;
+  const minWidth = options.minWidth ?? 400;
+  const minHeight = options.minHeight ?? 320;
 
   const popup = new BrowserWindow({
     width,
     height,
-    minWidth: 400,
-    minHeight: 320,
+    minWidth,
+    minHeight,
     title: options.title ?? "Avar",
     icon: loadAppIcon(),
     parent: BrowserWindow.getFocusedWindow() ?? undefined,
@@ -446,8 +448,10 @@ setBatchPopupOpener((batchId, title) => {
   createPopupWindow({
     url: resolveAppUrl(`#/popup/batch-add/${encodeURIComponent(batchId)}`),
     title,
-    width: 960,
-    height: 640,
+    width: 1920,
+    height: 960,
+    minWidth: 1920,
+    minHeight: 960,
   });
 });
 

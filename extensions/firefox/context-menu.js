@@ -43,7 +43,7 @@ const AvarContextMenu = {
 
     await this.createMenuItem(menusApi, {
       id: this.IDS.ROOT,
-      title: "Avar",
+      title: "Avar integration",
       contexts: pageContexts,
       visible: false,
     });
@@ -61,7 +61,7 @@ const AvarContextMenu = {
     });
     await this.createMenuItem(menusApi, {
       id: this.IDS.DOWNLOAD_ALL,
-      title: "Avar — Download all media",
+      title: "Download all media",
       contexts: pageContexts,
     });
     await this.createMenuItem(menusApi, {

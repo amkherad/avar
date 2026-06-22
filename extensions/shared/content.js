@@ -10,6 +10,11 @@ let showSelectionWidget = false;
 /** @type {HTMLElement | null} */
 let selectionWidgetHost = null;
 let selectionChangeTimer = null;
+let widgetDismissed = false;
+let lastWidgetLinkCount = 0;
+
+const WIDGET_MARGIN_PX = 8;
+const WIDGET_VIEWPORT_PADDING_PX = 8;
 
 function rememberClassifiedItems(items) {
   if (!Array.isArray(items) || typeof AvarMedia === "undefined") {
@@ -101,6 +106,59 @@ function removeSelectionWidget() {
   }
 }
 
+function getSelectionAnchorRect() {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  let rect = range.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) {
+    const clientRects = range.getClientRects();
+    if (clientRects.length > 0) {
+      rect = clientRects[clientRects.length - 1];
+    }
+  }
+
+  if (rect.width === 0 && rect.height === 0) {
+    return null;
+  }
+
+  return rect;
+}
+
+function positionSelectionWidget(host) {
+  const anchor = getSelectionAnchorRect();
+  if (!anchor) {
+    return;
+  }
+
+  host.style.visibility = "hidden";
+  host.style.display = "block";
+  const widgetRect = host.getBoundingClientRect();
+  host.style.visibility = "";
+
+  let top = anchor.bottom + WIDGET_MARGIN_PX;
+  let left = anchor.left;
+
+  if (top + widgetRect.height > window.innerHeight - WIDGET_VIEWPORT_PADDING_PX) {
+    top = anchor.top - widgetRect.height - WIDGET_MARGIN_PX;
+  }
+
+  left = Math.max(
+    WIDGET_VIEWPORT_PADDING_PX,
+    Math.min(left, window.innerWidth - widgetRect.width - WIDGET_VIEWPORT_PADDING_PX),
+  );
+  top = Math.max(
+    WIDGET_VIEWPORT_PADDING_PX,
+    Math.min(top, window.innerHeight - widgetRect.height - WIDGET_VIEWPORT_PADDING_PX),
+  );
+
+  host.style.left = `${Math.round(left)}px`;
+  host.style.top = `${Math.round(top)}px`;
+}
+
 function ensureSelectionWidget() {
   if (selectionWidgetHost) {
     return selectionWidgetHost;
@@ -108,7 +166,7 @@ function ensureSelectionWidget() {
 
   const host = document.createElement("div");
   host.id = "avar-selection-widget-host";
-  host.style.cssText = "all: initial; position: fixed; z-index: 2147483646;";
+  host.style.cssText = "all: initial; position: fixed; z-index: 2147483646; left: 0; top: 0;";
 
   const shadow = host.attachShadow({ mode: "closed" });
   shadow.innerHTML = `
@@ -118,13 +176,10 @@ function ensureSelectionWidget() {
         font-family: system-ui, sans-serif;
       }
       .widget {
-        position: fixed;
-        right: 16px;
-        bottom: 16px;
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 12px;
+        padding: 8px 8px 8px 12px;
         border-radius: 8px;
         background: #0f172a;
         color: #e2e8f0;
@@ -137,7 +192,7 @@ function ensureSelectionWidget() {
         color: #94a3b8;
         white-space: nowrap;
       }
-      button {
+      .download-btn {
         margin: 0;
         padding: 6px 12px;
         border: none;
@@ -149,22 +204,44 @@ function ensureSelectionWidget() {
         cursor: pointer;
         white-space: nowrap;
       }
-      button:hover {
+      .download-btn:hover {
         background: #7dd3fc;
       }
-      button:disabled {
+      .download-btn:disabled {
         opacity: 0.6;
         cursor: default;
+      }
+      .close-btn {
+        margin: 0;
+        margin-inline-start: 2px;
+        padding: 2px 6px;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: #94a3b8;
+        font: inherit;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .close-btn:hover {
+        background: #1e293b;
+        color: #e2e8f0;
       }
     </style>
     <div class="widget" role="region" aria-label="Avar download selection">
       <span class="count" id="count"></span>
-      <button type="button" id="downloadBtn">Download all</button>
+      <button type="button" class="download-btn" id="downloadBtn">Download all</button>
+      <button type="button" class="close-btn" id="closeBtn" aria-label="Dismiss">×</button>
     </div>
   `;
 
   shadow.getElementById("downloadBtn").addEventListener("click", () => {
     void downloadSelectedLinks(shadow);
+  });
+  shadow.getElementById("closeBtn").addEventListener("click", () => {
+    widgetDismissed = true;
+    removeSelectionWidget();
   });
 
   document.documentElement.appendChild(host);
@@ -216,7 +293,13 @@ async function downloadSelectedLinks(shadow) {
 
 function updateSelectionWidget() {
   const items = collectSelectedLinks();
-  const shouldShow = showSelectionWidget && items.length >= MIN_SELECTED_LINKS_FOR_WIDGET;
+  if (items.length !== lastWidgetLinkCount) {
+    widgetDismissed = false;
+    lastWidgetLinkCount = items.length;
+  }
+
+  const shouldShow =
+    showSelectionWidget && items.length >= MIN_SELECTED_LINKS_FOR_WIDGET && !widgetDismissed;
 
   if (!shouldShow) {
     removeSelectionWidget();
@@ -233,6 +316,8 @@ function updateSelectionWidget() {
   if (countEl) {
     countEl.textContent = `${items.length} link(s) selected`;
   }
+
+  positionSelectionWidget(host);
 }
 
 async function loadWidgetSetting() {
@@ -279,6 +364,16 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 document.addEventListener("selectionchange", scheduleSelectionWidgetUpdate);
+
+function repositionSelectionWidgetIfVisible() {
+  if (!selectionWidgetHost) {
+    return;
+  }
+  positionSelectionWidget(selectionWidgetHost);
+}
+
+window.addEventListener("scroll", repositionSelectionWidgetIfVisible, true);
+window.addEventListener("resize", repositionSelectionWidgetIfVisible);
 
 api.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || !changes.showSelectionWidget) {
