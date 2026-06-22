@@ -26,6 +26,9 @@ char *sanitize_filename(const char *name);
 /* Atomically moves src to dest (replace if dest exists). Returns 0 on success. */
 int move_file_atomic(const char *src, const char *dest);
 
+/* Returns dest_path, or a variant with " (n)" before the extension when dest exists. Caller must free(). */
+char *resolve_unique_dest_path(const char *dest_path);
+
 /* Returns true when path exists and is a regular file. */
 bool file_exists(const char *path);
 

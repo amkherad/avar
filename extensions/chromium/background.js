@@ -1,6 +1,7 @@
-importScripts("media.js", "capture.js", "protocol.js", "hls.js");
+importScripts("media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js");
 
 const EXTENSION_VERSION = "0.1.0";
+const { IDS: MENU_IDS } = globalThis.AvarContextMenu;
 const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE } =
   globalThis.AvarExtensionProtocol;
 
@@ -178,18 +179,78 @@ async function listMediaFromActiveTab() {
   return result;
 }
 
+let lastSelectionCount = 0;
+
+async function refreshContextMenus(hasSelectedLinks) {
+  await globalThis.AvarContextMenu.rebuild(chrome.contextMenus, hasSelectedLinks);
+}
+
+async function openBatchAllMedia(tab) {
+  const { items, urls, pageTitle } = await collectFromTab(tab.id);
+  const media = items.length > 0 ? items : urls.map((url) => ({ url, kind: "direct" }));
+  const listed = media.filter((item) => AvarMedia.shouldListMediaItem(item));
+  if (listed.length === 0) {
+    return;
+  }
+  const stored = await chrome.storage.local.get(["defaultQueueId"]);
+  await openBatchAdd({
+    items: listed.map((item) => buildBatchItemFromMedia(item, pageTitle, tab.url)),
+    pageUrl: tab.url,
+    pageTitle: pageTitle || tab.title || "",
+    defaultQueueId: stored.defaultQueueId || null,
+  });
+}
+
+async function openBatchSelectedMedia(tab) {
+  const { selectedItems, pageTitle } = await collectFromTab(tab.id);
+  const listed = selectedItems.filter((item) => item?.url);
+  if (listed.length === 0) {
+    return;
+  }
+  const stored = await chrome.storage.local.get(["defaultQueueId"]);
+  await openDownloads({
+    items: listed.map((item) => buildBatchItemFromMedia(item, pageTitle, tab.url)),
+    pageUrl: tab.url,
+    pageTitle: pageTitle || tab.title || "",
+    defaultQueueId: stored.defaultQueueId || null,
+  });
+}
+
+async function openLinkDownloadDialog(linkUrl, tab) {
+  const stored = await chrome.storage.local.get(["defaultQueueId"]);
+  const classified = AvarMedia.classifyMediaUrl(linkUrl);
+  const item = classified || { url: linkUrl, kind: "direct" };
+  const pageTitle = tab.title || "";
+  await openSingleAdd({
+    url: linkUrl,
+    streamKind: item.kind,
+    filename: AvarMedia.itemDisplayFilename(item, pageTitle),
+    referer: tab.url,
+    pageUrl: tab.url,
+    pageTitle,
+    defaultQueueId: stored.defaultQueueId || null,
+  });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: "avar-download-page-media",
-    title: "Download all media with Avar",
-    contexts: ["page", "frame"],
-  });
-  chrome.contextMenus.create({
-    id: "avar-download-link",
-    title: "Download with Avar",
-    contexts: ["link"],
-  });
+  void refreshContextMenus(false);
 });
+
+if (chrome.contextMenus.onShown) {
+  chrome.contextMenus.onShown.addListener(async (_info, tab) => {
+    if (!tab?.id) {
+      return;
+    }
+    try {
+      const { selectedItems } = await collectFromTab(tab.id);
+      const count = selectedItems.length;
+      lastSelectionCount = count;
+      await refreshContextMenus(count > 0);
+    } catch {
+      await refreshContextMenus(lastSelectionCount > 0);
+    }
+  });
+}
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) {
@@ -197,25 +258,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 
   try {
-    if (info.menuItemId === "avar-download-link" && info.linkUrl) {
-      await addDownload({ url: info.linkUrl, referer: tab.url, autoStart: true });
+    if (info.menuItemId === MENU_IDS.DOWNLOAD_LINK && info.linkUrl) {
+      await openLinkDownloadDialog(info.linkUrl, tab);
       return;
     }
 
-    if (info.menuItemId === "avar-download-page-media") {
-      const { items, urls, pageTitle } = await collectFromTab(tab.id);
-      const media = items.length > 0 ? items : urls.map((url) => ({ url, kind: "direct" }));
-      const listed = media.filter((item) => AvarMedia.shouldListMediaItem(item));
-      if (listed.length === 0) {
-        return;
-      }
-      const stored = await chrome.storage.local.get(["defaultQueueId"]);
-      await openBatchAdd({
-        items: listed.map((item) => buildBatchItemFromMedia(item, pageTitle, tab.url)),
-        pageUrl: tab.url,
-        pageTitle: pageTitle || tab.title || "",
-        defaultQueueId: stored.defaultQueueId || null,
-      });
+    if (info.menuItemId === MENU_IDS.DOWNLOAD_ALL) {
+      await openBatchAllMedia(tab);
+      return;
+    }
+
+    if (info.menuItemId === MENU_IDS.DOWNLOAD_SELECTED) {
+      await openBatchSelectedMedia(tab);
       return;
     }
   } catch (error) {
@@ -224,6 +278,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "avar-selection-changed") {
+    const count = typeof message.count === "number" ? message.count : 0;
+    lastSelectionCount = count;
+    refreshContextMenus(count > 0)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+
   if (message?.type === "avar-open-add-download" && message.item?.url) {
     openSingleAdd({
       url: message.item.url,
@@ -265,12 +328,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message?.type === "avar-add-download" && message.url) {
     const referer = message.referer || sender.tab?.url || null;
-    addDownload({
+    openSingleAdd({
       url: message.url,
       streamKind: message.streamKind,
+      filename: message.filename,
       referer,
-      queue: message.queue,
-      autoStart: message.autoStart !== false,
+      pageUrl: referer,
+      pageTitle: message.pageTitle || "",
+      defaultQueueId: message.defaultQueueId,
     })
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: String(error) }));

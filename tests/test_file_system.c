@@ -73,6 +73,37 @@ AVAR_TEST(file_system_make_dirs_and_exists) {
     free(file_path);
 }
 
+AVAR_TEST(file_system_resolve_unique_dest_path) {
+    setup_paths();
+
+    char *existing = path_join(g_guard.work_dir, "report.pdf");
+    AVAR_ASSERT_NOT_NULL(existing);
+    FILE *fp = fopen(existing, "wb");
+    AVAR_ASSERT_NOT_NULL(fp);
+    fclose(fp);
+
+    char *requested = path_join(g_guard.work_dir, "report.pdf");
+    AVAR_ASSERT_NOT_NULL(requested);
+    char *unique = resolve_unique_dest_path(requested);
+    AVAR_ASSERT_NOT_NULL(unique);
+    char *expected = path_join(g_guard.work_dir, "report (1).pdf");
+    AVAR_ASSERT_NOT_NULL(expected);
+    AVAR_ASSERT_STR_EQ(unique, expected);
+    free(expected);
+    free(unique);
+    free(requested);
+
+    char *free_path = path_join(g_guard.work_dir, "notes.txt");
+    AVAR_ASSERT_NOT_NULL(free_path);
+    unique = resolve_unique_dest_path(free_path);
+    AVAR_ASSERT_NOT_NULL(unique);
+    AVAR_ASSERT_STR_EQ(unique, free_path);
+    free(unique);
+    free(free_path);
+
+    free(existing);
+}
+
 AVAR_TEST(file_system_move_file_atomic) {
     setup_paths();
 
@@ -219,6 +250,7 @@ AVAR_TEST_MAIN(
         run_file_system_sanitize_filename();
         run_file_system_path_join();
         run_file_system_make_dirs_and_exists();
+        run_file_system_resolve_unique_dest_path();
         run_file_system_move_file_atomic();
         run_file_system_remove_directory_recursive();
         run_file_system_config_path_uses_home();

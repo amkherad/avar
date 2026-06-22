@@ -274,6 +274,57 @@ bool file_exists(const char *path) {
     return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
 
+char *resolve_unique_dest_path(const char *dest_path) {
+    if (dest_path == NULL || dest_path[0] == '\0') {
+        return NULL;
+    }
+
+    if (!file_exists(dest_path)) {
+        return strdup(dest_path);
+    }
+
+    const char *last_sep = strrchr(dest_path, PATH_SEPARATOR);
+    const char *filename = last_sep != NULL ? last_sep + 1 : dest_path;
+    char *dir = NULL;
+    if (last_sep != NULL) {
+        dir = strndup(dest_path, (size_t)(last_sep - dest_path));
+        if (dir == NULL) {
+            return NULL;
+        }
+    }
+
+    const char *dot = strrchr(filename, '.');
+    const bool has_ext = dot != NULL && dot != filename;
+    const size_t stem_len = has_ext ? (size_t)(dot - filename) : strlen(filename);
+    const char *ext = has_ext ? dot : "";
+
+    for (unsigned n = 1; n < 10000U; n++) {
+        char variant[512];
+        int written = snprintf(variant, sizeof variant, "%.*s (%u)%s", (int)stem_len, filename, n,
+                               ext);
+        if (written < 0 || (size_t)written >= sizeof variant) {
+            free(dir);
+            return NULL;
+        }
+
+        char *candidate = dir != NULL ? path_join(dir, variant) : strdup(variant);
+        if (candidate == NULL) {
+            free(dir);
+            return NULL;
+        }
+
+        if (!file_exists(candidate)) {
+            free(dir);
+            return candidate;
+        }
+
+        free(candidate);
+    }
+
+    free(dir);
+    return NULL;
+}
+
 int move_file_atomic(const char *src, const char *dest) {
     if (src == NULL || dest == NULL) {
         return -1;

@@ -35,6 +35,26 @@ function fsExists(filePath) {
   }
 }
 
+function resolveUniqueDestPath(destDir, filename) {
+  const baseName = path.basename(filename);
+  let destPath = path.join(destDir, baseName);
+  if (!fsExists(destPath)) {
+    return destPath;
+  }
+
+  const ext = path.extname(baseName);
+  const stem = ext ? baseName.slice(0, -ext.length) : baseName;
+
+  for (let n = 1; n < 10000; n++) {
+    const candidate = path.join(destDir, `${stem} (${n})${ext}`);
+    if (!fsExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error("Could not find a unique filename");
+}
+
 const iconSvgPath = path.join(__dirname, "..", "icon.svg");
 const iconPngPath = path.join(__dirname, "icon-16.png");
 const iconPngFallback = path.join(__dirname, "..", "public", "icon-128.png");
@@ -464,7 +484,7 @@ ipcMain.handle("download:saveRemoteFile", async (_event, options) => {
 
   const buffer = Buffer.from(await response.arrayBuffer());
   fs.mkdirSync(destDir, { recursive: true });
-  const destPath = path.join(destDir, path.basename(filename));
+  const destPath = resolveUniqueDestPath(destDir, path.basename(filename));
   fs.writeFileSync(destPath, buffer);
 });
 

@@ -1786,6 +1786,40 @@ static bool finalize_download(DownloadJob *job) {
         }
     }
 
+    char *unique_dest = resolve_unique_dest_path(job->dest_path);
+    if (unique_dest == NULL) {
+        set_error(job, "Failed to resolve destination path for %s", job->dest_path);
+        return false;
+    }
+
+    if (strcmp(unique_dest, job->dest_path) != 0) {
+        const char *basename = strrchr(unique_dest, PATH_SEPARATOR);
+        basename = basename != NULL ? basename + 1 : unique_dest;
+
+        free(job->dest_path);
+        job->dest_path = unique_dest;
+
+        free(job->filename);
+        job->filename = strdup(basename);
+        if (job->filename == NULL) {
+            set_error(job, "Failed to update filename for %s", unique_dest);
+            return false;
+        }
+
+        if (job->state != NULL) {
+            free(job->state->dest_path);
+            free(job->state->filename);
+            job->state->dest_path = strdup(unique_dest);
+            job->state->filename = strdup(basename);
+            if (job->state->dest_path == NULL || job->state->filename == NULL) {
+                set_error(job, "Failed to update state paths for %s", unique_dest);
+                return false;
+            }
+        }
+    } else {
+        free(unique_dest);
+    }
+
     if (move_file_atomic(job->temp_path, job->dest_path) != 0) {
         set_error(job, "Failed to move file to %s", job->dest_path);
         return false;

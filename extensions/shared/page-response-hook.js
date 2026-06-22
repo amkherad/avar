@@ -16,6 +16,24 @@
     }
   }
 
+  function getXhrResponseText(xhr) {
+    const responseType = xhr.responseType || "";
+    if (responseType === "" || responseType === "text") {
+      return xhr.responseText;
+    }
+    if (responseType === "json") {
+      const body = xhr.response;
+      if (typeof body === "string") {
+        return body;
+      }
+      if (body != null) {
+        return JSON.stringify(body);
+      }
+      return "";
+    }
+    return "";
+  }
+
   const originalFetch = window.fetch;
   window.fetch = function avarResponseFetchWrapper(...args) {
     return originalFetch.apply(this, args).then((response) => {
@@ -34,7 +52,11 @@
   const originalOpen = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function avarResponseXhrOpen(method, url, ...rest) {
     this.addEventListener("load", function avarResponseXhrLoad() {
-      postBody(this.responseText);
+      try {
+        postBody(getXhrResponseText(this));
+      } catch {
+        // responseText is invalid for some responseType values
+      }
     });
     return originalOpen.call(this, method, url, ...rest);
   };

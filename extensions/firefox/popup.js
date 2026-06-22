@@ -3,19 +3,28 @@ const DEFAULT_MEDIA_FILTER = "all";
 const DEFAULT_MEDIA_SORT = "type";
 const DEFAULT_POPUP_WIDTH = 420;
 const DEFAULT_POPUP_HEIGHT = 560;
+const POPUP_WIDTH_MIN = 320;
+const POPUP_WIDTH_MAX = 760;
+const POPUP_HEIGHT_MIN = 400;
+const POPUP_HEIGHT_MAX = 600;
+
+let verticalResizeEnabled = false;
 
 const api = typeof browser !== "undefined" ? browser : chrome;
 
 const bridgeUrlInput = document.getElementById("bridgeUrl");
 const statusEl = document.getElementById("status");
 const bridgeStatusEl = document.getElementById("bridgeStatus");
+const bridgeStatusLabel = document.getElementById("bridgeStatusLabel");
 const mediaList = document.getElementById("mediaList");
 const selectedSection = document.getElementById("selectedSection");
 const selectedLinksList = document.getElementById("selectedLinksList");
 const downloadSelectedBtn = document.getElementById("downloadSelected");
 const downloadAllBtn = document.getElementById("downloadAll");
-const settingsPanel = document.getElementById("settingsPanel");
+const mainView = document.getElementById("mainView");
+const settingsView = document.getElementById("settingsView");
 const settingsBtn = document.getElementById("settingsBtn");
+const settingsBackBtn = document.getElementById("settingsBackBtn");
 const refreshBtn = document.getElementById("refreshBtn");
 const defaultQueueSelect = document.getElementById("defaultQueue");
 const defaultMediaFilterSelect = document.getElementById("defaultMediaFilter");
@@ -58,6 +67,8 @@ function setStatus(text) {
 
 function setBridgeConnected(connected) {
   bridgeStatusEl.classList.toggle("status-dot--ok", connected);
+  bridgeStatusLabel.textContent = connected ? "Connected" : "Disconnected";
+  bridgeStatusLabel.classList.toggle("connection-status__label--ok", connected);
   bridgeStatusEl.title = connected
     ? "Connected to Avar bridge"
     : "Cannot reach Avar bridge";
@@ -132,10 +143,64 @@ function queueNameForId(queueId) {
 }
 
 function applyPopupSize(width, height) {
-  const nextWidth = Math.max(320, Math.min(760, Number(width) || DEFAULT_POPUP_WIDTH));
-  const nextHeight = Math.max(400, Math.min(760, Number(height) || DEFAULT_POPUP_HEIGHT));
+  const nextWidth = Math.max(
+    POPUP_WIDTH_MIN,
+    Math.min(POPUP_WIDTH_MAX, Number(width) || DEFAULT_POPUP_WIDTH),
+  );
+  let nextHeight = DEFAULT_POPUP_HEIGHT;
+  if (verticalResizeEnabled) {
+    nextHeight = Math.max(
+      POPUP_HEIGHT_MIN,
+      Math.min(POPUP_HEIGHT_MAX, Number(height) || DEFAULT_POPUP_HEIGHT),
+    );
+  }
+
   document.documentElement.style.width = `${nextWidth}px`;
   document.documentElement.style.height = `${nextHeight}px`;
+}
+
+function persistPopupSize(width, height) {
+  const payload = { popupWidth: Math.round(width) };
+  if (verticalResizeEnabled && typeof height === "number") {
+    payload.popupHeight = Math.round(height);
+  }
+  void api.storage.local.set(payload);
+}
+
+function hasOuterDocumentScroll() {
+  return (
+    document.documentElement.scrollHeight > document.documentElement.clientHeight + 1 ||
+    document.body.scrollHeight > document.body.clientHeight + 1
+  );
+}
+
+function browserHonorsPopupHeight(requestedHeight) {
+  void document.documentElement.offsetHeight;
+  return document.documentElement.clientHeight >= requestedHeight - 2;
+}
+
+function initVerticalResizeProbe(storedHeight) {
+  const bottomHandle = document.querySelector(".resize-handle--bottom");
+  const width = document.documentElement.getBoundingClientRect().width;
+
+  document.documentElement.style.height = `${POPUP_HEIGHT_MAX}px`;
+  void document.documentElement.offsetHeight;
+
+  const honored = browserHonorsPopupHeight(POPUP_HEIGHT_MAX);
+  const scrolls = hasOuterDocumentScroll();
+  verticalResizeEnabled = honored && !scrolls;
+
+  if (bottomHandle) {
+    bottomHandle.hidden = !verticalResizeEnabled;
+    bottomHandle.setAttribute("aria-hidden", verticalResizeEnabled ? "false" : "true");
+  }
+
+  if (!verticalResizeEnabled) {
+    applyPopupSize(width, DEFAULT_POPUP_HEIGHT);
+    return;
+  }
+
+  applyPopupSize(width, storedHeight ?? DEFAULT_POPUP_HEIGHT);
 }
 
 function installPopupResizePersistence() {
@@ -151,10 +216,87 @@ function installPopupResizePersistence() {
       clearTimeout(saveTimer);
     }
     saveTimer = setTimeout(() => {
-      void api.storage.local.set({ popupWidth: width, popupHeight: height });
+      persistPopupSize(width, verticalResizeEnabled ? height : undefined);
     }, 200);
   });
   observer.observe(document.documentElement);
+}
+
+function installPopupResizeHandles() {
+  let drag = null;
+
+  function onPointerMove(event) {
+    if (!drag) {
+      return;
+    }
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    let width = drag.startWidth;
+    let height = drag.startHeight;
+
+    if (drag.axis === "w") {
+      width = drag.startWidth - dx;
+    } else if (drag.axis === "s" && verticalResizeEnabled) {
+      height = drag.startHeight + dy;
+    }
+
+    applyPopupSize(width, height);
+
+    if (drag.axis === "s" && verticalResizeEnabled) {
+      if (!browserHonorsPopupHeight(height) || hasOuterDocumentScroll()) {
+        applyPopupSize(width, drag.startHeight);
+      }
+    }
+  }
+
+  function onPointerUp() {
+    if (!drag) {
+      return;
+    }
+    const rect = document.documentElement.getBoundingClientRect();
+    persistPopupSize(rect.width, verticalResizeEnabled ? rect.height : undefined);
+    drag = null;
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+  }
+
+  for (const handle of document.querySelectorAll(".resize-handle")) {
+    if (handle.hidden) {
+      continue;
+    }
+    handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      const rect = document.documentElement.getBoundingClientRect();
+      drag = {
+        axis: handle.dataset.resize,
+        startX: event.clientX,
+        startY: event.clientY,
+        startWidth: rect.width,
+        startHeight: rect.height,
+      };
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    });
+  }
+}
+
+function showSettingsView() {
+  mainView.hidden = true;
+  settingsView.hidden = false;
+  settingsBtn.setAttribute("aria-pressed", "true");
+  settingsBtn.title = "Back to media list";
+  void loadQueues();
+}
+
+function showMainView() {
+  settingsView.hidden = true;
+  mainView.hidden = false;
+  settingsBtn.setAttribute("aria-pressed", "false");
+  settingsBtn.title = "Settings";
+}
+
+function isSettingsOpen() {
+  return !settingsView.hidden;
 }
 
 function populateDefaultQueueOptions(selectedId) {
@@ -466,7 +608,7 @@ function createDownloadButton(item) {
       await openBatchAddDialog(lastSelectedItems);
       return;
     }
-    await openDownloadDialog([item]);
+    await openSingleAddDialog(item);
   });
   return btn;
 }
@@ -631,6 +773,7 @@ async function loadConfig() {
 
   applyPopupSize(stored.popupWidth, stored.popupHeight);
   installPopupResizePersistence();
+  initVerticalResizeProbe(stored.popupHeight);
 
   if (stored.defaultQueueId) {
     defaultQueueSelect.value = stored.defaultQueueId;
@@ -703,14 +846,16 @@ async function scanPage() {
   }
 }
 
-settingsBtn.addEventListener("click", async () => {
-  const open = settingsPanel.hasAttribute("hidden");
-  if (open) {
-    settingsPanel.removeAttribute("hidden");
-    await loadQueues();
-  } else {
-    settingsPanel.setAttribute("hidden", "");
+settingsBtn.addEventListener("click", () => {
+  if (isSettingsOpen()) {
+    showMainView();
+    return;
   }
+  showSettingsView();
+});
+
+settingsBackBtn.addEventListener("click", () => {
+  showMainView();
 });
 
 refreshBtn.addEventListener("click", () => {
@@ -759,6 +904,7 @@ downloadSelectedBtn.addEventListener("click", async () => {
 void (async () => {
   await loadConfig();
   void loadQueues();
+  installPopupResizeHandles();
   await scanPage();
 })();
 

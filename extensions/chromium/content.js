@@ -248,7 +248,13 @@ function scheduleSelectionWidgetUpdate() {
   selectionChangeTimer = setTimeout(() => {
     selectionChangeTimer = null;
     updateSelectionWidget();
+    notifySelectionChanged();
   }, SELECTION_WIDGET_DEBOUNCE_MS);
+}
+
+function notifySelectionChanged() {
+  const count = collectSelectedLinks().length;
+  void api.runtime.sendMessage({ type: "avar-selection-changed", count }).catch(() => {});
 }
 
 api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -284,3 +290,4 @@ api.storage.onChanged.addListener((changes, area) => {
 
 installPageHooks();
 void loadWidgetSetting();
+notifySelectionChanged();
