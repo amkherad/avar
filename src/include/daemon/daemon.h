@@ -113,6 +113,9 @@ void daemon_config_apply_start_options(DaemonConfig *cfg, const DaemonStartOptio
 /** Reads daemon.server.fileDownload.enabled (default false). */
 bool daemon_server_file_download_enabled(void);
 
+/** Reads daemon.server.fsBrowse.enabled (default false). */
+bool daemon_server_fs_browse_enabled(void);
+
 /* -------------------------------------------------------------------------- */
 /* Server lifecycle                                                           */
 /* -------------------------------------------------------------------------- */

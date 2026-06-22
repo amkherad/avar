@@ -85,12 +85,19 @@ export interface DownloadInfo {
 
 
 
+export interface DirectoryBrowseResult {
+  path: string;
+  parent?: string;
+  entries: Array<{ name: string }>;
+}
+
 export interface HealthInfo {
   status: string;
   queueCount: number;
   activeDownloads: number;
   uptimeSeconds: number;
   fileDownloadEnabled?: boolean;
+  fsBrowseEnabled?: boolean;
   downloads: Array<{
     id: string;
     filename: string;

@@ -470,3 +470,250 @@ int remove_directory_recursive(const char *path) {
     return rmdir(path) == 0 ? 0 : -1;
 #endif
 }
+
+static int compare_dir_entries(const void *a, const void *b) {
+    const AvarDirEntry *left = (const AvarDirEntry *)a;
+    const AvarDirEntry *right = (const AvarDirEntry *)b;
+    if (left->is_dir != right->is_dir) {
+        return left->is_dir ? -1 : 1;
+    }
+    return strcmp(left->name, right->name);
+}
+
+static char *parent_directory_path(const char *path) {
+    if (path == NULL || path[0] == '\0') {
+        return NULL;
+    }
+
+    const size_t len = strlen(path);
+    char *copy = malloc(len + 1);
+    if (copy == NULL) {
+        return NULL;
+    }
+    memcpy(copy, path, len + 1);
+
+    size_t trimmed = len;
+    while (trimmed > 0 && (copy[trimmed - 1] == PATH_SEP || copy[trimmed - 1] == '/')) {
+        copy[--trimmed] = '\0';
+    }
+
+    char *last_sep = strrchr(copy, PATH_SEP);
+#if defined(_WIN32)
+    {
+        char *alt_sep = strrchr(copy, '/');
+        if (alt_sep != NULL && (last_sep == NULL || alt_sep > last_sep)) {
+            last_sep = alt_sep;
+        }
+    }
+#endif
+    if (last_sep == NULL) {
+        free(copy);
+        return NULL;
+    }
+
+    if (last_sep == copy) {
+        copy[1] = '\0';
+        return copy;
+    }
+
+#if defined(_WIN32)
+    if (last_sep == copy + 2 && copy[1] == ':') {
+        copy[3] = '\0';
+        return copy;
+    }
+#endif
+
+    *last_sep = '\0';
+    return copy;
+}
+
+char *normalize_directory_path(const char *path) {
+    if (path == NULL) {
+        return default_download_path();
+    }
+
+    while (*path == ' ' || *path == '\t') {
+        path++;
+    }
+    if (path[0] == '\0') {
+        return default_download_path();
+    }
+
+    char *resolved = NULL;
+#if defined(_WIN32)
+    char buffer[AVAR_CONFIG_PATH_MAX];
+    if (_fullpath(buffer, path, sizeof buffer) != NULL) {
+        resolved = strdup(buffer);
+    }
+#else
+    resolved = realpath(path, NULL);
+    if (resolved == NULL && path[0] != '/') {
+        char *base = default_download_path();
+        if (base != NULL) {
+            char *joined = path_join(base, path);
+            free(base);
+            if (joined != NULL) {
+                resolved = realpath(joined, NULL);
+                free(joined);
+            }
+        }
+    }
+#endif
+    return resolved;
+}
+
+void avar_dir_listing_free(AvarDirListing *listing) {
+    if (listing == NULL) {
+        return;
+    }
+    free(listing->path);
+    free(listing->parent);
+    if (listing->entries != NULL) {
+        for (size_t i = 0; i < listing->count; ++i) {
+            free(listing->entries[i].name);
+        }
+        free(listing->entries);
+    }
+    listing->path = NULL;
+    listing->parent = NULL;
+    listing->entries = NULL;
+    listing->count = 0;
+}
+
+int list_directory_entries(const char *path, AvarDirListing *out) {
+    if (out == NULL) {
+        return -1;
+    }
+    out->path = NULL;
+    out->parent = NULL;
+    out->entries = NULL;
+    out->count = 0;
+
+    char *resolved = normalize_directory_path(path);
+    if (resolved == NULL) {
+        return -1;
+    }
+
+    struct stat st;
+    if (stat(resolved, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        free(resolved);
+        return -1;
+    }
+
+    AvarDirEntry *items = NULL;
+    size_t capacity = 0;
+    size_t count = 0;
+
+#if defined(_WIN32)
+    char pattern[AVAR_CONFIG_PATH_MAX];
+    snprintf(pattern, sizeof pattern, "%s\\*", resolved);
+
+    WIN32_FIND_DATAA entry;
+    HANDLE handle = FindFirstFileA(pattern, &entry);
+    if (handle == INVALID_HANDLE_VALUE) {
+        free(resolved);
+        return -1;
+    }
+
+    do {
+        if (strcmp(entry.cFileName, ".") == 0 || strcmp(entry.cFileName, "..") == 0) {
+            continue;
+        }
+
+        if (count >= capacity) {
+            const size_t next = capacity == 0 ? 16 : capacity * 2;
+            AvarDirEntry *grown = realloc(items, next * sizeof(AvarDirEntry));
+            if (grown == NULL) {
+                FindClose(handle);
+                for (size_t i = 0; i < count; ++i) {
+                    free(items[i].name);
+                }
+                free(items);
+                free(resolved);
+                return -1;
+            }
+            items = grown;
+            capacity = next;
+        }
+
+        items[count].name = strdup(entry.cFileName);
+        items[count].is_dir = (entry.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        if (items[count].name == NULL) {
+            FindClose(handle);
+            for (size_t i = 0; i < count; ++i) {
+                free(items[i].name);
+            }
+            free(items);
+            free(resolved);
+            return -1;
+        }
+        count++;
+    } while (FindNextFileA(handle, &entry));
+
+    FindClose(handle);
+#else
+    DIR *dir = opendir(resolved);
+    if (dir == NULL) {
+        free(resolved);
+        return -1;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        if (count >= capacity) {
+            const size_t next = capacity == 0 ? 16 : capacity * 2;
+            AvarDirEntry *grown = realloc(items, next * sizeof(AvarDirEntry));
+            if (grown == NULL) {
+                closedir(dir);
+                for (size_t i = 0; i < count; ++i) {
+                    free(items[i].name);
+                }
+                free(items);
+                free(resolved);
+                return -1;
+            }
+            items = grown;
+            capacity = next;
+        }
+
+        char *child = path_join(resolved, entry->d_name);
+        bool is_dir = false;
+        if (child != NULL) {
+            struct stat child_st;
+            if (stat(child, &child_st) == 0) {
+                is_dir = S_ISDIR(child_st.st_mode);
+            }
+            free(child);
+        }
+
+        items[count].name = strdup(entry->d_name);
+        items[count].is_dir = is_dir;
+        if (items[count].name == NULL) {
+            closedir(dir);
+            for (size_t i = 0; i < count; ++i) {
+                free(items[i].name);
+            }
+            free(items);
+            free(resolved);
+            return -1;
+        }
+        count++;
+    }
+
+    closedir(dir);
+#endif
+
+    if (count > 1) {
+        qsort(items, count, sizeof(AvarDirEntry), compare_dir_entries);
+    }
+
+    out->path = resolved;
+    out->parent = parent_directory_path(resolved);
+    out->entries = items;
+    out->count = count;
+    return 0;
+}

@@ -237,7 +237,7 @@ function updateSelectionWidget() {
 
 async function loadWidgetSetting() {
   const stored = await api.storage.local.get(["showSelectionWidget"]);
-  showSelectionWidget = Boolean(stored.showSelectionWidget);
+  showSelectionWidget = stored.showSelectionWidget === true;
   updateSelectionWidget();
 }
 
@@ -284,10 +284,21 @@ api.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || !changes.showSelectionWidget) {
     return;
   }
-  showSelectionWidget = Boolean(changes.showSelectionWidget.newValue);
+  showSelectionWidget = changes.showSelectionWidget.newValue === true;
   updateSelectionWidget();
 });
 
+document.addEventListener(
+  "contextmenu",
+  () => {
+    updateSelectionWidget();
+    notifySelectionChanged();
+  },
+  true,
+);
+
 installPageHooks();
-void loadWidgetSetting();
-notifySelectionChanged();
+void (async () => {
+  await loadWidgetSetting();
+  notifySelectionChanged();
+})();

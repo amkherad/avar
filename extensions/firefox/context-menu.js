@@ -3,7 +3,16 @@ const AvarContextMenu = {
     ROOT: "avar-root",
     DOWNLOAD_ALL: "avar-download-all",
     DOWNLOAD_SELECTED: "avar-download-selected",
+    DOWNLOAD_ALL_SUB: "avar-download-all-sub",
     DOWNLOAD_LINK: "avar-download-link",
+  },
+
+  menusReady: false,
+
+  isDownloadAllId(menuItemId) {
+    return (
+      menuItemId === this.IDS.DOWNLOAD_ALL || menuItemId === this.IDS.DOWNLOAD_ALL_SUB
+    );
   },
 
   async removeMenus(menusApi) {
@@ -14,43 +23,66 @@ const AvarContextMenu = {
         // Menu may not exist yet.
       }
     }
+    this.menusReady = false;
   },
 
-  async rebuild(menusApi, hasSelectedLinks) {
-    await this.removeMenus(menusApi);
-    const pageContexts = ["page", "frame"];
+  async createMenuItem(menusApi, properties) {
+    try {
+      await menusApi.create(properties);
+    } catch {
+      // Item may already exist after a service worker restart.
+    }
+  },
 
-    if (hasSelectedLinks) {
-      await menusApi.create({
-        id: this.IDS.ROOT,
-        title: "Avar",
-        contexts: pageContexts,
-      });
-      await menusApi.create({
-        id: this.IDS.DOWNLOAD_SELECTED,
-        parentId: this.IDS.ROOT,
-        title: "Download selected item(s)",
-        contexts: pageContexts,
-      });
-      await menusApi.create({
-        id: this.IDS.DOWNLOAD_ALL,
-        parentId: this.IDS.ROOT,
-        title: "Download all media",
-        contexts: pageContexts,
-      });
-    } else {
-      await menusApi.create({
-        id: this.IDS.DOWNLOAD_ALL,
-        title: "Avar — Download all media",
-        contexts: pageContexts,
-      });
+  async ensureMenus(menusApi) {
+    if (this.menusReady) {
+      return;
     }
 
-    await menusApi.create({
+    const pageContexts = ["page", "frame"];
+
+    await this.createMenuItem(menusApi, {
+      id: this.IDS.ROOT,
+      title: "Avar",
+      contexts: pageContexts,
+      visible: false,
+    });
+    await this.createMenuItem(menusApi, {
+      id: this.IDS.DOWNLOAD_SELECTED,
+      parentId: this.IDS.ROOT,
+      title: "Download selected item(s)",
+      contexts: pageContexts,
+    });
+    await this.createMenuItem(menusApi, {
+      id: this.IDS.DOWNLOAD_ALL_SUB,
+      parentId: this.IDS.ROOT,
+      title: "Download all media",
+      contexts: pageContexts,
+    });
+    await this.createMenuItem(menusApi, {
+      id: this.IDS.DOWNLOAD_ALL,
+      title: "Avar — Download all media",
+      contexts: pageContexts,
+    });
+    await this.createMenuItem(menusApi, {
       id: this.IDS.DOWNLOAD_LINK,
       title: "Download with Avar",
       contexts: ["link"],
     });
+
+    this.menusReady = true;
+  },
+
+  async setHasSelectedLinks(menusApi, hasSelectedLinks) {
+    await this.ensureMenus(menusApi);
+    await menusApi.update(this.IDS.ROOT, { visible: hasSelectedLinks });
+    await menusApi.update(this.IDS.DOWNLOAD_ALL, { visible: !hasSelectedLinks });
+  },
+
+  async install(menusApi) {
+    await this.removeMenus(menusApi);
+    await this.ensureMenus(menusApi);
+    await this.setHasSelectedLinks(menusApi, false);
   },
 };
 

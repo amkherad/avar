@@ -13,7 +13,6 @@ import { DownloadTable } from "@/components/download/DownloadTable";
 import { DownloadToolbar } from "@/components/download/DownloadToolbar";
 import { DownloadDetailPanel } from "@/components/download/DownloadDetailPanel";
 import { DownloadContextMenu } from "@/components/download/DownloadContextMenu";
-import { AddDownloadModal } from "@/components/download/AddDownloadModal";
 import { BatchAddDownloadModal } from "@/components/download/BatchAddDownloadModal";
 import { Footer } from "@/components/layout/Footer";
 import { ConsolePanel } from "@/components/console/ConsolePanel";
@@ -30,6 +29,7 @@ import {
   type DownloadStatusFilter,
 } from "@/lib/downloadFilterSort";
 import { openDownloadPopup } from "@/lib/popup";
+import { openAddDownloadDialog } from "@/lib/openAddDownloadDialog";
 import { appLogger } from "@/lib/appLogger";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useShortcutAction } from "@/shortcuts/useShortcutAction";
@@ -48,15 +48,11 @@ import type { DownloadInfo } from "@/api/types";
 interface DownloadPanelProps {
   staleBanner?: React.ReactNode;
   errorBanner?: React.ReactNode;
-  addDownloadOpen: boolean;
-  onAddDownloadOpenChange: (open: boolean) => void;
 }
 
 function DownloadPanel({
   staleBanner,
   errorBanner,
-  addDownloadOpen,
-  onAddDownloadOpenChange,
 }: DownloadPanelProps) {
   const { t } = useTranslation();
   const queues = useDataStore((s) => s.queues);
@@ -79,11 +75,6 @@ function DownloadPanel({
   const adjustDetailPanelWidth = useLayoutStore((s) => s.adjustDetailPanelWidth);
   const downloadViewMode = useLayoutStore((s) => s.downloadViewMode);
   const setDownloadViewMode = useLayoutStore((s) => s.setDownloadViewMode);
-  const { open, openModal, closeModal } = {
-    open: addDownloadOpen,
-    openModal: () => onAddDownloadOpenChange(true),
-    closeModal: () => onAddDownloadOpenChange(false),
-  };
   const [batchAddOpen, setBatchAddOpen] = useState(false);
   const downloadActions = useDownloadActions();
 
@@ -266,7 +257,6 @@ function DownloadPanel({
 
   return (
     <div className="avar-dashboard">
-      <AddDownloadModal open={open} onClose={closeModal} />
       <BatchAddDownloadModal open={batchAddOpen} onClose={() => setBatchAddOpen(false)} />
       <DownloadContextMenu
         download={contextMenu?.download ?? null}
@@ -292,7 +282,7 @@ function DownloadPanel({
                   size="sm"
                   variant="primary"
                   shortcut="download.add"
-                  onClick={openModal}
+                  onClick={() => openAddDownloadDialog(t("download.add"), queueId)}
                 >
                   <FontAwesomeIcon icon={faPlus} />
                   {t("download.add")}
@@ -404,12 +394,7 @@ function DownloadPanel({
   );
 }
 
-export interface DashboardPageProps {
-  addDownloadOpen: boolean;
-  onAddDownloadOpenChange: (open: boolean) => void;
-}
-
-export function DashboardPage({ addDownloadOpen, onAddDownloadOpenChange }: DashboardPageProps) {
+export function DashboardPage() {
   const { t } = useTranslation();
   const connection = useConnectionStore((s) => s.connection);
   const error = useDataStore((s) => s.error);
@@ -438,8 +423,6 @@ export function DashboardPage({ addDownloadOpen, onAddDownloadOpenChange }: Dash
       <DownloadPanel
         staleBanner={staleBanner}
         errorBanner={errorBanner}
-        addDownloadOpen={addDownloadOpen}
-        onAddDownloadOpenChange={onAddDownloadOpenChange}
       />
     </ErrorBoundary>
   );

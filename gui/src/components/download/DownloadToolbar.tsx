@@ -50,10 +50,12 @@ export function DownloadToolbar({
 
   useShortcutAction("download.search", () => searchRef.current?.focus());
 
+  const showStopAll = stoppableIds.length > 0;
+
   return (
     <div className="avar-download-toolbar">
       <div className="avar-download-toolbar__start">
-        {stoppableIds.length > 0 ? (
+        {showStopAll ? (
           <div className="avar-download-toolbar__group">
             <Button
               size="sm"
@@ -70,7 +72,9 @@ export function DownloadToolbar({
         ) : null}
 
         {selectedDownloads.length > 0 ? (
-          <div className="avar-download-toolbar__group">
+          <div
+            className={`avar-download-toolbar__group${showStopAll ? "" : " avar-download-toolbar__group--leading"}`}
+          >
             <span className="avar-download-toolbar__selection">
               {t("download.selectedCount", { count: selectedDownloads.length })}
             </span>

@@ -308,3 +308,11 @@ bool daemon_server_file_download_enabled(void) {
     free(value);
     return enabled;
 }
+
+bool daemon_server_fs_browse_enabled(void) {
+    char *value = get_config_or_default(AVAR_CFG_DAEMON_SERVER_FS_BROWSE_ENABLED, "false");
+    const bool enabled =
+        value != NULL && (strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
+    free(value);
+    return enabled;
+}

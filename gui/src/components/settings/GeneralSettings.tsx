@@ -1,9 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { DirectoryPathInput } from "@/components/ui/DirectoryPathInput";
 import { Button } from "@/components/ui/Button";
 import { useConfigStore } from "@/stores/configStore";
 import type { FooterMonitorSettings, LocaleId, SyncChannelId, ThemeId } from "@/config/defaults";
+import { useLocalDirectoryPathMode } from "@/hooks/useDirectoryPathMode";
 import i18n, { isRtlLocale } from "@/i18n";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { isPwaSupported } from "@/lib/pwa";
@@ -14,6 +16,7 @@ export function GeneralSettings() {
   const config = useConfigStore((s) => s.config);
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const pwa = usePwaInstall();
+  const localDirectoryPathMode = useLocalDirectoryPathMode();
 
   function setLocale(locale: LocaleId) {
     void i18n.changeLanguage(locale);
@@ -96,10 +99,11 @@ export function GeneralSettings() {
       <section className="avar-settings-group">
         <h3 className="avar-settings-group__heading">{t("settings.remoteCopy.title")}</h3>
         <p className="avar-settings-hint">{t("settings.remoteCopy.hint")}</p>
-        <Input
+        <DirectoryPathInput
+          mode={localDirectoryPathMode}
           label={t("settings.remoteCopy.localDownloadPath")}
           value={config.localDownloadPath}
-          onChange={(e) => updateConfig({ localDownloadPath: e.target.value })}
+          onChange={(next) => updateConfig({ localDownloadPath: next })}
         />
       </section>
 

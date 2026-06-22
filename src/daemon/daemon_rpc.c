@@ -7,6 +7,7 @@
 #include <daemon/daemon_session.h>
 #include <daemon/daemon_transport.h>
 #include <download.h>
+#include <file-system.h>
 #include <http_proxy.h>
 #include <queue.h>
 #include <system_stats.h>
@@ -386,6 +387,7 @@ static cJSON *handle_health(void) {
     cJSON_AddNumberToObject(result, "uptimeSeconds",
                             (double)(_daemon_started_at > 0 ? time(NULL) - _daemon_started_at : 0));
     cJSON_AddBoolToObject(result, "fileDownloadEnabled", daemon_server_file_download_enabled());
+    cJSON_AddBoolToObject(result, "fsBrowseEnabled", daemon_server_fs_browse_enabled());
     return result;
 }
 
@@ -646,6 +648,49 @@ static cJSON *handle_downloads_list(void) {
 
     cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
     cJSON_AddItemToObject(result, "downloads", downloads);
+    return result;
+}
+
+static cJSON *handle_fs_browse(cJSON *params) {
+    const cJSON *path_node = cJSON_GetObjectItemCaseSensitive(params, "path");
+    const char *requested =
+        cJSON_IsString(path_node) && path_node->valuestring != NULL ? path_node->valuestring : "";
+
+    AvarDirListing listing = {0};
+    if (list_directory_entries(requested, &listing) != 0) {
+        return NULL;
+    }
+
+    cJSON *result = cJSON_CreateObject();
+    cJSON *entries = cJSON_CreateArray();
+    if (result == NULL || entries == NULL) {
+        cJSON_Delete(result);
+        cJSON_Delete(entries);
+        avar_dir_listing_free(&listing);
+        return NULL;
+    }
+
+    if (listing.path != NULL) {
+        cJSON_AddStringToObject(result, "path", listing.path);
+    }
+    if (listing.parent != NULL) {
+        cJSON_AddStringToObject(result, "parent", listing.parent);
+    }
+
+    for (size_t i = 0; i < listing.count; ++i) {
+        if (!listing.entries[i].is_dir || listing.entries[i].name == NULL) {
+            continue;
+        }
+        cJSON *entry = cJSON_CreateObject();
+        if (entry == NULL) {
+            continue;
+        }
+        cJSON_AddStringToObject(entry, "name", listing.entries[i].name);
+        cJSON_AddItemToArray(entries, entry);
+    }
+
+    cJSON_AddItemToObject(result, "entries", entries);
+    avar_dir_listing_free(&listing);
     return result;
 }
 
@@ -1090,6 +1135,12 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     }
     if (strcmp(method, "downloads.list") == 0) {
         return handle_downloads_list();
+    }
+    if (strcmp(method, "fs.browse") == 0) {
+        if (!daemon_server_fs_browse_enabled()) {
+            return NULL;
+        }
+        return handle_fs_browse(params != NULL ? params : cJSON_CreateObject());
     }
     if (strcmp(method, "daemon.reload") == 0) {
         DaemonConfig cfg;

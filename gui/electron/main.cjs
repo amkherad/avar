@@ -7,6 +7,7 @@ const {
   Tray,
   Menu,
   nativeImage,
+  dialog,
 } = require("electron");
 const http = require("node:http");
 const fs = require("node:fs");
@@ -427,6 +428,18 @@ function createPopupWindow(options) {
 
 ipcMain.handle("popup:open", (_event, options) => {
   return createPopupWindow(options ?? {});
+});
+
+ipcMain.handle("dialog:selectDirectory", async (_event, options) => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory", "createDirectory"],
+    defaultPath: options?.defaultPath,
+    title: options?.title,
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
 });
 
 setBatchPopupOpener((batchId, title) => {

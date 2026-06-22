@@ -1029,6 +1029,11 @@
   border-inline-start: 1px solid var(--avar-border);
 }
 
+.avar-download-toolbar__group--leading {
+  padding-inline-start: 0;
+  border-inline-start: none;
+}
+
 .avar-download-controls {
   display: flex;
   align-items: center;
@@ -2542,6 +2547,99 @@
   font-weight: 600;
 }
 
+.avar-about-version-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.avar-about-version-table th,
+.avar-about-version-table td {
+  padding: 0.45rem 0.65rem;
+  text-align: start;
+  vertical-align: top;
+}
+
+.avar-about-version-table th {
+  width: 9rem;
+  font-weight: 600;
+  color: var(--avar-text-muted);
+}
+
+.avar-about-version-table tr:nth-child(odd) td,
+.avar-about-version-table tr:nth-child(odd) th {
+  background: var(--avar-bg-muted);
+}
+
+.avar-about-version-table__mono {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.avar-directory-path-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.avar-directory-path-input > .avar-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.avar-directory-path-input__browse {
+  flex-shrink: 0;
+  margin-bottom: 0.15rem;
+}
+
+.avar-remote-dir-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 16rem;
+}
+
+.avar-remote-dir-browser__path {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+  color: var(--avar-text-muted);
+}
+
+.avar-remote-dir-browser__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--avar-border);
+  border-radius: var(--avar-radius);
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.avar-remote-dir-browser__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--avar-border);
+  background: transparent;
+  color: var(--avar-text);
+  text-align: start;
+  cursor: pointer;
+}
+
+.avar-remote-dir-browser__item:hover {
+  background: var(--avar-bg-muted);
+}
+
+.avar-remote-dir-browser__list li:last-child .avar-remote-dir-browser__item {
+  border-bottom: none;
+}
+
 .avar-about__actions {
   display: flex;
   flex-wrap: wrap;
@@ -2648,6 +2746,7 @@
   border: 1px solid var(--avar-border);
   border-radius: var(--avar-radius);
   background: var(--avar-bg-elevated);
+  color: var(--avar-text);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
@@ -2675,6 +2774,7 @@
 .avar-browser-card__name {
   font-size: 0.85rem;
   font-weight: 600;
+  color: var(--avar-text);
 }
 
 .avar-browser-card__action {

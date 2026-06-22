@@ -182,7 +182,7 @@ async function listMediaFromActiveTab() {
 let lastSelectionCount = 0;
 
 async function refreshContextMenus(hasSelectedLinks) {
-  await globalThis.AvarContextMenu.rebuild(chrome.contextMenus, hasSelectedLinks);
+  await globalThis.AvarContextMenu.setHasSelectedLinks(chrome.contextMenus, hasSelectedLinks);
 }
 
 async function openBatchAllMedia(tab) {
@@ -233,7 +233,7 @@ async function openLinkDownloadDialog(linkUrl, tab) {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  void refreshContextMenus(false);
+  void globalThis.AvarContextMenu.install(chrome.contextMenus);
 });
 
 if (chrome.contextMenus.onShown) {
@@ -263,7 +263,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       return;
     }
 
-    if (info.menuItemId === MENU_IDS.DOWNLOAD_ALL) {
+    if (globalThis.AvarContextMenu.isDownloadAllId(info.menuItemId)) {
       await openBatchAllMedia(tab);
       return;
     }
@@ -442,3 +442,5 @@ void resolveBridgeUrl().then(async (bridgeUrl) => {
     // Bridge may not be running yet.
   }
 });
+
+void globalThis.AvarContextMenu.ensureMenus(chrome.contextMenus);

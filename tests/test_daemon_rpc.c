@@ -113,6 +113,23 @@ AVAR_TEST(daemon_rpc_cli_exec_and_logs) {
     free(response);
 }
 
+AVAR_TEST(daemon_rpc_fs_browse) {
+    setup_rpc_config();
+
+    char *response = NULL;
+    AVAR_ASSERT(rpc_call("fs.browse", "{}", &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "Method not found") != NULL);
+    free(response);
+
+    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DAEMON_SERVER_FS_BROWSE_ENABLED, "true"), 0);
+
+    AVAR_ASSERT(rpc_call("fs.browse", "{\"path\":\"\"}", &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "entries") != NULL);
+    free(response);
+}
+
 AVAR_TEST(daemon_rpc_invalid_request) {
     setup_rpc_config();
 
@@ -194,6 +211,7 @@ AVAR_TEST_MAIN(
         run_daemon_rpc_system_stats_and_lists();
         run_daemon_rpc_queue_mutations();
         run_daemon_rpc_cli_exec_and_logs();
+        run_daemon_rpc_fs_browse();
         run_daemon_rpc_invalid_request();
         run_daemon_rpc_reload_config();
         run_daemon_rpc_http_endpoints();

@@ -897,6 +897,56 @@ function collectMediaUrls(doc) {
   return collectMediaItems(doc).map((item) => item.url);
 }
 
+const SELECTED_TEXT_URL_RE = /https?:\/\/[^\s<>"']+/gi;
+
+function collectUrlsInSelectionRange(doc, range) {
+  const urls = new Set();
+
+  doc.querySelectorAll("a[href]").forEach((anchor) => {
+    const href = anchor.href;
+    if (!href || href.startsWith("javascript:")) {
+      return;
+    }
+    try {
+      if (range.intersectsNode(anchor)) {
+        urls.add(href);
+      }
+    } catch {
+      // intersectsNode can throw for detached nodes.
+    }
+  });
+
+  try {
+    const fragment = range.cloneContents();
+    fragment.querySelectorAll("a[href]").forEach((anchor) => {
+      const raw = anchor.getAttribute("href");
+      if (!raw || raw.startsWith("javascript:")) {
+        return;
+      }
+      const href = resolveUrl(raw, doc.baseURI);
+      if (href) {
+        urls.add(href);
+      }
+    });
+  } catch {
+    // cloneContents can fail on some cross-boundary selections.
+  }
+
+  const text = range.toString();
+  if (text) {
+    let match;
+    SELECTED_TEXT_URL_RE.lastIndex = 0;
+    while ((match = SELECTED_TEXT_URL_RE.exec(text)) !== null) {
+      const href = resolveUrl(match[0], doc.baseURI);
+      if (href && isFetchable(href)) {
+        urls.add(href);
+      }
+    }
+  }
+
+  return urls;
+}
+
 function collectSelectedLinkItems(doc) {
   const view = doc.defaultView;
   const selection = view?.getSelection?.();
@@ -904,28 +954,12 @@ function collectSelectedLinkItems(doc) {
     return [];
   }
 
-  const ranges = [];
-  for (let i = 0; i < selection.rangeCount; i += 1) {
-    ranges.push(selection.getRangeAt(i));
-  }
-
   const urls = new Set();
-  doc.querySelectorAll("a[href]").forEach((anchor) => {
-    const href = anchor.href;
-    if (!href || href.startsWith("javascript:")) {
-      return;
+  for (let i = 0; i < selection.rangeCount; i += 1) {
+    for (const url of collectUrlsInSelectionRange(doc, selection.getRangeAt(i))) {
+      urls.add(url);
     }
-    for (const range of ranges) {
-      try {
-        if (range.intersectsNode(anchor)) {
-          urls.add(href);
-          break;
-        }
-      } catch {
-        // intersectsNode can throw for detached nodes.
-      }
-    }
-  });
+  }
 
   const items = [];
   for (const url of urls) {

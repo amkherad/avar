@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("avar", {
   isElectron: true,
   openPopup: (options) => ipcRenderer.invoke("popup:open", options),
+  selectDirectory: (options) => ipcRenderer.invoke("dialog:selectDirectory", options),
   showNotification: (options) => ipcRenderer.invoke("notification:show", options),
   getProxyBaseUrl: () => ipcRenderer.invoke("daemon:getProxyBaseUrl"),
   saveRemoteDownloadFile: (options) =>

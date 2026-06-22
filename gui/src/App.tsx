@@ -24,12 +24,12 @@ import { ShortcutProvider } from "@/shortcuts/ShortcutProvider";
 import { useShortcutAction } from "@/shortcuts/useShortcutAction";
 import { useAppLocation, useAppNavigation } from "@/hooks/useAppLocation";
 import { buildAppHash, defaultAppLocation, navigateAppLocation } from "@/lib/appRouting";
+import { openAddDownloadDialog } from "@/lib/openAddDownloadDialog";
 import i18n, { isRtlLocale } from "@/i18n";
 
 function AppContent() {
   const location = useAppLocation();
-  const { goToPage, openSettings, setHelpTopic, setSettingsCategory, setDashboardAction } =
-    useAppNavigation();
+  const { goToPage, openSettings, setHelpTopic, setSettingsCategory } = useAppNavigation();
   const locale = useConfigStore((s) => s.config.locale);
   const toggleConsole = useConsoleStore((s) => s.toggleOpen);
 
@@ -74,7 +74,7 @@ function AppContent() {
   useShortcutAction("nav.help", () => goToPage("help"));
   useShortcutAction("console.toggle", () => toggleConsole());
   useShortcutAction("detailPanel.toggle", () => toggleDetailPanelWithSelection());
-  useShortcutAction("download.add", () => setDashboardAction("add-download"));
+  useShortcutAction("download.add", () => openAddDownloadDialog(i18n.t("download.add")));
 
   function renderPage() {
     switch (location.page) {
@@ -83,14 +83,7 @@ function AppContent() {
       case "help":
         return <HelpPage topicId={location.helpTopicId} />;
       default:
-        return (
-          <DashboardPage
-            addDownloadOpen={location.dashboardAction === "add-download"}
-            onAddDownloadOpenChange={(open) =>
-              setDashboardAction(open ? "add-download" : null)
-            }
-          />
-        );
+        return <DashboardPage />;
     }
   }
 

@@ -16,6 +16,12 @@ function parseBackendVersion(output: string | undefined): string | null {
   return match?.[1] ?? (trimmed || null);
 }
 
+interface VersionRow {
+  label: string;
+  value: string;
+  mono?: boolean;
+}
+
 export function AboutSettings() {
   const { t } = useTranslation();
   const build = getBuildInfo();
@@ -56,40 +62,48 @@ export function AboutSettings() {
     };
   }, [client, connection]);
 
+  const versionRows: VersionRow[] = [
+    { label: t("settings.about.frontendVersion"), value: build.version },
+    {
+      label: t("settings.about.backendVersion"),
+      value:
+        connection !== "connected"
+          ? t("settings.about.backendDisconnected")
+          : backendLoading
+            ? t("settings.about.backendLoading")
+            : (backendVersion ?? t("settings.about.backendUnknown")),
+    },
+  ];
+
+  if (build.date) {
+    versionRows.push({ label: t("settings.buildDate"), value: build.date });
+  }
+  if (build.commit) {
+    versionRows.push({
+      label: t("settings.buildCommit"),
+      value: build.commit,
+      mono: true,
+    });
+  }
+
   return (
     <div className="avar-about">
       <p className="avar-about__intro">{t("settings.about.intro")}</p>
 
       <section className="avar-about__section">
         <h3 className="avar-about__heading">{t("settings.about.versionTitle")}</h3>
-        <dl className="avar-settings-build__list">
-          <div>
-            <dt>{t("settings.about.frontendVersion")}</dt>
-            <dd>{build.version}</dd>
-          </div>
-          <div>
-            <dt>{t("settings.about.backendVersion")}</dt>
-            <dd>
-              {connection !== "connected"
-                ? t("settings.about.backendDisconnected")
-                : backendLoading
-                  ? t("settings.about.backendLoading")
-                  : (backendVersion ?? t("settings.about.backendUnknown"))}
-            </dd>
-          </div>
-          {build.date ? (
-            <div>
-              <dt>{t("settings.buildDate")}</dt>
-              <dd>{build.date}</dd>
-            </div>
-          ) : null}
-          {build.commit ? (
-            <div>
-              <dt>{t("settings.buildCommit")}</dt>
-              <dd className="avar-settings-build__mono">{build.commit}</dd>
-            </div>
-          ) : null}
-        </dl>
+        <table className="avar-about-version-table">
+          <tbody>
+            {versionRows.map((row) => (
+              <tr key={row.label}>
+                <th scope="row">{row.label}</th>
+                <td className={row.mono ? "avar-about-version-table__mono" : undefined}>
+                  {row.value}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
 
       <section className="avar-about__section">

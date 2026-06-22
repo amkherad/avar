@@ -344,7 +344,10 @@
       "logPath": "Log file path",
       "remoteFileDownload": "Remote file download",
       "remoteFileDownloadHint": "Allow the GUI to fetch completed files from this daemon over HTTP (for copy to local folder on remote sessions). Disabled by default.",
-      "fileDownloadEnabled": "Allow HTTP download of completed files"
+      "fileDownloadEnabled": "Allow HTTP download of completed files",
+      "fsBrowse": "Remote directory browser",
+      "fsBrowseHint": "Allow the GUI to browse directories on this daemon when configuring paths on remote sessions. Disabled by default.",
+      "fsBrowseEnabled": "Allow remote directory browsing"
     },
     "about": {
       "intro": "Avar is a cross-platform download manager — fast, open, and built to stay out of your way. Thank you for being here. 💙",
@@ -435,6 +438,13 @@
   },
   "table": {
     "settings": "Table settings"
+  },
+  "directoryPath": {
+    "browse": "Browse…",
+    "select": "Select folder",
+    "remoteTitle": "Choose folder on daemon",
+    "remoteRoot": "Daemon default folder",
+    "remoteDisconnected": "Connect to the daemon to browse folders."
   },
   "common": {
     "save": "Save",

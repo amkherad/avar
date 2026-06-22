@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/Input";
+import { DirectoryPathInput } from "@/components/ui/DirectoryPathInput";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useDaemonDirectoryPathMode } from "@/hooks/useDirectoryPathMode";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore } from "@/stores/dataStore";
 import { appLogger } from "@/lib/appLogger";
@@ -13,6 +15,7 @@ const CONFIG_DEFAULTS = {
   logEnabled: "false",
   logPath: "",
   fileDownloadEnabled: "false",
+  fsBrowseEnabled: "false",
 } as const;
 
 export function DaemonSettings() {
@@ -25,6 +28,8 @@ export function DaemonSettings() {
   const [logEnabled, setLogEnabled] = useState(false);
   const [logPath, setLogPath] = useState("");
   const [fileDownloadEnabled, setFileDownloadEnabled] = useState(false);
+  const [fsBrowseEnabled, setFsBrowseEnabled] = useState(false);
+  const directoryPathMode = useDaemonDirectoryPathMode();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,6 +63,12 @@ export function DaemonSettings() {
           CONFIG_DEFAULTS.fileDownloadEnabled,
         )) === "true",
       );
+      setFsBrowseEnabled(
+        (await client.getConfig(
+          "daemon.server.fsBrowse.enabled",
+          CONFIG_DEFAULTS.fsBrowseEnabled,
+        )) === "true",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
     }
@@ -84,6 +95,10 @@ export function DaemonSettings() {
       await client.setConfig(
         "daemon.server.fileDownload.enabled",
         fileDownloadEnabled ? "true" : "false",
+      );
+      await client.setConfig(
+        "daemon.server.fsBrowse.enabled",
+        fsBrowseEnabled ? "true" : "false",
       );
       appLogger.gui.info("Daemon settings saved");
       await useDataStore.getState().refresh();
@@ -126,12 +141,26 @@ export function DaemonSettings() {
           />
           {t("settings.daemon.logEnabled")}
         </label>
-        <Input
+        <DirectoryPathInput
+          mode={directoryPathMode}
           label={t("settings.daemon.logPath")}
           value={logPath}
-          onChange={(e) => setLogPath(e.target.value)}
+          onChange={setLogPath}
           disabled={!logEnabled}
         />
+      </section>
+
+      <section className="avar-settings-group">
+        <h3 className="avar-settings-group__heading">{t("settings.daemon.fsBrowse")}</h3>
+        <p className="avar-settings-hint">{t("settings.daemon.fsBrowseHint")}</p>
+        <label className="avar-checkbox-row">
+          <input
+            type="checkbox"
+            checked={fsBrowseEnabled}
+            onChange={(e) => setFsBrowseEnabled(e.target.checked)}
+          />
+          {t("settings.daemon.fsBrowseEnabled")}
+        </label>
       </section>
 
       <section className="avar-settings-group">

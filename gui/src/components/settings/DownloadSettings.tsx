@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/Input";
+import { DirectoryPathInput } from "@/components/ui/DirectoryPathInput";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { ProxySettingsFields } from "@/components/settings/ProxySettingsFields";
 import { defaultProxySettings, type ProxySettings } from "@/lib/proxySettings";
+import { useDaemonDirectoryPathMode } from "@/hooks/useDirectoryPathMode";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { appLogger } from "@/lib/appLogger";
 
@@ -44,6 +46,7 @@ const SEGMENT_KEYS = [
 export function DownloadSettings() {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
+  const directoryPathMode = useDaemonDirectoryPathMode();
   const [values, setValues] = useState<Record<string, string>>({});
   const [proxy, setProxy] = useState<ProxySettings>(defaultProxySettings());
   const [saving, setSaving] = useState(false);
@@ -128,15 +131,17 @@ export function DownloadSettings() {
 
   return (
     <form className="avar-settings-form" onSubmit={(e) => e.preventDefault()}>
-      <Input
+      <DirectoryPathInput
+        mode={directoryPathMode}
         label={t("settings.download.tempPath")}
         value={values["dm.tempPath"] ?? ""}
-        onChange={(e) => setField("dm.tempPath", e.target.value)}
+        onChange={(next) => setField("dm.tempPath", next)}
       />
-      <Input
+      <DirectoryPathInput
+        mode={directoryPathMode}
         label={t("settings.download.downloadPath")}
         value={values["dm.downloadPath"] ?? ""}
-        onChange={(e) => setField("dm.downloadPath", e.target.value)}
+        onChange={(next) => setField("dm.downloadPath", next)}
       />
 
       <section className="avar-settings-group">

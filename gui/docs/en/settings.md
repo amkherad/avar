@@ -60,6 +60,7 @@ Per-download proxy overrides are available in **Add download**. Global proxy set
 - **Auto shutdown** — Never, or when idle (no active downloads). When idle shutdown is enabled, set **Idle time before shutdown** in seconds.
 - **File logging** — Optionally write daemon logs to a file path.
 - **Remote file download** — When enabled, the daemon serves completed files at `GET /api/downloads/{id}/file`. Required for **Copy to local folder** on remote sessions. Disabled by default in `config.json` (`daemon.server.fileDownload.enabled`).
+- **Remote directory browser** — When enabled (`daemon.server.fsBrowse.enabled`), the GUI can browse folders on the daemon when configuring paths on remote sessions. Disabled by default.
 
 ### ✨ About
 

@@ -35,4 +35,24 @@ bool file_exists(const char *path);
 /* Recursively deletes a directory and its contents. Returns 0 on success. */
 int remove_directory_recursive(const char *path);
 
+typedef struct AvarDirEntry {
+    char *name;
+    bool is_dir;
+} AvarDirEntry;
+
+typedef struct AvarDirListing {
+    char *path;
+    char *parent;
+    AvarDirEntry *entries;
+    size_t count;
+} AvarDirListing;
+
+void avar_dir_listing_free(AvarDirListing *listing);
+
+/* Lists directory entries. Returns 0 on success. Caller must free listing via avar_dir_listing_free(). */
+int list_directory_entries(const char *path, AvarDirListing *out);
+
+/* Resolves and normalizes a directory path for browsing. Caller must free(). */
+char *normalize_directory_path(const char *path);
+
 #endif

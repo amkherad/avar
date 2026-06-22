@@ -53,9 +53,15 @@ export interface AvarSaveRemoteDownloadFileOptions {
   filename: string;
 }
 
+export interface AvarSelectDirectoryOptions {
+  defaultPath?: string;
+  title?: string;
+}
+
 export interface AvarElectronApi {
   isElectron: true;
   openPopup: (options: AvarPopupOptions) => Promise<number | null>;
+  selectDirectory: (options?: AvarSelectDirectoryOptions) => Promise<string | null>;
   showNotification: (options: AvarNotificationOptions) => Promise<boolean>;
   getProxyBaseUrl: () => Promise<string>;
   saveRemoteDownloadFile: (options: AvarSaveRemoteDownloadFileOptions) => Promise<void>;

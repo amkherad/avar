@@ -2,6 +2,7 @@ import { proxySettingsToRpcParams, type ProxySettings } from "@/lib/proxySetting
 import { parseDownloadItem, parseQueueRecord, parseSnapshotPayload } from "./snapshot";
 import type {
   CliExecResult,
+  DirectoryBrowseResult,
   DownloadInfo,
   HealthInfo,
   JsonRpcResponse,
@@ -355,6 +356,10 @@ export class DaemonClient {
       throw new DaemonApiError(`Stats request failed (${res.status})`, res.status);
     }
     return (await res.json()) as SystemStatsInfo;
+  }
+
+  async browseDirectory(path = "", signal?: AbortSignal): Promise<DirectoryBrowseResult> {
+    return this.rpc<DirectoryBrowseResult>("fs.browse", { path }, signal);
   }
 
   parseSnapshot(raw: unknown): SnapshotPayload | null {

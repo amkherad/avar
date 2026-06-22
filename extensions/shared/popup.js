@@ -769,7 +769,7 @@ async function loadConfig() {
   defaultMediaFilterSelect.value = defaultFilter;
   mediaTypeFilterSelect.value = defaultFilter;
   mediaSortSelect.value = stored.mediaSort || DEFAULT_MEDIA_SORT;
-  showSelectionWidgetInput.checked = Boolean(stored.showSelectionWidget);
+  showSelectionWidgetInput.checked = stored.showSelectionWidget === true;
 
   applyPopupSize(stored.popupWidth, stored.popupHeight);
   installPopupResizePersistence();

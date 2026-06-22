@@ -13,8 +13,10 @@ import { useDataStore, selectEffectiveQueueId, selectSelectedQueue } from "@/sto
 import { createDefaultQueueInfo, isDefaultQueue, withDefaultQueue } from "@/queue/defaultQueue";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { DirectoryPathInput } from "@/components/ui/DirectoryPathInput";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
+import { useDaemonDirectoryPathMode } from "@/hooks/useDirectoryPathMode";
 
 export interface AddDownloadPopupPageProps {
   addId: string;
@@ -35,6 +37,7 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
   const [group, setGroup] = useState<string>("default");
   const [proxy, setProxy] = useState(defaultProxySettings);
   const [adding, setAdding] = useState(false);
+  const directoryPathMode = useDaemonDirectoryPathMode();
 
   const displayQueues = withDefaultQueue(
     queues,
@@ -171,10 +174,11 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
             hint={t("download.filenameHint")}
           />
 
-          <Input
+          <DirectoryPathInput
+            mode={directoryPathMode}
             label={t("download.outputPath")}
             value={outputPath}
-            onChange={(e) => setOutputPath(e.target.value)}
+            onChange={setOutputPath}
             hint={t("download.outputPathHint")}
           />
 
