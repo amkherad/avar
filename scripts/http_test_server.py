@@ -8,6 +8,7 @@ import os
 import re
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 SEGMENTED_SIZE = 512 * 1024
@@ -21,6 +22,10 @@ STATS_PATH = os.environ.get(
     os.path.join(os.environ.get("TEMP", tempfile.gettempdir()), "avar-range-stats.json"),
 )
 HTTP_PORT = int(os.environ.get(PORT_ENV, "18080"))
+
+# Keep each range response open briefly so fast CI hosts still observe
+# overlapping segment requests when the client opens parallel connections.
+RANGE_STAT_HOLD_MS = int(os.environ.get("AVAR_TEST_RANGE_STAT_HOLD_MS", "75"))
 
 _stats_lock = threading.Lock()
 _active_range_requests = 0
@@ -200,6 +205,8 @@ class Handler(BaseHTTPRequestHandler):
             _write_stats_locked()
 
         try:
+            if RANGE_STAT_HOLD_MS > 0:
+                time.sleep(RANGE_STAT_HOLD_MS / 1000.0)
             self.send_response(206)
             self.send_header("Content-Type", "application/octet-stream")
             self.send_header("Content-Length", str(len(body)))
