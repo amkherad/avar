@@ -246,6 +246,9 @@ if (chrome.contextMenus.onShown) {
       const count = selectedItems.length;
       lastSelectionCount = count;
       await refreshContextMenus(count > 0);
+      if (typeof chrome.contextMenus.refresh === "function") {
+        chrome.contextMenus.refresh();
+      }
     } catch {
       await refreshContextMenus(lastSelectionCount > 0);
     }

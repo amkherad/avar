@@ -2,6 +2,7 @@ const api = typeof browser !== "undefined" ? browser : chrome;
 
 const MIN_SELECTED_LINKS_FOR_WIDGET = 2;
 const SELECTION_WIDGET_DEBOUNCE_MS = 100;
+const SELECTED_LINKS_CACHE_MS = 60_000;
 
 /** @type {Map<string, object>} */
 const hookedMediaItems = new Map();
@@ -12,6 +13,9 @@ let selectionWidgetHost = null;
 let selectionChangeTimer = null;
 let widgetDismissed = false;
 let lastWidgetLinkCount = 0;
+/** @type {object[]} */
+let cachedSelectedItems = [];
+let cachedSelectedAt = 0;
 
 const WIDGET_MARGIN_PX = 8;
 const WIDGET_VIEWPORT_PADDING_PX = 8;
@@ -92,11 +96,35 @@ function collectPageMedia() {
   );
 }
 
+function rememberSelectedLinks(items) {
+  if (items.length > 0) {
+    cachedSelectedItems = items;
+    cachedSelectedAt = Date.now();
+  }
+}
+
 function collectSelectedLinks() {
   if (typeof AvarMedia === "undefined") {
     return [];
   }
-  return AvarMedia.collectSelectedLinkItems(document);
+  const items = AvarMedia.collectSelectedLinkItems(document);
+  rememberSelectedLinks(items);
+  return items;
+}
+
+function getSelectedLinksFromPage({ allowCache = false } = {}) {
+  const current = collectSelectedLinks();
+  if (current.length > 0) {
+    return current;
+  }
+  if (
+    allowCache &&
+    cachedSelectedItems.length > 0 &&
+    Date.now() - cachedSelectedAt < SELECTED_LINKS_CACHE_MS
+  ) {
+    return cachedSelectedItems;
+  }
+  return [];
 }
 
 function removeSelectionWidget() {
@@ -327,13 +355,14 @@ async function loadWidgetSetting() {
 }
 
 function scheduleSelectionWidgetUpdate() {
+  notifySelectionChanged();
+
   if (selectionChangeTimer) {
     clearTimeout(selectionChangeTimer);
   }
   selectionChangeTimer = setTimeout(() => {
     selectionChangeTimer = null;
     updateSelectionWidget();
-    notifySelectionChanged();
   }, SELECTION_WIDGET_DEBOUNCE_MS);
 }
 
@@ -353,7 +382,7 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   const items = collectPageMedia();
-  const selectedItems = collectSelectedLinks();
+  const selectedItems = getSelectedLinksFromPage({ allowCache: true });
   sendResponse({
     urls: items.map((item) => item.url),
     items,

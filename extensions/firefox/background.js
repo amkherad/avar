@@ -247,6 +247,9 @@ if (api.contextMenus.onShown) {
       const count = selectedItems.length;
       lastSelectionCount = count;
       await refreshContextMenus(count > 0);
+      if (typeof api.contextMenus.refresh === "function") {
+        api.contextMenus.refresh();
+      }
     } catch {
       await refreshContextMenus(lastSelectionCount > 0);
     }

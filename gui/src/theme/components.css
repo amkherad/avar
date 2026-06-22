@@ -1074,8 +1074,9 @@
 .avar-download-list--cards .avar-download-row {
   border: 1px solid var(--avar-border);
   border-radius: calc(var(--avar-radius) - 2px);
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
+  align-items: start;
 }
 
 .avar-download-list--cards .avar-download-row:last-child {
@@ -1090,6 +1091,32 @@
 .avar-download-list--cards .avar-download-row--selected {
   border-color: var(--avar-primary);
   background: color-mix(in srgb, var(--avar-primary) 8%, var(--avar-bg));
+}
+
+.avar-download-list--cards .avar-download-row > div:first-child {
+  overflow: visible;
+  min-width: 0;
+}
+
+.avar-download-list--cards .avar-download-row .avar-download-progress {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.avar-download-list--cards .avar-download-row .avar-list__meta {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.avar-download-list--cards .avar-download-row .avar-badge {
+  align-self: start;
+  flex-shrink: 0;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .avar-download-row {

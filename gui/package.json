@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Avar Download Manager — web and desktop GUI",
+  "homepage": "https://github.com/amkherad/avar",
+  "author": {
+    "name": "Ali Kherad",
+    "email": "alimousavikherad@gmail.com"
+  },
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -66,6 +71,7 @@
       ]
     },
     "linux": {
+      "maintainer": "Ali Kherad <alimousavikherad@gmail.com>",
       "target": [
         "AppImage",
         "deb"

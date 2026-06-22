@@ -37,7 +37,7 @@ export function DownloadProgress({ download }: DownloadProgressProps) {
   const progressText = `${formatBytePair(download.bytesDownloaded, download.totalBytes)} (${percent}%)`;
 
   return (
-    <div>
+    <div className="avar-download-progress">
       <div className="avar-progress" aria-hidden="true">
         <div className="avar-progress__bar" style={{ width: `${percent}%` }} />
       </div>

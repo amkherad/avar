@@ -899,6 +899,27 @@ function collectMediaUrls(doc) {
 
 const SELECTED_TEXT_URL_RE = /https?:\/\/[^\s<>"']+/gi;
 
+function rangeContainsNode(range, node) {
+  try {
+    if (range.intersectsNode(node)) {
+      return true;
+    }
+  } catch {
+    // intersectsNode can throw for detached nodes.
+  }
+
+  try {
+    const nodeRange = node.ownerDocument.createRange();
+    nodeRange.selectNodeContents(node);
+    return (
+      range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0 &&
+      range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0
+    );
+  } catch {
+    return false;
+  }
+}
+
 function collectUrlsInSelectionRange(doc, range) {
   const urls = new Set();
 
@@ -907,12 +928,8 @@ function collectUrlsInSelectionRange(doc, range) {
     if (!href || href.startsWith("javascript:")) {
       return;
     }
-    try {
-      if (range.intersectsNode(anchor)) {
-        urls.add(href);
-      }
-    } catch {
-      // intersectsNode can throw for detached nodes.
+    if (rangeContainsNode(range, anchor)) {
+      urls.add(href);
     }
   });
 

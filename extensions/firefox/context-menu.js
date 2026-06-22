@@ -77,6 +77,9 @@ const AvarContextMenu = {
     await this.ensureMenus(menusApi);
     await menusApi.update(this.IDS.ROOT, { visible: hasSelectedLinks });
     await menusApi.update(this.IDS.DOWNLOAD_ALL, { visible: !hasSelectedLinks });
+    if (typeof menusApi.refresh === "function") {
+      menusApi.refresh();
+    }
   },
 
   async install(menusApi) {
