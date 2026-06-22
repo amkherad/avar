@@ -127,7 +127,7 @@ export function openPopupWindow(
   const url = buildPopupUrl(hash);
 
   if (window.avar?.isElectron) {
-    void window.avar.openPopup({ url, title, width, height });
+    void window.avar.openPopup({ hash, title, width, height });
     return Promise.resolve();
   }
 
@@ -218,7 +218,7 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<Confir
       window.addEventListener("storage", onStorage);
       const height = options.checkboxLabel ? 280 : 240;
       void window.avar.openPopup({
-        url: buildPopupUrl(`#/popup/confirm/${encodeURIComponent(id)}`),
+        hash: `#/popup/confirm/${encodeURIComponent(id)}`,
         title: options.title,
         width: 440,
         height,

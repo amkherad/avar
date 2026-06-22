@@ -104,11 +104,45 @@ const trayLabels = {
 /** @type {{ sectionLabel: string, items: Array<{ id: string, filename: string, percent: number }> }} */
 let trayActiveDownloads = { sectionLabel: "Active downloads", items: [] };
 
-function resolveAppUrl(hash = "") {
-  if (isDev && process.env.VITE_DEV_SERVER_URL) {
-    return `${process.env.VITE_DEV_SERVER_URL}${hash}`;
+function resolveGuiIndexPath() {
+  return path.join(__dirname, "..", "dist", "index.html");
+}
+
+function normalizeHash(hash = "") {
+  if (!hash) {
+    return "";
   }
-  return `file://${path.join(__dirname, "..", "dist", "index.html")}${hash}`;
+  return hash.startsWith("#") ? hash.slice(1) : hash;
+}
+
+function extractHashFromUrl(url) {
+  if (!url || typeof url !== "string") {
+    return "";
+  }
+  const hashIndex = url.indexOf("#");
+  return hashIndex >= 0 ? url.slice(hashIndex) : "";
+}
+
+function loadWindowContent(win, hash = "") {
+  const hashPart = normalizeHash(hash);
+
+  if (BUNDLED_GUI_URL) {
+    const url = hashPart ? `${BUNDLED_GUI_URL}#${hashPart}` : BUNDLED_GUI_URL;
+    void win.loadURL(url);
+    return;
+  }
+  if (isDev && process.env.VITE_DEV_SERVER_URL) {
+    const url = hashPart
+      ? `${process.env.VITE_DEV_SERVER_URL}#${hashPart}`
+      : process.env.VITE_DEV_SERVER_URL;
+    void win.loadURL(url);
+    return;
+  }
+  if (hashPart) {
+    void win.loadFile(resolveGuiIndexPath(), { hash: hashPart });
+  } else {
+    void win.loadFile(resolveGuiIndexPath());
+  }
 }
 
 async function daemonRpc(method, params) {
@@ -381,14 +415,10 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  if (BUNDLED_GUI_URL) {
-    void win.loadURL(BUNDLED_GUI_URL);
-  } else if (isDev && process.env.VITE_DEV_SERVER_URL) {
-    void win.loadURL(process.env.VITE_DEV_SERVER_URL);
+  if (isDev && process.env.VITE_DEV_SERVER_URL) {
     win.webContents.openDevTools({ mode: "detach" });
-  } else {
-    void win.loadFile(path.join(__dirname, "..", "dist", "index.html"));
   }
+  loadWindowContent(win);
 }
 
 function createPopupWindow(options) {
@@ -422,8 +452,8 @@ function createPopupWindow(options) {
     popupWindows.delete(popupId);
   });
 
-  const targetUrl = options.url ?? resolveAppUrl();
-  void popup.loadURL(targetUrl);
+  const hash = options.hash ?? extractHashFromUrl(options.url);
+  loadWindowContent(popup, hash);
 
   return popupId;
 }
@@ -446,7 +476,7 @@ ipcMain.handle("dialog:selectDirectory", async (_event, options) => {
 
 setBatchPopupOpener((batchId, title) => {
   createPopupWindow({
-    url: resolveAppUrl(`#/popup/batch-add/${encodeURIComponent(batchId)}`),
+    hash: `#/popup/batch-add/${encodeURIComponent(batchId)}`,
     title,
     width: 1920,
     height: 960,
@@ -457,7 +487,7 @@ setBatchPopupOpener((batchId, title) => {
 
 setAddDownloadPopupOpener((addId, title) => {
   createPopupWindow({
-    url: resolveAppUrl(`#/popup/add-download/${encodeURIComponent(addId)}`),
+    hash: `#/popup/add-download/${encodeURIComponent(addId)}`,
     title,
     width: 560,
     height: 720,

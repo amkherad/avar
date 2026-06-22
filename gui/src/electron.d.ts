@@ -1,5 +1,8 @@
 export interface AvarPopupOptions {
-  url: string;
+  /** Popup route hash (preferred in Electron — main process resolves the app URL). */
+  hash?: string;
+  /** Full popup URL (web in-app popups; legacy Electron fallback). */
+  url?: string;
   title?: string;
   width?: number;
   height?: number;
