@@ -15,9 +15,10 @@ out/
 
 # CLion #
 ###########
-cmake-build-debug/
-cmake-build-release/
-cmake-build-test/
+/cmake-build-debug/
+/cmake-build-release/
+/cmake-build-test/
+/build-gui-test/
 /build-coverage-test/
 /build-coverage/
 coverage.xml
@@ -100,3 +101,4 @@ DerivedData/
 # General project files #
 ######################
 # Ignore all files except those explicitly included
+

@@ -228,6 +228,7 @@ if(AVAR_BUILD_GUI OR AVAR_BUILD_ALL)
     if(AVAR_BUILD_GUI)
         add_executable(avar-gui
                 "${SRC_DIR}/main.c"
+                "${SRC_DIR}/cli/gui_launch.c"
                 "${GUI_EMBED_C}"
         )
 
