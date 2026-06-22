@@ -244,7 +244,9 @@
       "enableNotifications": "فعال‌سازی اعلان‌ها",
       "notificationsGranted": "اعلان‌ها فعال شد.",
       "notificationsDenied": "اعلان‌ها مسدود شد. آن‌ها را در تنظیمات مرورگر فعال کنید.",
-      "notificationsUnsupported": "اعلان در این مرورگر پشتیبانی نمی‌شود."
+      "notificationsUnsupported": "اعلان در این مرورگر پشتیبانی نمی‌شود.",
+      "updateAvailable": "نسخه جدیدی از آوار موجود است.",
+      "reload": "بارگذاری مجدد"
     },
     "browser": {
       "title": "یکپارچه‌سازی مرورگر",

@@ -176,9 +176,10 @@ static char *platform_data_dir(void) {
 
 char *default_temp_path(void) {
     char *configured = get_config(AVAR_CFG_DM_TEMP_PATH);
-    if (configured != NULL) {
+    if (configured != NULL && configured[0] != '\0') {
         return configured;
     }
+    free(configured);
 
     char *base = platform_data_dir();
     if (base == NULL) {
@@ -195,9 +196,10 @@ char *default_temp_path(void) {
 
 char *default_download_path(void) {
     char *configured = get_config(AVAR_CFG_DM_DOWNLOAD_PATH);
-    if (configured != NULL) {
+    if (configured != NULL && configured[0] != '\0') {
         return configured;
     }
+    free(configured);
 
 #if defined(_WIN32)
     const char *profile = getenv(AVAR_ENV_USERPROFILE);

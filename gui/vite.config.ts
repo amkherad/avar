@@ -3,13 +3,23 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { extensionsPlugin } from "./vite-extensions";
 import { extensionBridgePlugin } from "./vite-extension-bridge";
+import { serviceWorkerCacheVersionPlugin } from "./vite-sw-cache";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const buildDate = env.VITE_BUILD_DATE || new Date().toISOString();
+  const buildVersion =
+    env.VITE_BUILD_VERSION || process.env.npm_package_version || "dev";
+  const buildCommit = env.VITE_BUILD_COMMIT?.slice(0, 7) ?? "";
+  const cacheVersion = buildCommit ? `${buildVersion}-${buildCommit}` : buildVersion;
 
   return {
-    plugins: [react(), extensionBridgePlugin(), extensionsPlugin()],
+    plugins: [
+      react(),
+      extensionBridgePlugin(),
+      extensionsPlugin(),
+      serviceWorkerCacheVersionPlugin(cacheVersion),
+    ],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "src"),

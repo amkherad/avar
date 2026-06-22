@@ -197,6 +197,24 @@ AVAR_TEST(file_system_default_paths_from_config) {
     free(download);
 }
 
+AVAR_TEST(file_system_empty_config_paths_use_defaults) {
+    setup_paths();
+
+    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_TEMP_PATH, ""), 0);
+    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_DOWNLOAD_PATH, ""), 0);
+
+    char *temp = default_temp_path();
+    char *download = default_download_path();
+    AVAR_ASSERT_NOT_NULL(temp);
+    AVAR_ASSERT_NOT_NULL(download);
+    AVAR_ASSERT(temp[0] != '\0');
+    AVAR_ASSERT(download[0] != '\0');
+    AVAR_ASSERT_EQ(make_dirs_in_path(temp), 0);
+    AVAR_ASSERT_EQ(make_dirs_in_path(download), 0);
+    free(temp);
+    free(download);
+}
+
 AVAR_TEST_MAIN(
         run_file_system_sanitize_filename();
         run_file_system_path_join();
@@ -204,4 +222,5 @@ AVAR_TEST_MAIN(
         run_file_system_move_file_atomic();
         run_file_system_remove_directory_recursive();
         run_file_system_config_path_uses_home();
-        run_file_system_default_paths_from_config();)
+        run_file_system_default_paths_from_config();
+        run_file_system_empty_config_paths_use_defaults();)

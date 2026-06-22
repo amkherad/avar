@@ -441,6 +441,15 @@
   overflow: hidden;
 }
 
+.avar-shell__update-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.5rem 0.75rem 0;
+}
+
 .avar-shell__body {
   display: flex;
   flex: 1;

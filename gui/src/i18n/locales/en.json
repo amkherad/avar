@@ -244,7 +244,9 @@
       "enableNotifications": "Enable notifications",
       "notificationsGranted": "Notifications enabled.",
       "notificationsDenied": "Notifications were blocked. Enable them in browser settings.",
-      "notificationsUnsupported": "Notifications are not supported in this browser."
+      "notificationsUnsupported": "Notifications are not supported in this browser.",
+      "updateAvailable": "A new version of Avar is available.",
+      "reload": "Reload"
     },
     "browser": {
       "title": "Browser integration",
