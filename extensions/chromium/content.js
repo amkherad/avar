@@ -172,6 +172,19 @@ function ensureSelectionWidget() {
   return host;
 }
 
+function buildContentDownloadItem(item) {
+  const linkName = AvarMedia.itemDisplayFilename(item, document.title);
+  return {
+    url: item.url,
+    streamKind: item.kind,
+    filename: linkName,
+    linkName,
+    fileType: AvarMedia.classifyMediaCategory(item),
+    referer: location.href,
+    originalUrl: location.href,
+  };
+}
+
 async function downloadSelectedLinks(shadow) {
   const items = collectSelectedLinks();
   if (items.length === 0) {
@@ -181,27 +194,20 @@ async function downloadSelectedLinks(shadow) {
   const button = shadow.getElementById("downloadBtn");
   button.disabled = true;
   const previousLabel = button.textContent;
-  button.textContent = "Queuing…";
+  button.textContent = "Opening…";
 
-  let count = 0;
-  for (const item of items) {
-    try {
-      const result = await api.runtime.sendMessage({
-        type: "avar-add-download",
-        url: item.url,
-        streamKind: item.kind,
-        referer: location.href,
-        autoStart: true,
-      });
-      if (result?.ok) {
-        count += 1;
-      }
-    } catch {
-      // Ignore per-item failures.
-    }
+  try {
+    const response = await api.runtime.sendMessage({
+      type: "avar-open-downloads",
+      items: items.map((item) => buildContentDownloadItem(item)),
+      pageUrl: location.href,
+      pageTitle: document.title,
+    });
+    button.textContent = response?.ok ? "Opened in Avar" : "Failed";
+  } catch {
+    button.textContent = "Failed";
   }
 
-  button.textContent = count > 0 ? `Queued ${count}` : "Failed";
   setTimeout(() => {
     button.disabled = false;
     button.textContent = previousLabel;

@@ -62,6 +62,45 @@ async function openBatchAdd(payload) {
   });
 }
 
+async function openSingleAdd(payload) {
+  const bridgeUrl = await resolveBridgeUrl();
+  return sendMessage(bridgeUrl, "download.add.open", {
+    url: payload.url,
+    streamKind: payload.streamKind,
+    filename: payload.filename,
+    referer: payload.referer,
+    pageUrl: payload.pageUrl,
+    pageTitle: payload.pageTitle,
+    defaultQueueId: payload.defaultQueueId,
+    title: payload.title || "Add download",
+  });
+}
+
+async function openDownloads(payload) {
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  if (items.length === 0) {
+    throw new Error("No items");
+  }
+  if (items.length === 1) {
+    const item = items[0];
+    return openSingleAdd({
+      url: item.url,
+      streamKind: item.streamKind,
+      filename: item.filename,
+      referer: item.referer || item.originalUrl || payload.pageUrl,
+      pageUrl: payload.pageUrl,
+      pageTitle: payload.pageTitle,
+      defaultQueueId: payload.defaultQueueId,
+    });
+  }
+  return openBatchAdd({
+    items,
+    pageUrl: payload.pageUrl,
+    pageTitle: payload.pageTitle,
+    defaultQueueId: payload.defaultQueueId,
+  });
+}
+
 function buildBatchItemFromMedia(item, pageTitle, pageUrl) {
   const linkName = AvarMedia.itemDisplayFilename(item, pageTitle);
   return {
@@ -186,6 +225,33 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "avar-open-add-download" && message.item?.url) {
+    openSingleAdd({
+      url: message.item.url,
+      streamKind: message.item.streamKind,
+      filename: message.item.filename,
+      referer: message.item.referer || message.item.originalUrl || message.pageUrl,
+      pageUrl: message.pageUrl,
+      pageTitle: message.pageTitle,
+      defaultQueueId: message.defaultQueueId,
+    })
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+
+  if (message?.type === "avar-open-downloads" && Array.isArray(message.items)) {
+    openDownloads({
+      items: message.items,
+      pageUrl: message.pageUrl,
+      pageTitle: message.pageTitle,
+      defaultQueueId: message.defaultQueueId,
+    })
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+
   if (message?.type === "avar-open-batch-add" && Array.isArray(message.items)) {
     openBatchAdd({
       items: message.items,

@@ -10,6 +10,7 @@
  *   GET  /extension/status
  *   POST /extension/download
  *   GET  /extension/batch/:id
+ *   GET  /extension/add-download/:id
  *   POST /extension/settings
  */
 
@@ -19,7 +20,7 @@ const BRIDGE_VERSION = "0.1.0";
 const EXTENSION_BRIDGE_PORT = Number(process.env.AVAR_EXTENSION_BRIDGE_PORT || 18766);
 const EXTENSION_BRIDGE_HOST = "127.0.0.1";
 
-/** @typedef {'ping' | 'status' | 'download.add' | 'download.batch.open'} ExtensionMessageType */
+/** @typedef {'ping' | 'status' | 'download.add' | 'download.add.open' | 'download.batch.open'} ExtensionMessageType */
 
 /**
  * @param {ExtensionMessageType} type

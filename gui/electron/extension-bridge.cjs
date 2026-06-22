@@ -24,8 +24,14 @@ const bridgeState = {
 /** @type {Map<string, { createdAt: number, payload: Record<string, unknown> }>} */
 const batchStash = new Map();
 
+/** @type {Map<string, { createdAt: number, payload: Record<string, unknown> }>} */
+const addDownloadStash = new Map();
+
 /** @type {((batchId: string, title: string) => void) | null} */
 let batchPopupOpener = null;
+
+/** @type {((addId: string, title: string) => void) | null} */
+let addDownloadPopupOpener = null;
 
 let bridgeConfig = {
   daemonUrl: process.env.AVAR_DAEMON_URL || "http://127.0.0.1:8000",
@@ -47,11 +53,20 @@ function setBatchPopupOpener(opener) {
   batchPopupOpener = typeof opener === "function" ? opener : null;
 }
 
+function setAddDownloadPopupOpener(opener) {
+  addDownloadPopupOpener = typeof opener === "function" ? opener : null;
+}
+
 function pruneBatchStash() {
   const now = Date.now();
   for (const [id, entry] of batchStash.entries()) {
     if (now - entry.createdAt > BATCH_STASH_TTL_MS) {
       batchStash.delete(id);
+    }
+  }
+  for (const [id, entry] of addDownloadStash.entries()) {
+    if (now - entry.createdAt > BATCH_STASH_TTL_MS) {
+      addDownloadStash.delete(id);
     }
   }
 }
@@ -61,6 +76,13 @@ function stashBatchPayload(payload) {
   const batchId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   batchStash.set(batchId, { createdAt: Date.now(), payload });
   return batchId;
+}
+
+function stashAddDownloadPayload(payload) {
+  pruneBatchStash();
+  const addId = `add-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  addDownloadStash.set(addId, { createdAt: Date.now(), payload });
+  return addId;
 }
 
 function readBatchPayload(batchId) {
@@ -73,6 +95,51 @@ function readBatchPayload(batchId) {
     return null;
   }
   return entry.payload;
+}
+
+function readAddDownloadPayload(addId) {
+  const entry = addDownloadStash.get(addId);
+  if (!entry) {
+    return null;
+  }
+  if (Date.now() - entry.createdAt > BATCH_STASH_TTL_MS) {
+    addDownloadStash.delete(addId);
+    return null;
+  }
+  return entry.payload;
+}
+
+function normalizeAddDownloadPayload(payload, pageUrl) {
+  const url = typeof payload.url === "string" ? payload.url.trim() : "";
+  if (!url) {
+    return null;
+  }
+
+  const referer =
+    typeof payload.referer === "string" && payload.referer.trim()
+      ? payload.referer.trim()
+      : typeof pageUrl === "string" && pageUrl.trim()
+        ? pageUrl.trim()
+        : undefined;
+
+  return {
+    url,
+    filename:
+      typeof payload.filename === "string" && payload.filename.trim()
+        ? payload.filename.trim()
+        : undefined,
+    referer,
+    streamKind:
+      typeof payload.streamKind === "string" && payload.streamKind.trim()
+        ? payload.streamKind.trim()
+        : undefined,
+    defaultQueueId:
+      typeof payload.defaultQueueId === "string" ? payload.defaultQueueId : null,
+    pageTitle:
+      typeof payload.pageTitle === "string" && payload.pageTitle.trim()
+        ? payload.pageTitle.trim()
+        : undefined,
+  };
 }
 
 function normalizeBatchItems(items, pageUrl) {
@@ -522,6 +589,46 @@ async function handleProtocolMessage(message, origin, res) {
     return;
   }
 
+  if (type === "download.add.open") {
+    try {
+      const pageUrl = typeof payload.pageUrl === "string" ? payload.pageUrl : undefined;
+      const addPayload = normalizeAddDownloadPayload(payload, pageUrl);
+      if (!addPayload) {
+        sendJson(res, 400, createErrorResponse("download.add.open", id, "Missing url"), origin);
+        return;
+      }
+
+      const addId = stashAddDownloadPayload(addPayload);
+      const title =
+        typeof payload.title === "string" && payload.title.trim()
+          ? payload.title.trim()
+          : "Add download";
+
+      if (addDownloadPopupOpener) {
+        addDownloadPopupOpener(addId, title);
+      }
+
+      sendJson(
+        res,
+        200,
+        createResponse("download.add.open", id, { addId, title }),
+        origin,
+      );
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "download.add.open",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
   if (type === "download.batch.open") {
     try {
       const pageUrl = typeof payload.pageUrl === "string" ? payload.pageUrl : undefined;
@@ -767,6 +874,17 @@ async function handleExtensionBridgeRequest(req, res) {
     return true;
   }
 
+  if (req.method === "GET" && urlPath.startsWith("/extension/add-download/")) {
+    const addId = decodeURIComponent(urlPath.slice("/extension/add-download/".length));
+    const payload = readAddDownloadPayload(addId);
+    if (!payload) {
+      sendJson(res, 404, { ok: false, error: "Add download not found" }, origin);
+      return true;
+    }
+    sendJson(res, 200, { ok: true, payload }, origin);
+    return true;
+  }
+
   if (req.method === "POST" && urlPath === "/extension/download") {
     try {
       const raw = await readBody(req);
@@ -809,6 +927,7 @@ module.exports = {
   setExtensionBridgeEnabled,
   setExtensionBridgeConfig,
   setBatchPopupOpener,
+  setAddDownloadPopupOpener,
   getExtensionBridgeState,
   createExtensionBridgeServer,
   DEFAULT_EXTENSION_GUI_URL: "http://127.0.0.1:5173",

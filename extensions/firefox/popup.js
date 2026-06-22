@@ -418,6 +418,41 @@ async function openBatchAddDialog(items) {
   }
 }
 
+async function openSingleAddDialog(item) {
+  if (!bridgeConnected) {
+    setStatus("Cannot reach Avar bridge.");
+    return;
+  }
+
+  const response = await api.runtime.sendMessage({
+    type: "avar-open-add-download",
+    item: buildBatchItem(item),
+    pageUrl: pageReferer,
+    pageTitle,
+    defaultQueueId: defaultQueueSelect.value || null,
+  });
+  if (response?.ok) {
+    setStatus("Review download in Avar.");
+  } else {
+    setStatus(response?.error || "Failed to open add download.");
+  }
+}
+
+async function openDownloadDialog(items) {
+  if (!bridgeConnected) {
+    setStatus("Cannot reach Avar bridge.");
+    return;
+  }
+  if (!items.length) {
+    return;
+  }
+  if (items.length === 1) {
+    await openSingleAddDialog(items[0]);
+    return;
+  }
+  await openBatchAddDialog(items);
+}
+
 function createDownloadButton(item) {
   const btn = document.createElement("button");
   btn.type = "button";
@@ -427,7 +462,11 @@ function createDownloadButton(item) {
   btn.disabled = !bridgeConnected;
   btn.innerHTML = DOWNLOAD_ICON;
   btn.addEventListener("click", async () => {
-    await openBatchAddDialog([item]);
+    if (lastSelectedItems.length > 1) {
+      await openBatchAddDialog(lastSelectedItems);
+      return;
+    }
+    await openDownloadDialog([item]);
   });
   return btn;
 }
@@ -710,11 +749,11 @@ document.getElementById("save").addEventListener("click", async () => {
 downloadAllBtn.addEventListener("click", async () => {
   const selectedUrls = new Set(lastSelectedItems.map((item) => item.url));
   const items = getVisibleMediaItems(lastMediaItems).filter((item) => !selectedUrls.has(item.url));
-  await openBatchAddDialog(items);
+  await openDownloadDialog(items);
 });
 
 downloadSelectedBtn.addEventListener("click", async () => {
-  await openBatchAddDialog(lastSelectedItems);
+  await openDownloadDialog(lastSelectedItems);
 });
 
 void (async () => {

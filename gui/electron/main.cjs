@@ -15,6 +15,7 @@ const {
   setExtensionBridgeEnabled,
   setExtensionBridgeConfig,
   setBatchPopupOpener,
+  setAddDownloadPopupOpener,
   getExtensionBridgeState,
   createExtensionBridgeServer,
   ELECTRON_EXTENSION_BRIDGE_URL,
@@ -414,6 +415,15 @@ setBatchPopupOpener((batchId, title) => {
     title,
     width: 960,
     height: 640,
+  });
+});
+
+setAddDownloadPopupOpener((addId, title) => {
+  createPopupWindow({
+    url: resolveAppUrl(`#/popup/add-download/${encodeURIComponent(addId)}`),
+    title,
+    width: 560,
+    height: 720,
   });
 });
 

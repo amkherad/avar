@@ -15,6 +15,8 @@ The dialog closes after either action succeeds.
 
 ## 🔍 Search and filters
 
+When any download is actively transferring, a **Stop all** button appears at the left end of the toolbar (stop icon). It stops every downloading item across all queues.
+
 The search box is on the right side of the toolbar (no label — placeholder text only). It filters by filename, URL, status, and other fields. Press **Ctrl+F** to focus search.
 
 In **card view**, use the **Status filter** dropdown beside the search box.
