@@ -301,6 +301,8 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
 static void apply_proxy_to_state(DownloadState *state, const char *proxy_override);
 static void background_download_task_by_id(void *arg);
 static int update_download_item_status(const char *item_id, const char *status);
+static void log_download_item_status(const char *item_id, const char *filename, const char *status);
+static void log_job_status(const DownloadJob *job, const char *status);
 
 static void set_error(DownloadJob *job, const char *fmt, ...);
 
@@ -798,14 +800,18 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
         return -1;
     }
 
+    int rc;
     if (update_config_array_item(AVAR_CFG_DM_ITEMS, AVAR_FIELD_ID, job->item_id, json) != 0) {
-        const int rc = append_config_array_item(AVAR_CFG_DM_ITEMS, json);
-        cJSON_free(json);
-        return rc;
+        rc = append_config_array_item(AVAR_CFG_DM_ITEMS, json);
+    } else {
+        rc = 0;
     }
 
     cJSON_free(json);
-    return 0;
+    if (rc == 0) {
+        log_job_status(job, status);
+    }
+    return rc;
 }
 
 static void clear_progress_line(DownloadJob *job) {
@@ -2640,7 +2646,7 @@ static int run_download(DownloadJob *job) {
 #endif
         if (job->cancel_requested) {
             job->done = true;
-            (void)dm_item_upsert(job, AVAR_DL_STATUS_QUEUED);
+            (void)dm_item_upsert(job, AVAR_DL_STATUS_STOPPED);
             break;
         }
         if (job->pause_requested) {
@@ -3138,6 +3144,30 @@ static char *download_generate_id(void) {
     return NULL;
 }
 
+static void log_download_item_status(const char *item_id, const char *filename, const char *status) {
+    const char *label = filename != NULL && filename[0] != '\0' ? filename : item_id;
+    if (label == NULL || status == NULL) {
+        return;
+    }
+
+    if (strcmp(status, AVAR_DL_STATUS_COMPLETED) == 0) {
+        LOG_INFO("Download completed: %s", label);
+    } else if (strcmp(status, AVAR_DL_STATUS_STOPPED) == 0) {
+        LOG_INFO("Download stopped: %s", label);
+    } else if (strcmp(status, AVAR_DL_STATUS_PAUSED) == 0) {
+        LOG_INFO("Download paused: %s", label);
+    } else if (strcmp(status, AVAR_DL_STATUS_FAILED) == 0) {
+        LOG_WARNING("Download failed: %s", label);
+    }
+}
+
+static void log_job_status(const DownloadJob *job, const char *status) {
+    if (job == NULL) {
+        return;
+    }
+    log_download_item_status(job->item_id, job->filename, status);
+}
+
 static int update_download_item_status(const char *item_id, const char *status) {
     if (item_id == NULL || status == NULL) {
         return -1;
@@ -3159,6 +3189,12 @@ static int update_download_item_status(const char *item_id, const char *status) 
         return -1;
     }
 
+    const cJSON *filename_node = cJSON_GetObjectItemCaseSensitive(obj, AVAR_FIELD_FILENAME);
+    const char *filename =
+            cJSON_IsString(filename_node) && filename_node->valuestring != NULL
+                    ? filename_node->valuestring
+                    : NULL;
+
     cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_STATUS);
     cJSON_AddStringToObject(obj, AVAR_FIELD_STATUS, status);
 
@@ -3170,6 +3206,9 @@ static int update_download_item_status(const char *item_id, const char *status) 
 
     const int rc = replace_config_array_item_at(AVAR_CFG_DM_ITEMS, (size_t)index, updated);
     cJSON_free(updated);
+    if (rc == 0) {
+        log_download_item_status(item_id, filename, status);
+    }
     return rc;
 }
 
@@ -3587,7 +3626,7 @@ int download_stop(const char *id) {
         return EXIT_FAILURE;
     }
 
-    return update_download_item_status(id, AVAR_DL_STATUS_QUEUED) == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+    return update_download_item_status(id, AVAR_DL_STATUS_STOPPED) == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 static void purge_download_files(const char *item_id) {

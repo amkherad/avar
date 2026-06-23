@@ -39,6 +39,15 @@ const AvarContextMenu = {
       return;
     }
 
+    // Service worker restarts clear menusReady while browser menus may still exist.
+    for (const id of Object.values(this.IDS)) {
+      try {
+        await menusApi.remove(id);
+      } catch {
+        // Menu may not exist yet.
+      }
+    }
+
     const pageContexts = ["page", "frame"];
 
     await this.createMenuItem(menusApi, {

@@ -23,6 +23,7 @@ async function runForIds(
   ids: string[],
   label: string,
   action: (id: string) => Promise<void>,
+  describe?: (id: string) => string | undefined,
 ): Promise<DownloadActionResult> {
   const succeeded: string[] = [];
   const failed: string[] = [];
@@ -34,7 +35,7 @@ async function runForIds(
     try {
       await action(id);
       succeeded.push(id);
-      appLogger.gui.debug(`Download action: ${label}`, id);
+      appLogger.gui.info(`Download ${label}`, describe?.(id) ?? id);
     } catch (err) {
       failed.push(id);
       appLogger.gui.error(
@@ -60,7 +61,12 @@ export async function pauseDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canPause(item.status);
   });
-  return runForIds(eligible, "pause", (id) => client.pauseDownload(id));
+  return runForIds(
+    eligible,
+    "pause",
+    (id) => client.pauseDownload(id),
+    (id) => downloads.find((d) => d.id === id)?.filename,
+  );
 }
 
 export async function resumeDownloads(
@@ -72,7 +78,12 @@ export async function resumeDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canResume(item.status);
   });
-  return runForIds(eligible, "resume", (id) => client.resumeDownload(id));
+  return runForIds(
+    eligible,
+    "resume",
+    (id) => client.resumeDownload(id),
+    (id) => downloads.find((d) => d.id === id)?.filename,
+  );
 }
 
 export async function startDownloads(
@@ -84,7 +95,12 @@ export async function startDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canStart(item.status);
   });
-  return runForIds(eligible, "start", (id) => client.startDownload(id));
+  return runForIds(
+    eligible,
+    "start",
+    (id) => client.startDownload(id),
+    (id) => downloads.find((d) => d.id === id)?.filename,
+  );
 }
 
 export async function stopDownloads(
@@ -96,7 +112,12 @@ export async function stopDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canStop(item.status);
   });
-  return runForIds(eligible, "stop", (id) => client.stopDownload(id));
+  return runForIds(
+    eligible,
+    "stop",
+    (id) => client.stopDownload(id),
+    (id) => downloads.find((d) => d.id === id)?.filename,
+  );
 }
 
 export async function deleteDownloads(
@@ -104,8 +125,11 @@ export async function deleteDownloads(
   ids: string[],
   purgeFiles = false,
 ): Promise<DownloadActionResult> {
-  const result = await runForIds(ids, "delete", (id) =>
-    client.removeDownload(id, purgeFiles),
+  const result = await runForIds(
+    ids,
+    "delete",
+    (id) => client.removeDownload(id, purgeFiles),
+    (id) => useDataStore.getState().downloads.find((d) => d.id === id)?.filename,
   );
   if (result.succeeded.length > 0) {
     const state = useDataStore.getState();
@@ -141,7 +165,7 @@ export async function redownloadDownloads(
         startNow: true,
       });
       succeeded.push(item.id);
-      appLogger.gui.debug("Download redownloaded", item.id);
+      appLogger.gui.info("Download redownloaded", item.filename);
     } catch (err) {
       failed.push(item.id);
       appLogger.gui.error(

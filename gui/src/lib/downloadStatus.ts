@@ -16,7 +16,7 @@ export function canStart(status: string): boolean {
 }
 
 export function canStop(status: string): boolean {
-  return status === "downloading";
+  return status === "downloading" || status === "paused";
 }
 
 export function canPause(status: string): boolean {

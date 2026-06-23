@@ -116,7 +116,7 @@ const defaultSettings: ConsoleSettings = {
   showGuiLogs: true,
   showDaemonLogs: true,
   guiMinLevel: "info",
-  daemonMinLevel: "warn",
+  daemonMinLevel: "info",
   daemonPollIntervalMs: 3000,
 };
 
@@ -181,9 +181,6 @@ export const useConsoleStore = create<ConsoleState>()(
         const additions: LogEntry[] = [];
         for (const line of lines) {
           const level = inferLevel(line);
-          if (!logLevelMeetsMin(level, settings.daemonMinLevel)) {
-            continue;
-          }
           additions.push({
             id: nextEntryId(),
             source: "daemon",

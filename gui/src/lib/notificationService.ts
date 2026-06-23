@@ -1,5 +1,6 @@
 import i18n from "@/i18n";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import { appLogger } from "@/lib/appLogger";
 import { getServiceWorkerRegistration } from "@/lib/pwa";
 import { useConfigStore } from "@/stores/configStore";
 import type { DownloadInfo, QueueInfo } from "@/api/types";
@@ -13,7 +14,13 @@ export interface AppNotification {
   tag?: string;
 }
 
-const NOTIFY_DOWNLOAD_STATUSES = new Set(["completed", "error", "paused", "cancelled"]);
+const NOTIFY_DOWNLOAD_STATUSES = new Set([
+  "completed",
+  "error",
+  "paused",
+  "stopped",
+  "cancelled",
+]);
 
 const lastNotifiedDownloadStatus = new Map<string, string>();
 
@@ -59,11 +66,13 @@ async function showViaServiceWorker(notification: AppNotification): Promise<bool
 }
 
 export async function showNotification(notification: AppNotification): Promise<void> {
+  const { title, body } = notification;
+  appLogger.gui.info(`Notification: ${title}`, body);
+
   if (!useConfigStore.getState().config.notificationsEnabled) {
     return;
   }
 
-  const { title, body } = notification;
   const tag = notification.tag ?? `avar-${notification.category ?? "general"}`;
 
   if (isElectron() && window.avar?.showNotification) {
@@ -118,6 +127,7 @@ export function notifyDownloadStatusChange(
   lastNotifiedDownloadStatus.set(download.id, download.status);
 
   const statusLabel = formatDownloadStatus(download.status, i18n.t.bind(i18n));
+  const body = download.status === "completed" ? undefined : download.url;
   void showNotification({
     category: "download",
     tag: `avar-download-${download.id}`,
@@ -125,7 +135,7 @@ export function notifyDownloadStatusChange(
       name: download.filename,
       status: statusLabel,
     }),
-    body: download.url,
+    body,
   });
 }
 

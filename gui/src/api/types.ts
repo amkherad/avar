@@ -1,17 +1,11 @@
 export type DownloadStatus =
-
   | "queued"
-
   | "downloading"
-
   | "paused"
-
+  | "stopped"
   | "completed"
-
   | "error"
-
   | "cancelled"
-
   | string;
 
 

@@ -1,4 +1,6 @@
 import type { DownloadInfo, QueueInfo } from "@/api/types";
+import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import { appLogger } from "@/lib/appLogger";
 import {
   clearNotifiedDownloadStatuses,
   notifyConnectionLost,
@@ -9,6 +11,23 @@ import {
 } from "@/lib/notificationService";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore } from "@/stores/dataStore";
+import i18n from "@/i18n";
+
+function logDownloadStatusChange(
+  download: DownloadInfo,
+  previousStatus?: string,
+): void {
+  if (previousStatus === download.status) {
+    return;
+  }
+
+  const statusLabel = formatDownloadStatus(download.status, i18n.t.bind(i18n));
+  const detail =
+    previousStatus !== undefined
+      ? `${formatDownloadStatus(previousStatus, i18n.t.bind(i18n))} → ${statusLabel}`
+      : statusLabel;
+  appLogger.gui.info(`Download status: ${download.filename}`, detail);
+}
 
 function trackDownloadStatuses(downloads: DownloadInfo[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -39,6 +58,7 @@ export function initNotificationWatcher(): () => void {
       currentDownloadIds.add(download.id);
       const previous = prevDownloads.get(download.id);
       if (previous !== undefined && previous !== download.status) {
+        logDownloadStatusChange(download, previous);
         notifyDownloadStatusChange(download, previous);
       }
     }
@@ -58,6 +78,9 @@ export function initNotificationWatcher(): () => void {
     for (const queue of state.queues) {
       const previous = prevQueues.get(queue.id);
       if (previous !== undefined && previous !== queue.running) {
+        appLogger.gui.info(
+          queue.running ? `Queue started: ${queue.name}` : `Queue stopped: ${queue.name}`,
+        );
         notifyQueueStateChange(queue, queue.running);
       }
     }
@@ -69,9 +92,11 @@ export function initNotificationWatcher(): () => void {
       return;
     }
     if (state.connection === "disconnected" && prevConnection === "connected") {
+      appLogger.gui.warn("Daemon connection lost");
       notifyConnectionLost();
     }
     if (state.connection === "connected" && prevConnection === "disconnected") {
+      appLogger.gui.info("Daemon connection restored");
       notifyConnectionRestored();
     }
     prevConnection = state.connection;

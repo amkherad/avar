@@ -27,6 +27,39 @@ let cachedSelectedAt = 0;
 let contextMenuSnapshot = [];
 let contextMenuSnapshotAt = 0;
 
+let contentScriptRetired = false;
+
+function isExtensionContextValid() {
+  try {
+    return Boolean(api.runtime?.id);
+  } catch {
+    return false;
+  }
+}
+
+function ensureExtensionContext() {
+  if (contentScriptRetired) {
+    return false;
+  }
+  if (isExtensionContextValid()) {
+    return true;
+  }
+  contentScriptRetired = true;
+  if (selectionChangeTimer) {
+    clearTimeout(selectionChangeTimer);
+    selectionChangeTimer = null;
+  }
+  removeSelectionWidget();
+  return false;
+}
+
+function sendRuntimeMessage(message) {
+  if (!ensureExtensionContext()) {
+    return Promise.resolve(undefined);
+  }
+  return api.runtime.sendMessage(message).catch(() => {});
+}
+
 const WIDGET_MARGIN_PX = 8;
 const WIDGET_VIEWPORT_PADDING_PX = 8;
 
@@ -69,6 +102,9 @@ function rememberHookedUrls(urls) {
 }
 
 function injectPageScript(filename) {
+  if (!ensureExtensionContext()) {
+    return;
+  }
   const script = document.createElement("script");
   script.src = api.runtime.getURL(filename);
   script.addEventListener("error", () => {
@@ -499,6 +535,9 @@ function buildContentDownloadItem(item) {
 }
 
 async function downloadSelectedLinks(shadow) {
+  if (!ensureExtensionContext()) {
+    return;
+  }
   const items = collectSelectedLinks();
   if (items.length === 0) {
     return;
@@ -518,6 +557,7 @@ async function downloadSelectedLinks(shadow) {
     });
     button.textContent = response?.ok ? "Opened in Avar" : "Failed";
   } catch {
+    ensureExtensionContext();
     button.textContent = "Failed";
   }
 
@@ -528,6 +568,9 @@ async function downloadSelectedLinks(shadow) {
 }
 
 function updateSelectionWidget() {
+  if (!ensureExtensionContext()) {
+    return;
+  }
   const items = collectSelectedLinks();
   if (items.length !== lastWidgetLinkCount) {
     widgetDismissed = false;
@@ -558,25 +601,37 @@ function updateSelectionWidget() {
 }
 
 async function loadWidgetSetting() {
+  if (!ensureExtensionContext()) {
+    return;
+  }
   const stored = await api.storage.local.get(["showSelectionWidget"]);
   showSelectionWidget = stored.showSelectionWidget !== false;
   updateSelectionWidget();
 }
 
 function scheduleSelectionWidgetUpdate() {
+  if (!ensureExtensionContext()) {
+    return;
+  }
   const count = collectSelectedLinks().length;
-  void api.runtime.sendMessage({ type: "avar-selection-changed", count }).catch(() => {});
+  void sendRuntimeMessage({ type: "avar-selection-changed", count });
 
   if (selectionChangeTimer) {
     clearTimeout(selectionChangeTimer);
   }
   selectionChangeTimer = setTimeout(() => {
     selectionChangeTimer = null;
+    if (!ensureExtensionContext()) {
+      return;
+    }
     updateSelectionWidget();
   }, SELECTION_WIDGET_DEBOUNCE_MS);
 }
 
 api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!ensureExtensionContext()) {
+    return false;
+  }
   if (message?.type !== "avar-get-page-media") {
     return false;
   }
@@ -623,6 +678,9 @@ window.addEventListener("scroll", repositionSelectionWidgetIfVisible, true);
 window.addEventListener("resize", repositionSelectionWidgetIfVisible);
 
 api.storage.onChanged.addListener((changes, area) => {
+  if (!ensureExtensionContext()) {
+    return;
+  }
   if (area !== "local" || !changes.showSelectionWidget) {
     return;
   }
@@ -633,10 +691,11 @@ api.storage.onChanged.addListener((changes, area) => {
 document.addEventListener(
   "contextmenu",
   () => {
+    if (!ensureExtensionContext()) {
+      return;
+    }
     const snapshot = refreshContextMenuSnapshot();
-    void api.runtime
-      .sendMessage({ type: "avar-selection-changed", count: snapshot.length })
-      .catch(() => {});
+    void sendRuntimeMessage({ type: "avar-selection-changed", count: snapshot.length });
     updateSelectionWidget();
   },
   true,
@@ -644,7 +703,10 @@ document.addEventListener(
 
 installPageHooks();
 void (async () => {
+  if (!ensureExtensionContext()) {
+    return;
+  }
   await loadWidgetSetting();
   const count = collectSelectedLinks().length;
-  void api.runtime.sendMessage({ type: "avar-selection-changed", count }).catch(() => {});
+  void sendRuntimeMessage({ type: "avar-selection-changed", count });
 })();
