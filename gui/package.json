@@ -21,7 +21,7 @@
     "build:desktop": "npm run build && electron-builder --mac --win --linux",
     "build:desktop:current": "npm run build && electron-builder --dir",
     "start:tiny": "npm run build && concurrently -k \"vite preview --port 4173 --strictPort\" \"wait-on http://localhost:4173 && cross-env AVAR_GUI_URL=http://localhost:4173 node tiny/main.cjs\"",
-    "build:tiny": "npm run build && npm install tinytron && node tiny/verify-build.cjs",
+    "build:tiny": "npm run build && node scripts/install-tinytron.cjs && node tiny/verify-build.cjs",
     "build:all": "python ../scripts/build_all.py",
     "icons": "node scripts/generate-icons.cjs"
   },
@@ -50,9 +50,6 @@
     "typescript": "^5.8.3",
     "vite": "^6.3.4",
     "wait-on": "^8.0.3"
-  },
-  "optionalDependencies": {
-    "tinytron": "^1.0.3"
   },
   "build": {
     "appId": "io.avar.gui",

@@ -75,7 +75,11 @@ jobs:
 
       - name: Build Tiny shell (experiment)
         working-directory: gui
-        run: npm ci && npm run build:tiny
+        run: |
+          npm ci
+          npm run build
+          node scripts/install-tinytron.cjs
+          node tiny/verify-build.cjs
 
       - name: Package Tiny release
         run: |

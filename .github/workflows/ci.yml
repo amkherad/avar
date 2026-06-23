@@ -100,6 +100,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -116,7 +121,11 @@ jobs:
 
       - name: Build Tiny shell
         working-directory: gui
-        run: npm ci && npm run build:tiny
+        run: |
+          npm ci
+          npm run build
+          node scripts/install-tinytron.cjs
+          node tiny/verify-build.cjs
 
       - name: Upload Tiny native artifact
         uses: actions/upload-artifact@v4

@@ -12,11 +12,11 @@ This shell runs the **same** Avar GUI SPA as Electron, but without the Electron 
   - **macOS:** Xcode Command Line Tools
   - **Linux:** `build-essential`, `libwebkit2gtk-4.1-dev` (or distro equivalent for webview)
 
-Install the native addon (optional — `npm install` in `gui/` continues if this fails):
+Install the native addon before running Tiny (optional for normal `npm ci`):
 
 ```bash
 cd gui
-npm install tinytron
+node scripts/install-tinytron.cjs
 ```
 
 Upstream project: https://github.com/Rafi993/tiny

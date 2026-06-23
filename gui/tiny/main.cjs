@@ -35,7 +35,7 @@ function loadTiny() {
       [
         "Failed to load tinytron.",
         "Install build tools (Visual Studio C++ on Windows, Xcode CLT on macOS, build-essential on Linux)",
-        "then run: npm install tinytron",
+        "then run: node scripts/install-tinytron.cjs",
         "",
         `Details: ${message}`,
       ].join("\n"),

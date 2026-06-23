@@ -7,7 +7,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
 
-const Tiny = require("tinytron");
 const { getProxyBaseUrl, startDaemonProxy, stopDaemonProxy } = require("../desktop/daemon-proxy.cjs");
 const { resolveGuiUrl } = require("../desktop/resolve-gui-url.cjs");
 const {
@@ -15,10 +14,30 @@ const {
   stopStaticServer,
 } = require("../desktop/static-server.cjs");
 
+function tinytronRoot() {
+  return path.join(__dirname, "..", "node_modules", "tinytron");
+}
+
 function tinytronAddonPath() {
-  const packageJson = require.resolve("tinytron/package.json");
-  const root = path.dirname(packageJson);
-  return path.join(root, "build", "Release", "addon.node");
+  return path.join(tinytronRoot(), "build", "Release", "addon.node");
+}
+
+function loadTiny() {
+  const root = tinytronRoot();
+  if (!fs.existsSync(path.join(root, "package.json"))) {
+    throw new Error(
+      "tinytron is not installed. Run: node scripts/install-tinytron.cjs",
+    );
+  }
+
+  try {
+    return require("tinytron");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `tinytron failed to load (${message}). Run: node scripts/install-tinytron.cjs`,
+    );
+  }
 }
 
 function waitForStaticServerUrl(staticServer, timeoutMs = 10_000) {
@@ -56,9 +75,12 @@ function fetchOk(url) {
 async function main() {
   const addonPath = tinytronAddonPath();
   if (!fs.existsSync(addonPath)) {
-    throw new Error(`tinytron native addon not found: ${addonPath}`);
+    throw new Error(
+      `tinytron native addon not found: ${addonPath}. Run: node scripts/install-tinytron.cjs`,
+    );
   }
 
+  const Tiny = loadTiny();
   if (typeof Tiny !== "function") {
     throw new Error("tinytron did not export the Tiny constructor");
   }
