@@ -31,21 +31,23 @@ A cross-platform download manager written in **C23**, with a CLI, background dae
 git clone --recursive https://github.com/amkherad/avar.git
 cd avar
 
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
-cmake --build build --parallel
+cmake -S . -B output/build -DCMAKE_BUILD_TYPE=Release -G Ninja
+cmake --build output/build --parallel
 ```
+
+All CMake build trees, packaged binaries, and coverage reports live under `output/` (git-ignored). IDEs can use the presets in `CMakePresets.json` (`debug`, `release`, `gui`, `coverage`, `all`).
 
 ### Run
 
 ```bash
 # Start the daemon (HTTP API on port 8000)
-./build/avar daemon start --http --port=8000
+./output/build/avar daemon start --http --port=8000
 
 # Download a file
-./build/avar https://example.com/file.zip
+./output/build/avar https://example.com/file.zip
 
 # Check daemon health
-./build/avar daemon ping
+./output/build/avar daemon ping
 ```
 
 Pre-built binaries for tagged releases are published on the [Releases](https://github.com/amkherad/avar/releases) page.
@@ -73,8 +75,8 @@ npm run build:desktop      # installers → gui/release/
 Build a single binary with the UI embedded:
 
 ```bash
-cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
-cmake --build build-gui --target avar-gui --parallel
+cmake -S . -B output/build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
+cmake --build output/build-gui --target avar-gui --parallel
 ```
 
 ## Browser extensions
@@ -96,6 +98,7 @@ avar/
 ├── extensions/    # Chromium and Firefox extensions
 ├── docs/          # Jekyll documentation site
 ├── scripts/       # Build and automation scripts
+├── output/        # Build trees and packaged binaries (git-ignored)
 └── tests/         # C unit tests (doctest)
 ```
 
@@ -123,7 +126,7 @@ bundle exec jekyll serve
 
 ```bash
 # Run tests (AddressSanitizer / UBSan enabled in CI)
-ctest --test-dir build --output-on-failure
+ctest --test-dir output/build --output-on-failure
 ```
 
 CI builds `avar`, the GUI, and `avar-gui` on every push to `main` / `master`. Tagged releases (`v*`) publish installers for Windows (`.exe`), Linux (`.deb`), and macOS (`.dmg`) on `x86_64` and `arm64`, including all-in-one `avar-gui-*` builds with embedded Electron.

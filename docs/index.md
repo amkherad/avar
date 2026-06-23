@@ -27,11 +27,11 @@ title: Avar
 
 ```bash
 git clone --recursive {{ site.repo_url }}.git
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
-cmake --build build
+cmake -S . -B output/build -DCMAKE_BUILD_TYPE=Release -G Ninja
+cmake --build output/build
 
-./build/avar daemon start --http --port=8000
-./build/avar https://example.com/file.zip
+./output/build/avar daemon start --http --port=8000
+./output/build/avar https://example.com/file.zip
 ```
 
 Pre-built binaries will be available from [{{ site.download_url }}]({{ site.download_url }}) once releases are published.

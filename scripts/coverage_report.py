@@ -16,6 +16,13 @@ def run(cmd: list[str], *, cwd: Path, env: dict[str, str] | None = None) -> None
     subprocess.run(cmd, cwd=cwd, env=env, check=True)
 
 
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from paths import BUILD_COVERAGE_DIR, COVERAGE_XML, ROOT, rel
+
+
 def find_gcovr() -> str:
     gcovr = shutil.which("gcovr")
     if gcovr is not None:
@@ -35,13 +42,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--build-dir",
-        default="build-coverage",
-        help="CMake build directory (default: build-coverage)",
+        default=rel(BUILD_COVERAGE_DIR),
+        help=f"CMake build directory (default: {rel(BUILD_COVERAGE_DIR)})",
     )
     parser.add_argument(
         "--output",
-        default="coverage.xml",
-        help="Cobertura XML output path (default: coverage.xml)",
+        default=rel(COVERAGE_XML),
+        help=f"Cobertura XML output path (default: {rel(COVERAGE_XML)})",
     )
     parser.add_argument(
         "--min-line-coverage",
@@ -71,22 +78,21 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parent.parent
-    build_dir = (root / args.build_dir).resolve()
-    output = (root / args.output).resolve() if not os.path.isabs(args.output) else Path(args.output)
-    src_root = (root / "src").as_posix()
-    third_party = (root / "src" / "third_party").as_posix()
-    main_c = (root / "src" / "main.c").as_posix()
-    daemon_cli = (root / "src" / "daemon" / "daemon_cli.c").as_posix()
-    daemon_install = (root / "src" / "daemon" / "daemon_install.c").as_posix()
-    torrent_c = (root / "src" / "torrent.c").as_posix()
-    transport_c = (root / "src" / "transport.c").as_posix()
-    include_dir = (root / "src" / "include").as_posix()
+    build_dir = (ROOT / args.build_dir).resolve()
+    output = (ROOT / args.output).resolve() if not os.path.isabs(args.output) else Path(args.output)
+    src_root = (ROOT / "src").as_posix()
+    third_party = (ROOT / "src" / "third_party").as_posix()
+    main_c = (ROOT / "src" / "main.c").as_posix()
+    daemon_cli = (ROOT / "src" / "daemon" / "daemon_cli.c").as_posix()
+    daemon_install = (ROOT / "src" / "daemon" / "daemon_install.c").as_posix()
+    torrent_c = (ROOT / "src" / "torrent.c").as_posix()
+    transport_c = (ROOT / "src" / "transport.c").as_posix()
+    include_dir = (ROOT / "src" / "include").as_posix()
 
     configure_cmd = [
         "cmake",
         "-S",
-        str(root),
+        str(ROOT),
         "-B",
         str(build_dir),
         "-DCMAKE_BUILD_TYPE=Debug",
@@ -98,11 +104,11 @@ def main() -> int:
         configure_cmd.extend(["-G", "MinGW Makefiles"])
 
     if not args.skip_configure:
-        run(configure_cmd, cwd=root)
+        run(configure_cmd, cwd=ROOT)
     if not args.skip_build:
-        run(["cmake", "--build", str(build_dir), "--parallel"], cwd=root)
+        run(["cmake", "--build", str(build_dir), "--parallel"], cwd=ROOT)
     if not args.skip_tests:
-        run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"], cwd=root)
+        run(["ctest", "--test-dir", str(build_dir), "--output-on-failure"], cwd=ROOT)
 
     gcovr_exe = find_gcovr()
     gcovr_cmd = [gcovr_exe]
@@ -111,7 +117,7 @@ def main() -> int:
     gcovr_cmd.extend(
         [
             "--root",
-            root.as_posix(),
+            ROOT.as_posix(),
             "--object-directory",
             build_dir.as_posix(),
             "--filter",
@@ -144,7 +150,7 @@ def main() -> int:
 
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
-    run(gcovr_cmd, cwd=root, env=env)
+    run(gcovr_cmd, cwd=ROOT, env=env)
 
     print(f"Cobertura report written to {output}")
     return 0

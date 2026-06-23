@@ -11,7 +11,11 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from paths import BUILD_ALL_DIR, DIST_ALL_DIR, ROOT, rel
 
 
 def run(cmd: list[str], *, cwd: Path | None = None) -> None:
@@ -21,14 +25,22 @@ def run(cmd: list[str], *, cwd: Path | None = None) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--build-dir", default="build-all", help="CMake build directory")
+    parser.add_argument(
+        "--build-dir",
+        default=rel(BUILD_ALL_DIR),
+        help=f"CMake build directory (default: {rel(BUILD_ALL_DIR)})",
+    )
     parser.add_argument(
         "--config",
         default="Release",
         choices=["Debug", "Release", "RelWithDebInfo", "MinSizeRel"],
         help="CMake build type",
     )
-    parser.add_argument("--output-dir", default="dist", help="Output directory for artifacts")
+    parser.add_argument(
+        "--output-dir",
+        default=rel(DIST_ALL_DIR),
+        help=f"Output directory for artifacts (default: {rel(DIST_ALL_DIR)})",
+    )
     parser.add_argument(
         "--skip-electron",
         action="store_true",

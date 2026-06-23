@@ -27,28 +27,28 @@ jobs:
           cmakeVersion: "~4.1.0"
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DAVAR_ENABLE_COVERAGE=ON -G Ninja
+        run: cmake -S . -B output/build -DCMAKE_BUILD_TYPE=Debug -DAVAR_ENABLE_COVERAGE=ON -G Ninja
 
       - name: Build avar
-        run: cmake --build build --parallel
+        run: cmake --build output/build --parallel
 
       - name: Run tests
         timeout-minutes: 20
         env:
           PYTHON: python
-        run: ctest --test-dir build --output-on-failure
+        run: ctest --test-dir output/build --output-on-failure
 
       - name: Install gcovr
         run: pip install gcovr
 
       - name: Coverage report (Cobertura)
-        run: python scripts/coverage_report.py --build-dir build --output coverage.xml --skip-configure --skip-build --skip-tests
+        run: python scripts/coverage_report.py --build-dir output/build --skip-configure --skip-build --skip-tests
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: cobertura-coverage-${{ github.sha }}
-          path: coverage.xml
+          path: output/coverage.xml
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -65,8 +65,8 @@ jobs:
 
       - name: Build avar-gui (embedded frontend)
         run: |
-          cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
-          cmake --build build-gui --target avar-gui --parallel
+          cmake -S . -B output/build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
+          cmake --build output/build-gui --target avar-gui --parallel
 
       - name: Install Electron build dependencies
         run: |
@@ -74,14 +74,14 @@ jobs:
           sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libasound2t64 libxtst6
 
       - name: Build all-in-one avar
-        run: python scripts/build_all.py --build-dir build-all --config Release --output-dir dist-all
+        run: python scripts/build_all.py --config Release
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: avar-linux-${{ github.sha }}
           path: |
-            build/avar
-            build-gui/avar-gui
-            dist-all/avar
+            output/build/avar
+            output/build-gui/avar-gui
+            output/dist-all/avar
             gui/dist

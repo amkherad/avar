@@ -73,49 +73,47 @@ jobs:
 
       - name: Build avar (CLI)
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
-          cmake --build build --parallel
+          cmake -S . -B output/build -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build output/build --parallel
 
       - name: Package avar release
         run: |
           if [ "${{ matrix.platform }}" = windows ]; then
-            exe="build/avar.exe"
+            exe="output/build/avar.exe"
           else
-            exe="build/avar"
+            exe="output/build/avar"
           fi
           python scripts/package_release.py \
             --exe "$exe" \
             --kind avar \
             --version "${{ steps.version.outputs.version }}" \
             --os "${{ matrix.platform }}" \
-            --arch "${{ matrix.arch }}" \
-            --output-dir dist
+            --arch "${{ matrix.arch }}"
 
       - name: Build all-in-one avar-gui
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: python scripts/build_all.py --build-dir build-all --config Release --output-dir dist-all
+        run: python scripts/build_all.py --config Release
 
       - name: Package avar-gui release
         run: |
           if [ "${{ matrix.platform }}" = windows ]; then
-            exe="dist-all/avar.exe"
+            exe="output/dist-all/avar.exe"
           else
-            exe="dist-all/avar"
+            exe="output/dist-all/avar"
           fi
           python scripts/package_release.py \
             --exe "$exe" \
             --kind avar-gui \
             --version "${{ steps.version.outputs.version }}" \
             --os "${{ matrix.platform }}" \
-            --arch "${{ matrix.arch }}" \
-            --output-dir dist
+            --arch "${{ matrix.arch }}"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}-${{ matrix.arch }}
-          path: dist/*
+          path: output/dist/*
           if-no-files-found: error
 
   publish:

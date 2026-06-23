@@ -16,6 +16,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from compute_version import compute_version
+from paths import DIST_DIR, rel
 
 
 def detect_platform() -> tuple[str, str]:
@@ -127,7 +128,12 @@ def main() -> int:
     parser.add_argument("--exe", type=Path, required=True, help="Built executable path")
     parser.add_argument("--kind", choices=("avar", "avar-gui"), required=True)
     parser.add_argument("--version", help="Release version (default: from version.json + git)")
-    parser.add_argument("--output-dir", type=Path, default=Path("dist"))
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DIST_DIR,
+        help=f"Packaged release output directory (default: {rel(DIST_DIR)})",
+    )
     parser.add_argument("--os", dest="os_name", choices=("windows", "linux", "mac"))
     parser.add_argument("--arch", choices=("x86_64", "arm64"))
     args = parser.parse_args()

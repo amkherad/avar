@@ -40,19 +40,21 @@ git submodule update --init --recursive
 ### Build the CLI and daemon
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
-cmake --build build --parallel
+cmake -S . -B output/build -DCMAKE_BUILD_TYPE=Release -G Ninja
+cmake --build output/build --parallel
 ```
 
-The executable is at `build/avar` (or `build\avar.exe` on Windows).
+The executable is at `output/build/avar` (or `output/build\avar.exe` on Windows).
+
+Build trees and packaged binaries are written under `output/` (git-ignored). See `CMakePresets.json` for common IDE presets.
 
 ### Build with embedded GUI (`avar-gui`)
 
 This produces a single binary that serves the web UI from the daemon's HTTP channel:
 
 ```bash
-cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
-cmake --build build-gui --target avar-gui --parallel
+cmake -S . -B output/build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
+cmake --build output/build-gui --target avar-gui --parallel
 ```
 
 The build runs `npm ci && npm run build` in `gui/` and embeds the result into the binary.
@@ -71,7 +73,7 @@ See the [GUI documentation]({{ site.baseurl }}/gui/building.html) for developmen
 ### Run tests
 
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir output/build --output-on-failure
 ```
 
 ## Platform notes

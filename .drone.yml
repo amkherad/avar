@@ -20,15 +20,15 @@ steps:
       - apt-get update
       - apt-get install -y cmake ninja-build git python3 nodejs npm
       - git submodule update --init --recursive
-      - cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -G Ninja
-      - cmake --build build --parallel
-      - ctest --test-dir build --output-on-failure
+      - cmake -S . -B output/build -DCMAKE_BUILD_TYPE=Debug -G Ninja
+      - cmake --build output/build --parallel
+      - ctest --test-dir output/build --output-on-failure
       - cd gui && npm ci && npm run build
-      - cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
-      - cmake --build build-gui --target avar-gui --parallel
+      - cmake -S . -B output/build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
+      - cmake --build output/build-gui --target avar-gui --parallel
       - mkdir -p /drone/src/artifacts
-      - cp build/avar /drone/src/artifacts/avar
-      - cp build-gui/avar-gui /drone/src/artifacts/avar-gui
+      - cp output/build/avar /drone/src/artifacts/avar
+      - cp output/build-gui/avar-gui /drone/src/artifacts/avar-gui
       - tar -czf /drone/src/artifacts/avar-gui-dist.tar.gz -C gui dist
 
   - name: upload-artifacts

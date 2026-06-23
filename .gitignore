@@ -13,7 +13,10 @@ Thumbs.db
 *.iws
 out/
 
-# CLion #
+# Build output (CMake, packaging, coverage) #
+#############################################
+/output/
+
 ###########
 /cmake-build-debug/
 /cmake-build-release/
@@ -22,6 +25,7 @@ out/
 /build-coverage-test/
 /build-coverage/
 coverage.xml
+/build/
 /build-gui/
 /build-all/
 /dist-all/
@@ -31,6 +35,8 @@ daemon_transport.c.gcov
 /.cmake.tar.gz
 /build-all/
 /dist-all/
+
+###########
 
 # VSCode #
 ###########
@@ -78,10 +84,6 @@ target/
 *.jar
 *.war
 *.ear
-
-# C/C++ #
-#########
-build/
 
 # Ruby #
 ########

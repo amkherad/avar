@@ -55,8 +55,8 @@ Cross-origin access is enabled by default in the daemon (`daemon.server.cors.ena
 Build the C binary with the GUI embedded:
 
 ```bash
-cmake -S . -B build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
-cmake --build build-gui --target avar-gui --parallel
+cmake -S . -B output/build-gui -DCMAKE_BUILD_TYPE=Release -DAVAR_BUILD_GUI=ON -G Ninja
+cmake --build output/build-gui --target avar-gui --parallel
 ```
 
 The daemon serves the SPA on its HTTP port — no separate web server needed.
