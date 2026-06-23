@@ -14,11 +14,14 @@
 
 #define APP_NAME "Avar"
 #define APP_ID "avar"
-#ifndef VERSION
-#define VERSION 0.0.1
+
+#if defined(__has_include)
+#  if __has_include("avar_version.h")
+#    include "avar_version.h"
+#  endif
 #endif
 #ifndef VERSION_STR
-#define VERSION_STR TOSTR(VERSION)
+#define VERSION_STR "0.0.0-dev"
 #endif
 
 /* -------------------------------------------------------------------------- */

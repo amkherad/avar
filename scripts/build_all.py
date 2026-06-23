@@ -42,6 +42,17 @@ def main() -> int:
     gui_dir = ROOT / "gui"
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    run(
+        [
+            sys.executable,
+            str(ROOT / "scripts" / "generate_version.py"),
+            "--root",
+            str(ROOT),
+            "--out-env",
+            str(gui_dir / ".avar-build.env"),
+        ]
+    )
+
     if not args.skip_electron:
         run(["npm", "ci"], cwd=gui_dir)
         run(["npm", "run", "build:desktop:current"], cwd=gui_dir)

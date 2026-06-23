@@ -2,6 +2,7 @@
 project(avar C CXX)
 
 include("${CMAKE_SOURCE_DIR}/cmake/AvarCoverage.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/AvarVersion.cmake")
 
 set(SRC_DIR "${CMAKE_SOURCE_DIR}/src")
 set(THIRD_PARTY_DIR "${SRC_DIR}/third_party")
@@ -65,6 +66,7 @@ function(avar_configure_core_library target_name testing)
             src/third_party/cJSON
             "${THIRD_PARTY_DIR}/mbedtls/include"
     )
+    avar_apply_version(${target_name})
     target_compile_definitions(${target_name} PUBLIC
             MG_ENABLE_CUSTOM_LOG=1
             MG_TLS=MG_TLS_MBED
@@ -96,6 +98,7 @@ function(avar_configure_cli_library target_name testing)
             src/third_party/cJSON
             "${THIRD_PARTY_DIR}/mbedtls/include"
     )
+    avar_apply_version(${target_name})
     target_compile_definitions(${target_name} PUBLIC
             MG_ENABLE_CUSTOM_LOG=1
             MG_TLS=MG_TLS_MBED
@@ -174,6 +177,7 @@ else()
 endif()
 
 add_executable(${PROJECT_NAME} "${SRC_DIR}/main.c")
+avar_apply_version(${PROJECT_NAME})
 if(AVAR_ENABLE_COVERAGE)
     target_sources(${PROJECT_NAME} PRIVATE
             $<TARGET_OBJECTS:avar_core_obj>
@@ -210,6 +214,9 @@ if(AVAR_BUILD_GUI OR AVAR_BUILD_ALL)
 
   add_custom_command(
         OUTPUT "${GUI_EMBED_C}" "${GUI_EMBED_H}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/scripts/generate_version.py"
+                --root "${CMAKE_SOURCE_DIR}"
+                --out-env "${CMAKE_SOURCE_DIR}/gui/.avar-build.env"
         COMMAND "${NPM_EXECUTABLE}" ci
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/gui"
         COMMAND "${NPM_EXECUTABLE}" run build
@@ -220,7 +227,10 @@ if(AVAR_BUILD_GUI OR AVAR_BUILD_ALL)
                 --out-h "${GUI_EMBED_H}"
         DEPENDS
             "${CMAKE_SOURCE_DIR}/gui/package.json"
+            "${CMAKE_SOURCE_DIR}/version.json"
             "${CMAKE_SOURCE_DIR}/scripts/embed_gui.py"
+            "${CMAKE_SOURCE_DIR}/scripts/generate_version.py"
+            "${CMAKE_SOURCE_DIR}/scripts/compute_version.py"
         COMMENT "Building and embedding GUI assets"
         VERBATIM
     )
@@ -238,6 +248,7 @@ if(AVAR_BUILD_GUI OR AVAR_BUILD_ALL)
         )
 
         target_compile_definitions(avar-gui PRIVATE AVAR_EMBED_GUI=1)
+        avar_apply_version(avar-gui)
 
         set_target_properties(avar-gui PROPERTIES
                 C_STANDARD 23

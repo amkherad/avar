@@ -35,6 +35,7 @@ function(avar_add_test test_name)
             C_STANDARD_REQUIRED ON
     )
     avar_apply_coverage(${test_name})
+    avar_apply_version(${test_name})
     add_test(NAME ${test_name} COMMAND ${test_name})
     set_tests_properties(${test_name} PROPERTIES TIMEOUT ${_TEST_TIMEOUT})
 endfunction()
@@ -68,7 +69,6 @@ endfunction()
 
 avar_add_test(test_utils TIMEOUT ${AVAR_TEST_TIMEOUT_UNIT} test_utils.c)
 avar_link_core_test(test_utils)
-target_compile_definitions(test_utils PRIVATE VERSION_STR=\"0.0.1\")
 
 avar_add_test(test_http TIMEOUT ${AVAR_TEST_TIMEOUT_FAST} test_http.c)
 avar_link_core_test(test_http)
@@ -142,16 +142,14 @@ avar_link_core_test(test_download_internals)
 
 avar_add_test(test_cli TIMEOUT ${AVAR_TEST_TIMEOUT_UNIT} test_cli.c)
 avar_link_cli_test(test_cli)
-target_compile_definitions(test_cli PRIVATE VERSION_STR=\"0.0.1\")
 
 avar_add_test(test_cli_handlers TIMEOUT ${AVAR_TEST_TIMEOUT_INTEGRATION} test_cli_handlers.c
         ${AVAR_TEST_GUARD_SOURCES})
 avar_link_cli_test(test_cli_handlers)
-target_compile_definitions(test_cli_handlers PRIVATE VERSION_STR=\"0.0.1\" AVAR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(test_cli_handlers PRIVATE AVAR_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 avar_add_test(test_daemon TIMEOUT ${AVAR_TEST_TIMEOUT_DAEMON} test_daemon.c ${AVAR_TEST_GUARD_SOURCES})
 avar_link_cli_test(test_daemon)
-target_compile_definitions(test_daemon PRIVATE VERSION_STR=\"0.0.1\")
 
 avar_add_test(test_daemon_session TIMEOUT ${AVAR_TEST_TIMEOUT_UNIT} test_daemon_session.c
         ${AVAR_TEST_GUARD_SOURCES})
@@ -173,4 +171,3 @@ avar_link_cli_test(test_daemon_config)
 avar_add_test(test_daemon_transport TIMEOUT ${AVAR_TEST_TIMEOUT_DAEMON} test_daemon_transport.c
         ${AVAR_TEST_GUARD_SOURCES})
 avar_link_cli_test(test_daemon_transport)
-target_compile_definitions(test_daemon_transport PRIVATE VERSION_STR=\"0.0.1\")
