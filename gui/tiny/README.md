@@ -6,7 +6,7 @@ This shell runs the **same** Avar GUI SPA as Electron, but without the Electron 
 
 ## Prerequisites
 
-- Node.js 20+ (tinytron may need an older LTS if native build fails on your Node version)
+- Node.js 20+ (tinytron is built with the gui's node-gyp@10; Node 22+ is supported in CI)
 - C++ build toolchain:
   - **Windows:** Visual Studio with "Desktop development with C++"
   - **macOS:** Xcode Command Line Tools
