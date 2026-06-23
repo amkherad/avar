@@ -10,6 +10,7 @@ import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import { canRedownload, isCompleted } from "@/lib/downloadStatus";
 import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
+import { useDownloadProgressWatch } from "@/hooks/useDownloadProgressWatch";
 import { formatBytePair, progressPercent } from "./format";
 import { DownloadProgressBar } from "./DownloadProgressBar";
 
@@ -36,6 +37,7 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
 
 export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadDetailViewProps) {
   const { t } = useTranslation();
+  useDownloadProgressWatch(download.id);
   const { busy, redownload, copyToLocal, copyToLocalAvailable, copyToLocalVisible, localCopyReady } =
     useDownloadActions();
   const percent = progressPercent(download.bytesDownloaded, download.totalBytes);

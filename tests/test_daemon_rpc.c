@@ -196,6 +196,21 @@ AVAR_TEST(daemon_rpc_download_add) {
     free(response);
 }
 
+AVAR_TEST(daemon_rpc_download_progress_watch) {
+    setup_rpc_config();
+
+    char *response = NULL;
+    AVAR_ASSERT(rpc_call("download.watch", "{\"id\":\"dl-watch-test\"}", &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "\"exitCode\":0") != NULL);
+    free(response);
+
+    AVAR_ASSERT(rpc_call("download.unwatch", "{\"id\":\"dl-watch-test\"}", &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "\"exitCode\":0") != NULL);
+    free(response);
+}
+
 AVAR_TEST(daemon_rpc_malformed_jsonrpc) {
     setup_rpc_config();
 
@@ -216,4 +231,5 @@ AVAR_TEST_MAIN(
         run_daemon_rpc_reload_config();
         run_daemon_rpc_http_endpoints();
         run_daemon_rpc_download_add();
+        run_daemon_rpc_download_progress_watch();
         run_daemon_rpc_malformed_jsonrpc();)

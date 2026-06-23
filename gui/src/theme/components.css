@@ -1246,6 +1246,20 @@
   gap: 0.75rem;
 }
 
+.avar-download-detail .avar-progress {
+  height: 30px;
+  margin-top: 0.5rem;
+  border-radius: 4px;
+}
+
+.avar-download-detail .avar-progress--segmented {
+  gap: 3px;
+}
+
+.avar-download-detail .avar-progress__segment {
+  border-radius: 3px;
+}
+
 .avar-download-detail__field dt {
   font-size: 0.75rem;
   font-weight: 600;

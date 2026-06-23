@@ -186,6 +186,14 @@ export class DaemonClient {
     return (result.downloads ?? []).map((item) => parseDownloadItem(item));
   }
 
+  async watchDownloadProgress(id: string): Promise<void> {
+    await this.rpc<{ exitCode: number }>("download.watch", { id });
+  }
+
+  async unwatchDownloadProgress(id: string): Promise<void> {
+    await this.rpc<{ exitCode: number }>("download.unwatch", { id });
+  }
+
   async addQueue(params: QueueAddParams): Promise<string> {
     const result = await this.rpc<QueueRpcResult>("queue.add", { ...params });
     if (result.exitCode !== 0 || !result.id) {

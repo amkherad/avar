@@ -43,6 +43,15 @@ size_t download_active_count(void);
  */
 size_t download_active_list(DownloadActiveInfo *items, size_t max_items);
 
+/** Registers a GUI client watching segmented progress for id (reference counted). */
+void download_progress_watch(const char *id);
+
+/** Unregisters a segmented-progress watcher for id. */
+void download_progress_unwatch(const char *id);
+
+/** Returns true when at least one client is watching segmented progress for id. */
+bool download_progress_is_watched(const char *id);
+
 /** Waits until no active downloads or timeout. Returns true when idle. */
 bool download_wait_idle(unsigned timeout_ms);
 

@@ -104,6 +104,125 @@ static void platform_enable_ansi_terminal(void) {
 
 static atomic_uint g_active_downloads = 0;
 
+typedef struct {
+    char id[AVAR_DL_ID_BUF_SIZE];
+    unsigned refcount;
+} ProgressWatcher;
+
+static struct {
+    AvarMutex *mutex;
+    ProgressWatcher *items;
+    size_t count;
+    size_t capacity;
+} g_progress_watchers = {0};
+
+static void sync_active_progress_detail(const char *id);
+
+static void progress_watchers_init(void) {
+    if (g_progress_watchers.mutex == NULL) {
+        g_progress_watchers.mutex = avar_mutex_create();
+    }
+}
+
+static ssize_t progress_watcher_index(const char *id) {
+    if (id == NULL) {
+        return -1;
+    }
+
+    for (size_t i = 0U; i < g_progress_watchers.count; i++) {
+        if (strcmp(g_progress_watchers.items[i].id, id) == 0) {
+            return (ssize_t)i;
+        }
+    }
+
+    return -1;
+}
+
+static bool progress_watchers_grow(void) {
+    const size_t next_capacity = g_progress_watchers.capacity == 0U ? 8U
+                                                                 : g_progress_watchers.capacity * 2U;
+    ProgressWatcher *items =
+        realloc(g_progress_watchers.items, next_capacity * sizeof(ProgressWatcher));
+    if (items == NULL) {
+        return false;
+    }
+
+    g_progress_watchers.items = items;
+    g_progress_watchers.capacity = next_capacity;
+    return true;
+}
+
+void download_progress_watch(const char *id) {
+    if (id == NULL || id[0] == '\0') {
+        return;
+    }
+
+    progress_watchers_init();
+    avar_mutex_lock(g_progress_watchers.mutex);
+
+    const ssize_t index = progress_watcher_index(id);
+    if (index >= 0) {
+        g_progress_watchers.items[(size_t)index].refcount++;
+        avar_mutex_unlock(g_progress_watchers.mutex);
+        return;
+    }
+
+    if (g_progress_watchers.count >= g_progress_watchers.capacity && !progress_watchers_grow()) {
+        avar_mutex_unlock(g_progress_watchers.mutex);
+        return;
+    }
+
+    ProgressWatcher *entry = &g_progress_watchers.items[g_progress_watchers.count++];
+    memset(entry, 0, sizeof(*entry));
+    snprintf(entry->id, sizeof entry->id, "%s", id);
+    entry->refcount = 1U;
+
+    avar_mutex_unlock(g_progress_watchers.mutex);
+    sync_active_progress_detail(id);
+}
+
+void download_progress_unwatch(const char *id) {
+    if (id == NULL || id[0] == '\0' || g_progress_watchers.mutex == NULL) {
+        return;
+    }
+
+    avar_mutex_lock(g_progress_watchers.mutex);
+
+    const ssize_t index = progress_watcher_index(id);
+    if (index < 0) {
+        avar_mutex_unlock(g_progress_watchers.mutex);
+        return;
+    }
+
+    ProgressWatcher *entry = &g_progress_watchers.items[(size_t)index];
+    if (entry->refcount > 1U) {
+        entry->refcount--;
+        avar_mutex_unlock(g_progress_watchers.mutex);
+        return;
+    }
+
+    const size_t last = g_progress_watchers.count - 1U;
+    if ((size_t)index != last) {
+        g_progress_watchers.items[(size_t)index] = g_progress_watchers.items[last];
+    }
+    g_progress_watchers.count--;
+
+    avar_mutex_unlock(g_progress_watchers.mutex);
+    sync_active_progress_detail(id);
+}
+
+bool download_progress_is_watched(const char *id) {
+    if (id == NULL || id[0] == '\0' || g_progress_watchers.mutex == NULL) {
+        return false;
+    }
+
+    bool watched = false;
+    avar_mutex_lock(g_progress_watchers.mutex);
+    watched = progress_watcher_index(id) >= 0;
+    avar_mutex_unlock(g_progress_watchers.mutex);
+    return watched;
+}
+
 #define DL_SNOWFLAKE_EPOCH_MS 1704067200000ULL
 #define DL_SNOWFLAKE_MACHINE_BITS 10U
 #define DL_SNOWFLAKE_SEQUENCE_BITS 12U
@@ -769,7 +888,8 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         cJSON_AddNullToObject(obj, AVAR_FIELD_QUEUE_ID);
     }
 
-    if (job->state != NULL && job->state->total_size > 0U && job->state->chunk_size > 0U) {
+    if (job->state != NULL && job->state->total_size > 0U && job->state->chunk_size > 0U
+        && download_progress_is_watched(job->item_id)) {
         cJSON_AddNumberToObject(obj, AVAR_FIELD_CHUNK_SIZE, (double)job->state->chunk_size);
         cJSON *ranges = cJSON_AddArrayToObject(obj, "doneRanges");
         if (ranges != NULL) {
@@ -812,6 +932,15 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
         log_job_status(job, status);
     }
     return rc;
+}
+
+static void sync_active_progress_detail(const char *id) {
+    DownloadJob *job = active_jobs_find(id);
+    if (job == NULL || job->done || job->failed) {
+        return;
+    }
+
+    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
 }
 
 static void clear_progress_line(DownloadJob *job) {

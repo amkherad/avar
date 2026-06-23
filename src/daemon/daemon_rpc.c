@@ -835,6 +835,36 @@ static cJSON *handle_queue_edit(cJSON *params) {
     return result;
 }
 
+static cJSON *handle_download_watch(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    if (!cJSON_IsString(id) || id->valuestring == NULL || id->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    download_progress_watch(id->valuestring);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result != NULL) {
+        cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
+    }
+    return result;
+}
+
+static cJSON *handle_download_unwatch(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    if (!cJSON_IsString(id) || id->valuestring == NULL || id->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    download_progress_unwatch(id->valuestring);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result != NULL) {
+        cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
+    }
+    return result;
+}
+
 static cJSON *handle_queue_start(cJSON *params) {
     const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
     const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
@@ -1135,6 +1165,12 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     }
     if (strcmp(method, "downloads.list") == 0) {
         return handle_downloads_list();
+    }
+    if (strcmp(method, "download.watch") == 0) {
+        return handle_download_watch(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "download.unwatch") == 0) {
+        return handle_download_unwatch(params != NULL ? params : cJSON_CreateObject());
     }
     if (strcmp(method, "fs.browse") == 0) {
         if (!daemon_server_fs_browse_enabled()) {

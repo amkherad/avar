@@ -64,8 +64,22 @@ AVAR_TEST(download_internals_generate_id) {
     free(id2);
 }
 
+AVAR_TEST(download_internals_progress_watch) {
+    AVAR_ASSERT(!download_progress_is_watched("dl-test-watch"));
+    download_progress_watch("dl-test-watch");
+    AVAR_ASSERT(download_progress_is_watched("dl-test-watch"));
+    download_progress_watch("dl-test-watch");
+    AVAR_ASSERT(download_progress_is_watched("dl-test-watch"));
+    download_progress_unwatch("dl-test-watch");
+    AVAR_ASSERT(download_progress_is_watched("dl-test-watch"));
+    download_progress_unwatch("dl-test-watch");
+    AVAR_ASSERT(!download_progress_is_watched("dl-test-watch"));
+    download_progress_unwatch("dl-test-watch");
+}
+
 AVAR_TEST_MAIN(
         run_download_internals_choose_filename();
         run_download_internals_parse_content_range();
         run_download_internals_existing_file_size();
-        run_download_internals_generate_id();)
+        run_download_internals_generate_id();
+        run_download_internals_progress_watch();)
