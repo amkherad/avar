@@ -2,6 +2,7 @@
 project(avar C CXX)
 
 include("${CMAKE_SOURCE_DIR}/cmake/AvarCoverage.cmake")
+include("${CMAKE_SOURCE_DIR}/cmake/AvarLink.cmake")
 include("${CMAKE_SOURCE_DIR}/cmake/AvarVersion.cmake")
 
 set(SRC_DIR "${CMAKE_SOURCE_DIR}/src")
@@ -184,10 +185,8 @@ if(AVAR_ENABLE_COVERAGE)
             $<TARGET_OBJECTS:avar_cli_obj>
     )
     target_link_libraries(${PROJECT_NAME} PRIVATE avar_cli)
-elseif(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-    target_link_libraries(${PROJECT_NAME} PRIVATE -Wl,--start-group avar_cli avar_core -Wl,--end-group)
 else()
-    target_link_libraries(${PROJECT_NAME} PRIVATE avar_cli)
+    avar_link_cli_core(${PROJECT_NAME} avar_cli avar_core)
 endif()
 set_target_properties(${PROJECT_NAME} PROPERTIES
         C_STANDARD 23

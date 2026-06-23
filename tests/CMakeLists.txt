@@ -60,10 +60,8 @@ function(avar_link_cli_test test_name)
                 $<TARGET_OBJECTS:avar_cli_obj>
         )
         target_link_libraries(${test_name} PRIVATE avar_cli_testing)
-    elseif(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
-        target_link_libraries(${test_name} PRIVATE -Wl,--start-group avar_cli_testing avar_core_testing -Wl,--end-group)
     else()
-        target_link_libraries(${test_name} PRIVATE avar_cli_testing avar_core_testing)
+        avar_link_cli_core(${test_name} avar_cli_testing avar_core_testing)
     endif()
 endfunction()
 
