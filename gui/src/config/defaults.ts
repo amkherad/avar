@@ -3,7 +3,7 @@ import {
   type ShortcutActionId,
 } from "@/shortcuts/definitions";
 
-export type ThemeId = "light" | "dark" | "system";
+export type ThemeId = "light" | "light-bright" | "dark" | "system";
 
 export type LocaleId = "en" | "fa";
 

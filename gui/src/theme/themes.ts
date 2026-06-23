@@ -1,5 +1,7 @@
+export type ThemeVariantId = "light-soft" | "light-bright" | "dark";
+
 export interface ThemeTokens {
-  id: "light" | "dark";
+  id: ThemeVariantId;
   bg: string;
   bgElevated: string;
   bgMuted: string;
@@ -17,8 +19,29 @@ export interface ThemeTokens {
   font: string;
 }
 
-export const lightTheme: ThemeTokens = {
-  id: "light",
+/** Default light theme — muted surfaces for bright rooms and large displays. */
+export const softLightTheme: ThemeTokens = {
+  id: "light-soft",
+  bg: "#d4d0c8",
+  bgElevated: "#e2ded6",
+  bgMuted: "#c8c4bc",
+  border: "#b4b0a8",
+  text: "#2a2824",
+  textMuted: "#5c5850",
+  primary: "#2563eb",
+  primaryHover: "#1d4ed8",
+  primaryText: "#f4f2ee",
+  success: "#15803d",
+  warning: "#b45309",
+  danger: "#b91c1c",
+  shadow: "0 8px 24px rgba(42, 40, 36, 0.12)",
+  radius: "10px",
+  font: "'Segoe UI', system-ui, -apple-system, sans-serif",
+};
+
+/** High-contrast light theme with brighter surfaces. */
+export const brightLightTheme: ThemeTokens = {
+  id: "light-bright",
   bg: "#f4f6f8",
   bgElevated: "#ffffff",
   bgMuted: "#e8ecf0",
@@ -62,6 +85,22 @@ export function resolveSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
+}
+
+export function resolveThemeTokens(
+  themeSetting: "light" | "light-bright" | "dark" | "system",
+  systemMode: "light" | "dark",
+): ThemeTokens {
+  if (themeSetting === "dark") {
+    return darkTheme;
+  }
+  if (themeSetting === "light-bright") {
+    return brightLightTheme;
+  }
+  if (themeSetting === "system") {
+    return systemMode === "dark" ? darkTheme : softLightTheme;
+  }
+  return softLightTheme;
 }
 
 export function themeToCssVars(theme: ThemeTokens): Record<string, string> {

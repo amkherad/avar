@@ -8,7 +8,7 @@ Use the inner sidebar to switch between setting groups.
 
 ### 🌐 General
 
-- **Theme** — Light, Dark, or follow system preference.
+- **Theme** — Light (muted surfaces, default for bright rooms), Light (bright), Dark, or follow system preference. System uses the muted light theme when your OS is in light mode.
 - **Language** — English or Persian (فارسی). RTL layout applies automatically for Persian.
 - **Data sync channel** — How the GUI receives live updates:
   - *Periodic polls* — interval configurable below.

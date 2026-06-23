@@ -43,6 +43,7 @@ export function GeneralSettings() {
         onChange={(e) => updateConfig({ theme: e.target.value as ThemeId })}
       >
         <option value="light">{t("settings.themeLight")}</option>
+        <option value="light-bright">{t("settings.themeLightBright")}</option>
         <option value="dark">{t("settings.themeDark")}</option>
         <option value="system">{t("settings.themeSystem")}</option>
       </Select>
