@@ -18,6 +18,7 @@ cd gui
 npm install
 npm run dev          # http://localhost:5173 (proxies /api to daemon)
 npm run dev:desktop  # Electron + Vite dev server
+npm run dev:tiny     # Tiny webview experiment + Vite dev server
 ```
 
 ## Production builds
@@ -26,6 +27,7 @@ npm run dev:desktop  # Electron + Vite dev server
 npm run build              # Static files in dist/ — host on any static file server
 npm run build:desktop      # Electron installers for macOS, Windows, and Linux
 npm run build:desktop:current  # Package for the current OS only
+npm run start:tiny       # Tiny webview experiment (production build)
 ```
 
 ### Web hosting

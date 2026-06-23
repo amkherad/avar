@@ -22,9 +22,10 @@ cd gui
 npm install
 npm run dev          # http://localhost:5173 — proxies /api to daemon
 npm run dev:desktop  # Electron + Vite dev server
+npm run dev:tiny     # Tiny webview experiment + Vite (see gui/tiny/README.md)
 ```
 
-Enable **Use dev proxy** in session settings when using `npm run dev`.
+Enable **Use dev proxy** in session settings when using `npm run dev` or `npm run dev:tiny`.
 
 ## Production builds
 
@@ -32,6 +33,7 @@ Enable **Use dev proxy** in session settings when using `npm run dev`.
 npm run build              # Static files in gui/dist/
 npm run build:desktop      # Electron installers for macOS, Windows, Linux
 npm run build:desktop:current  # Package for the current OS only
+npm run start:tiny         # Tiny webview experiment (built SPA)
 ```
 
 ### Web hosting
@@ -49,6 +51,12 @@ Cross-origin access is enabled by default in the daemon (`daemon.server.cors.ena
 | macOS | DMG, ZIP |
 | Windows | NSIS installer, portable |
 | Linux | AppImage, deb |
+
+### Tiny webview experiment
+
+`gui/tiny/` is an optional minimal shell using [tinytron](https://github.com/Rafi993/tiny). Shared desktop helpers live in `gui/desktop/`. Electron remains the full-featured desktop target; Tiny runs the SPA in web mode without tray, popups, or extension bridge.
+
+CI builds Tiny on Linux and Windows (`tiny-build` job). Tagged releases include `avar-tiny-{os}-{arch}-{version}.zip` artifacts.
 
 ## Embedded GUI (`avar-gui`)
 

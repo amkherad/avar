@@ -9,7 +9,6 @@ const {
   nativeImage,
   dialog,
 } = require("electron");
-const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
@@ -24,6 +23,12 @@ const {
   EXTENSION_BRIDGE_PORT,
 } = require("./extension-bridge.cjs");
 const { trayMenuIcon } = require("./tray-menu-icons.cjs");
+const { DAEMON_TARGET } = require("../desktop/env.cjs");
+const { startDaemonProxy, stopDaemonProxy, getProxyBaseUrl } = require("../desktop/daemon-proxy.cjs");
+const {
+  extractHashFromUrl,
+  loadElectronWindowContent,
+} = require("../desktop/resolve-gui-url.cjs");
 
 const isDev = !app.isPackaged;
 
@@ -73,17 +78,9 @@ function loadAppIcon() {
   return nativeImage.createFromPath(iconSvgPath);
 }
 
-const DAEMON_TARGET = process.env.AVAR_DAEMON_URL || "http://127.0.0.1:8000";
-const BUNDLED_GUI_URL = process.env.AVAR_GUI_URL || "";
-const IS_BUNDLED = process.env.AVAR_BUNDLED === "1";
-const PROXY_HOST = "127.0.0.1";
-const PROXY_PORT = Number(process.env.AVAR_ELECTRON_PROXY_PORT || 18765);
-
 /** @type {Map<number, import('electron').BrowserWindow>} */
 const popupWindows = new Map();
 let popupCounter = 0;
-/** @type {import('node:http').Server | null} */
-let proxyServer = null;
 /** @type {import('node:http').Server | null} */
 let extensionBridgeServer = null;
 /** @type {import('electron').Tray | null} */
@@ -103,47 +100,6 @@ const trayLabels = {
 
 /** @type {{ sectionLabel: string, items: Array<{ id: string, filename: string, percent: number }> }} */
 let trayActiveDownloads = { sectionLabel: "Active downloads", items: [] };
-
-function resolveGuiIndexPath() {
-  return path.join(__dirname, "..", "dist", "index.html");
-}
-
-function normalizeHash(hash = "") {
-  if (!hash) {
-    return "";
-  }
-  return hash.startsWith("#") ? hash.slice(1) : hash;
-}
-
-function extractHashFromUrl(url) {
-  if (!url || typeof url !== "string") {
-    return "";
-  }
-  const hashIndex = url.indexOf("#");
-  return hashIndex >= 0 ? url.slice(hashIndex) : "";
-}
-
-function loadWindowContent(win, hash = "") {
-  const hashPart = normalizeHash(hash);
-
-  if (BUNDLED_GUI_URL) {
-    const url = hashPart ? `${BUNDLED_GUI_URL}#${hashPart}` : BUNDLED_GUI_URL;
-    void win.loadURL(url);
-    return;
-  }
-  if (isDev && process.env.VITE_DEV_SERVER_URL) {
-    const url = hashPart
-      ? `${process.env.VITE_DEV_SERVER_URL}#${hashPart}`
-      : process.env.VITE_DEV_SERVER_URL;
-    void win.loadURL(url);
-    return;
-  }
-  if (hashPart) {
-    void win.loadFile(resolveGuiIndexPath(), { hash: hashPart });
-  } else {
-    void win.loadFile(resolveGuiIndexPath());
-  }
-}
 
 async function daemonRpc(method, params) {
   const response = await fetch(`${DAEMON_TARGET}/api/rpc`, {
@@ -345,40 +301,6 @@ function startExtensionBridge() {
   extensionBridgeServer.listen(EXTENSION_BRIDGE_PORT, EXTENSION_BRIDGE_HOST);
 }
 
-function startDaemonProxy() {
-  if (proxyServer) {
-    return;
-  }
-
-  proxyServer = http.createServer((req, res) => {
-      const target = new URL(req.url || "/", DAEMON_TARGET);
-      const headers = { ...req.headers, host: target.host };
-      const upstream = http.request(
-        {
-          protocol: target.protocol,
-          hostname: target.hostname,
-          port: target.port,
-          path: `${target.pathname}${target.search}`,
-          method: req.method,
-          headers,
-        },
-        (upstreamRes) => {
-          res.writeHead(upstreamRes.statusCode || 500, upstreamRes.headers);
-          upstreamRes.pipe(res);
-        },
-      );
-
-      upstream.on("error", () => {
-        res.statusCode = 502;
-        res.end("Bad Gateway");
-      });
-
-      req.pipe(upstream);
-  });
-
-  proxyServer.listen(PROXY_PORT, PROXY_HOST);
-}
-
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -418,7 +340,7 @@ function createWindow() {
   if (isDev && process.env.VITE_DEV_SERVER_URL) {
     win.webContents.openDevTools({ mode: "detach" });
   }
-  loadWindowContent(win);
+  loadElectronWindowContent(win, { isDev, isPackaged: app.isPackaged });
 }
 
 function createPopupWindow(options) {
@@ -453,7 +375,11 @@ function createPopupWindow(options) {
   });
 
   const hash = options.hash ?? extractHashFromUrl(options.url);
-  loadWindowContent(popup, hash);
+  loadElectronWindowContent(popup, {
+    hash,
+    isDev,
+    isPackaged: app.isPackaged,
+  });
 
   return popupId;
 }
@@ -508,7 +434,7 @@ ipcMain.handle("notification:show", (_event, options) => {
 });
 
 ipcMain.handle("daemon:getProxyBaseUrl", () => {
-  return `http://${PROXY_HOST}:${PROXY_PORT}`;
+  return getProxyBaseUrl();
 });
 
 ipcMain.handle("download:saveRemoteFile", async (_event, options) => {
@@ -620,10 +546,7 @@ app.on("before-quit", () => {
     extensionBridgeServer.close();
     extensionBridgeServer = null;
   }
-  if (proxyServer) {
-    proxyServer.close();
-    proxyServer = null;
-  }
+  stopDaemonProxy();
   if (tray) {
     tray.destroy();
     tray = null;

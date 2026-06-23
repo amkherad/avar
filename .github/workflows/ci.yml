@@ -85,3 +85,42 @@ jobs:
             output/build-gui/avar-gui
             output/dist-all/avar
             gui/dist
+
+  tiny-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux
+          - runner: windows-latest
+            platform: windows
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      - name: Install Tiny native dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libgtk-3-dev pkg-config
+          sudo apt-get install -y libwebkit2gtk-4.1-dev || sudo apt-get install -y libwebkit2gtk-4.0-dev
+
+      - name: Build Tiny shell
+        working-directory: gui
+        run: npm ci && npm run build:tiny
+
+      - name: Upload Tiny native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiny-native-${{ matrix.platform }}-${{ github.sha }}
+          path: gui/node_modules/tinytron/build/Release/addon.node
+          if-no-files-found: error
