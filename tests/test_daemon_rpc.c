@@ -158,11 +158,6 @@ AVAR_TEST(daemon_rpc_http_endpoints) {
     char *body = NULL;
     int status = 0;
 
-    AVAR_ASSERT(daemon_rpc_handle_http("/api/ping", NULL, 0, &body, &status));
-    AVAR_ASSERT_EQ(status, 200);
-    AVAR_ASSERT_NOT_NULL(body);
-    free(body);
-
     AVAR_ASSERT(daemon_rpc_handle_http("/api/health", NULL, 0, &body, &status));
     AVAR_ASSERT_EQ(status, 200);
     AVAR_ASSERT_NOT_NULL(body);

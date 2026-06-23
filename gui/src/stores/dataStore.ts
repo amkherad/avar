@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { DownloadInfo, HealthInfo, QueueInfo } from "@/api/types";
+import type { DownloadInfo, HealthInfo, QueueInfo, SystemStatsInfo } from "@/api/types";
 import { DEFAULT_QUEUE_ID, isDefaultQueue } from "@/queue/defaultQueue";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { appLogger } from "@/lib/appLogger";
@@ -11,12 +11,14 @@ export interface SnapshotPayload {
   health?: HealthInfo;
   queues?: QueueInfo[];
   downloads?: DownloadInfo[];
+  stats?: SystemStatsInfo;
 }
 
 interface DataStoreState {
   queues: QueueInfo[];
   health: HealthInfo | null;
   downloads: DownloadInfo[];
+  stats: SystemStatsInfo | null;
   status: DataStatus;
   error: string | null;
   selectedQueueId: string | null;
@@ -31,6 +33,7 @@ interface DataStoreState {
   selectDownload: (id: string, options?: { additive?: boolean; range?: boolean; orderedIds?: string[] }) => void;
   clearDownloadSelection: () => void;
   applySnapshot: (snapshot: SnapshotPayload) => void;
+  setStats: (stats: SystemStatsInfo | null) => void;
   refresh: () => Promise<void>;
   clear: () => void;
 }
@@ -39,6 +42,7 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
   queues: [],
   health: null,
   downloads: [],
+  stats: null,
   status: "idle",
   error: null,
   selectedQueueId: null,
@@ -124,10 +128,13 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
       queues: snapshot.queues ?? state.queues,
       health: snapshot.health ?? state.health,
       downloads: snapshot.downloads ?? state.downloads,
+      stats: snapshot.stats ?? state.stats,
       status: "idle",
       error: null,
     }));
   },
+
+  setStats: (stats) => set({ stats }),
 
   refresh: async () => {
     const client = useConnectionStore.getState().client;
@@ -176,6 +183,7 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
       queues: [],
       health: null,
       downloads: [],
+      stats: null,
       status: "idle",
       error: null,
       selectedDownloadId: null,

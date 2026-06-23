@@ -76,6 +76,10 @@ void daemon_rpc_stream_attach_ws(struct mg_connection *connection);
 /** Removes a streaming connection from the registry. */
 void daemon_rpc_stream_detach(struct mg_connection *connection);
 
+/** Handles an incoming WebSocket text frame (e.g. client keepalive ping). */
+void daemon_rpc_stream_handle_ws_message(struct mg_connection *connection, const char *payload,
+                                         size_t len);
+
 /** Records HTTP or streaming client activity (keeps auto-shutdown idle timer reset). */
 void daemon_rpc_note_frontend_activity(void);
 

@@ -26,7 +26,7 @@ The GUI talks to the Avar daemon over HTTP:
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/ping` | Connectivity check |
+| `GET /api/stats` | System statistics (poll sync / manual checks; SSE and WebSocket push stats) |
 | `GET /api/health` | Uptime, active downloads, queue count |
 | `POST /api/rpc` | JSON-RPC 2.0 |
 

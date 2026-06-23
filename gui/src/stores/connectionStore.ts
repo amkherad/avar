@@ -1,10 +1,12 @@
 import { create } from "zustand";
 import { createDaemonClient, type DaemonClient } from "@/api/daemon";
+import type { SystemStatsInfo } from "@/api/types";
 import {
   createElectronSession,
   ELECTRON_SESSION_ID,
   type GuiSession,
 } from "@/config/defaults";
+import { isPushSyncChannel, resolveSyncChannel } from "@/lib/syncChannel";
 import { useConfigStore } from "@/stores/configStore";
 import { useDataStore } from "@/stores/dataStore";
 import { appLogger } from "@/lib/appLogger";
@@ -18,8 +20,10 @@ interface ConnectionStoreState {
   client: DaemonClient | null;
   activeSession: GuiSession | null;
   pingTimerId: number | null;
+  lastStreamAt: number | null;
   reconnectClient: () => void;
   checkConnection: () => Promise<boolean>;
+  noteStreamActivity: (stats?: SystemStatsInfo) => void;
   startPingMonitor: () => void;
   stopPingMonitor: () => void;
 }
@@ -55,11 +59,21 @@ function buildClient(session: GuiSession | null): DaemonClient | null {
   });
 }
 
+function activePushChannel(): boolean {
+  const { config } = useConfigStore.getState();
+  const session =
+    config.sessions.find((s) => s.id === config.activeSessionId) ??
+    config.sessions[0];
+  return isPushSyncChannel(resolveSyncChannel(config.syncChannel, session));
+}
+
 async function pingWithTimeout(client: DaemonClient): Promise<boolean> {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    return await client.ping(controller.signal);
+    const stats = await client.systemStats(controller.signal);
+    useDataStore.getState().setStats(stats);
+    return stats.status === "ok";
   } catch {
     return false;
   } finally {
@@ -107,6 +121,7 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
   client: null,
   activeSession: null,
   pingTimerId: null,
+  lastStreamAt: null,
 
   reconnectClient: () => {
     const session = resolveActiveSession();
@@ -118,7 +133,20 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
       activeSession: session,
       client: buildClient(session),
       connection: session ? "connecting" : "disconnected",
+      lastStreamAt: null,
     });
+  },
+
+  noteStreamActivity: (stats) => {
+    const prevConnection = get().connection;
+    if (stats) {
+      useDataStore.getState().setStats(stats);
+    }
+    set({ lastStreamAt: Date.now() });
+    if (prevConnection !== "connected") {
+      appLogger.gui.info("Daemon reachable (stream)");
+      set({ connection: "connected" });
+    }
   },
 
   checkConnection: async () => {
@@ -126,9 +154,27 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
     if (!client) {
       if (prevConnection !== "disconnected") {
         appLogger.gui.error("Cannot connect to daemon — no active session");
-        set({ connection: "disconnected" });
+        set({ connection: "disconnected", lastStreamAt: null });
       }
       return false;
+    }
+
+    if (activePushChannel()) {
+      const { config } = useConfigStore.getState();
+      const intervalMs = Math.max(config.pingIntervalMs, 500);
+      const lastStreamAt = get().lastStreamAt;
+      const fresh =
+        lastStreamAt !== null && Date.now() - lastStreamAt <= intervalMs * 2;
+      const nextConnection = fresh ? "connected" : "connecting";
+      if (nextConnection !== prevConnection) {
+        if (fresh) {
+          appLogger.gui.info("Daemon reachable");
+        } else if (prevConnection === "connected") {
+          appLogger.gui.error("Cannot connect to daemon");
+        }
+        set({ connection: nextConnection });
+      }
+      return fresh;
     }
 
     if (prevConnection === "disconnected") {
@@ -143,6 +189,7 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
         appLogger.gui.info("Daemon reachable");
       } else {
         appLogger.gui.error("Cannot connect to daemon");
+        useDataStore.getState().setStats(null);
       }
       set({ connection: nextConnection });
     }
@@ -183,7 +230,10 @@ useConfigStore.subscribe((state, prev) => {
   const pingIntervalChanged =
     state.config.pingIntervalMs !== prev.config.pingIntervalMs;
 
-  if (sessionChanged) {
+  const syncChannelChanged =
+    state.config.syncChannel !== prev.config.syncChannel;
+
+  if (sessionChanged || syncChannelChanged) {
     useDataStore.getState().clear();
     useConnectionStore.getState().reconnectClient();
     useConnectionStore.getState().startPingMonitor();

@@ -6,8 +6,10 @@ import { useConnectionStore } from "@/stores/connectionStore";
  * for this download while the detail view is mounted.
  */
 export function useDownloadProgressWatch(downloadId: string | null | undefined): void {
+  const connection = useConnectionStore((s) => s.connection);
+
   useEffect(() => {
-    if (!downloadId) {
+    if (!downloadId || connection !== "connected") {
       return;
     }
 
@@ -16,10 +18,15 @@ export function useDownloadProgressWatch(downloadId: string | null | undefined):
       return;
     }
 
-    void client.watchDownloadProgress(downloadId);
+    void client.watchDownloadProgress(downloadId).catch(() => {
+      // Non-fatal: bytesDownloaded still syncs; segment detail appears on next upsert.
+    });
 
     return () => {
-      void useConnectionStore.getState().client?.unwatchDownloadProgress(downloadId);
+      void useConnectionStore
+        .getState()
+        .client?.unwatchDownloadProgress(downloadId)
+        .catch(() => {});
     };
-  }, [downloadId]);
+  }, [connection, downloadId]);
 }

@@ -53,7 +53,6 @@ export class DaemonClient {
   private readonly rpcUrl: string;
   private readonly healthUrl: string;
   private readonly statsUrl: string;
-  private readonly pingUrl: string;
   private readonly eventsUrl: string;
   private readonly wsUrl: string;
   private readonly authToken?: string;
@@ -70,14 +69,12 @@ export class DaemonClient {
       this.rpcUrl = "/api/rpc";
       this.healthUrl = "/api/health";
       this.statsUrl = "/api/stats";
-      this.pingUrl = "/api/ping";
       this.eventsUrl = "/api/events";
       this.wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/api/ws`;
     } else {
       this.rpcUrl = `${trimmed}/api/rpc`;
       this.healthUrl = `${trimmed}/api/health`;
       this.statsUrl = `${trimmed}/api/stats`;
-      this.pingUrl = `${trimmed}/api/ping`;
       this.eventsUrl = `${trimmed}/api/events`;
       const wsBase = trimmed.replace(/^http/i, "ws");
       this.wsUrl = `${wsBase}/api/ws`;
@@ -106,15 +103,8 @@ export class DaemonClient {
 
   async ping(signal?: AbortSignal): Promise<boolean> {
     try {
-      const res = await fetch(this.pingUrl, {
-        headers: this.headers(),
-        signal,
-      });
-      if (!res.ok) {
-        return false;
-      }
-      const body = (await res.json()) as { status?: string };
-      return body.status === "ok";
+      const stats = await this.systemStats(signal);
+      return stats.status === "ok";
     } catch {
       return false;
     }

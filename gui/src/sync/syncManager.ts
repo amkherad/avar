@@ -1,7 +1,7 @@
-import { parseSnapshotPayload } from "@/api/snapshot";
-import type { SnapshotPayload } from "@/api/types";
+import { parseSnapshotPayload, parseStreamStatsPayload } from "@/api/snapshot";
+import type { SnapshotPayload, SystemStatsInfo } from "@/api/types";
 import type { DaemonClient } from "@/api/daemon";
-import type { SyncChannelId } from "@/config/defaults";
+import { isPushSyncChannel, resolveSyncChannel } from "@/lib/syncChannel";
 import { appLogger } from "@/lib/appLogger";
 import { useConfigStore } from "@/stores/configStore";
 import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
@@ -31,29 +31,10 @@ function startPollSync(intervalMs: number): SyncStopFn {
   return () => window.clearInterval(timerId);
 }
 
-function resolveSyncChannel(
-  preferred: SyncChannelId,
-  session: { authToken?: string } | undefined,
-): SyncChannelId {
-  if (preferred === "sse") {
-    if (typeof EventSource === "undefined") {
-      appLogger.gui.warn("SSE unavailable in this environment; falling back to poll");
-      return "poll";
-    }
-    if (session?.authToken) {
-      appLogger.gui.warn("SSE unavailable with auth token; falling back to poll");
-      return "poll";
-    }
-    return "sse";
-  }
-  if (preferred === "websocket") {
-    if (session?.authToken) {
-      appLogger.gui.warn("WebSocket unavailable with auth token; falling back to poll");
-      return "poll";
-    }
-    return "websocket";
-  }
-  return preferred;
+function applyStreamPayload(payload: SnapshotPayload, stats?: SystemStatsInfo): void {
+  appLogger.gui.debug("Stream snapshot received");
+  useDataStore.getState().applySnapshot(payload);
+  useConnectionStore.getState().noteStreamActivity(stats ?? payload.stats);
 }
 
 function startSseSync(client: DaemonClient): SyncStopFn {
@@ -61,18 +42,13 @@ function startSseSync(client: DaemonClient): SyncStopFn {
   appLogger.gui.info("SSE sync connecting", url);
   const source = new EventSource(url, { withCredentials: false });
 
-  const apply = (payload: SnapshotPayload) => {
-    appLogger.gui.debug("SSE snapshot received");
-    useDataStore.getState().applySnapshot(payload);
-  };
-
   source.addEventListener("snapshot", (event) => {
     try {
       const parsed = parseSnapshotPayload(
         JSON.parse((event as MessageEvent<string>).data),
       );
       if (parsed) {
-        apply(parsed);
+        applyStreamPayload(parsed);
       }
     } catch {
       appLogger.gui.warn("Malformed SSE snapshot event");
@@ -81,6 +57,7 @@ function startSseSync(client: DaemonClient): SyncStopFn {
 
   source.onopen = () => {
     appLogger.gui.info("SSE connection opened");
+    useConnectionStore.getState().noteStreamActivity();
   };
 
   source.onerror = () => {
@@ -90,8 +67,6 @@ function startSseSync(client: DaemonClient): SyncStopFn {
       appLogger.gui.debug("SSE connection error (reconnecting)");
     }
   };
-
-  void useDataStore.getState().refresh();
 
   return () => source.close();
 }
@@ -108,18 +83,22 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
 
     ws.onopen = () => {
       appLogger.gui.info("WebSocket connection opened");
-      if (useConnectionStore.getState().connection !== "connected") {
-        useConnectionStore.setState({ connection: "connected" });
-      }
-      void useDataStore.getState().refresh();
+      useConnectionStore.getState().noteStreamActivity();
     };
 
     ws.onmessage = (event) => {
       try {
-        const parsed = parseSnapshotPayload(JSON.parse(String(event.data)));
+        const raw = JSON.parse(String(event.data));
+        const stats = parseStreamStatsPayload(raw);
+        if (stats) {
+          appLogger.gui.debug("WebSocket stats received");
+          useConnectionStore.getState().noteStreamActivity(stats);
+          return;
+        }
+
+        const parsed = parseSnapshotPayload(raw);
         if (parsed?.type === "snapshot") {
-          appLogger.gui.debug("WebSocket snapshot received");
-          useDataStore.getState().applySnapshot(parsed);
+          applyStreamPayload(parsed);
         }
       } catch {
         appLogger.gui.debug("Ignored WebSocket message");
@@ -140,12 +119,14 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
 
   connect();
 
+  const { config } = useConfigStore.getState();
+  const keepaliveMs = Math.max(config.pingIntervalMs, 500);
   const keepalive = window.setInterval(() => {
     if (ws?.readyState === WebSocket.OPEN) {
       appLogger.gui.debug("WebSocket keepalive ping");
       ws.send("ping");
     }
-  }, 15000);
+  }, keepaliveMs);
 
   return () => {
     closed = true;
@@ -162,8 +143,8 @@ export function restartDataSync(): void {
 
   const { config } = useConfigStore.getState();
   const { client, connection } = useConnectionStore.getState();
-  if (!client || connection !== "connected") {
-    appLogger.gui.debug("Data sync not started (not connected)");
+  if (!client) {
+    appLogger.gui.debug("Data sync not started (no client)");
     return;
   }
 
@@ -172,19 +153,19 @@ export function restartDataSync(): void {
     config.sessions[0];
   const channel = resolveSyncChannel(config.syncChannel, session);
 
-  appLogger.gui.info(`Starting data sync (${channel})`);
-
-  switch (channel) {
-    case "sse":
-      activeStop = startSseSync(client);
-      break;
-    case "websocket":
-      activeStop = startWebSocketSync(client);
-      break;
-    default:
-      activeStop = startPollSync(Math.max(config.refreshIntervalMs, 1000));
-      break;
+  if (channel === "poll") {
+    if (connection !== "connected") {
+      appLogger.gui.debug("Data sync not started (not connected)");
+      return;
+    }
+    appLogger.gui.info("Starting data sync (poll)");
+    activeStop = startPollSync(Math.max(config.refreshIntervalMs, 1000));
+    return;
   }
+
+  appLogger.gui.info(`Starting data sync (${channel})`);
+  activeStop =
+    channel === "websocket" ? startWebSocketSync(client) : startSseSync(client);
 }
 
 export function stopDataSync(): void {
@@ -195,13 +176,36 @@ export function initSyncCoordinator(): () => void {
   appLogger.gui.debug("Initializing sync coordinator");
 
   const unsubConnection = useConnectionStore.subscribe((state, prev) => {
+    const { config } = useConfigStore.getState();
+    const session =
+      config.sessions.find((s) => s.id === config.activeSessionId) ??
+      config.sessions[0];
+    const channel = resolveSyncChannel(config.syncChannel, session);
+
+    if (
+      isPushSyncChannel(channel) &&
+      state.client &&
+      (state.client !== prev.client || state.activeSession !== prev.activeSession)
+    ) {
+      restartDataSync();
+    }
+
     if (state.connection === "connected" && prev.connection !== "connected") {
       appLogger.gui.info("Connection established — starting sync");
+      if (!isPushSyncChannel(channel)) {
+        void useDataStore.getState().refresh();
+      }
       restartDataSync();
     }
     if (state.connection !== "connected" && prev.connection === "connected") {
-      appLogger.gui.warn("Connection lost — stopping sync");
-      stopDataSync();
+      const session =
+        config.sessions.find((s) => s.id === config.activeSessionId) ??
+        config.sessions[0];
+      const channel = resolveSyncChannel(config.syncChannel, session);
+      if (!isPushSyncChannel(channel)) {
+        appLogger.gui.warn("Connection lost — stopping sync");
+        stopDataSync();
+      }
     }
   });
 
@@ -209,10 +213,7 @@ export function initSyncCoordinator(): () => void {
     const channelChanged = state.config.syncChannel !== prev.config.syncChannel;
     const intervalChanged =
       state.config.refreshIntervalMs !== prev.config.refreshIntervalMs;
-    if (
-      useConnectionStore.getState().connection === "connected" &&
-      (channelChanged || intervalChanged)
-    ) {
+    if (channelChanged || intervalChanged) {
       appLogger.gui.info("Sync config changed — restarting sync");
       restartDataSync();
     }
@@ -221,10 +222,7 @@ export function initSyncCoordinator(): () => void {
   void ensureElectronSession().then(() => {
     useConnectionStore.getState().reconnectClient();
     useConnectionStore.getState().startPingMonitor();
-
-    if (useConnectionStore.getState().connection === "connected") {
-      restartDataSync();
-    }
+    restartDataSync();
   });
 
   return () => {

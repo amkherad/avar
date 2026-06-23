@@ -163,9 +163,8 @@ When HTTP is enabled, the daemon exposes:
 
 | Endpoint | Purpose |
 |----------|---------|
-| `/api/ping` | Health check |
 | `/api/health` | Health JSON |
-| `/api/stats` | System statistics |
+| `/api/stats` | System statistics (poll mode only; push clients receive stats on SSE/WebSocket) |
 | `/api/rpc` | JSON-RPC 2.0 |
 | `/api/events` | Server-sent events (live updates) |
 | `/api/ws` | WebSocket (live updates) |

@@ -1,4 +1,4 @@
-import type { DownloadInfo, HealthInfo, QueueInfo, SnapshotPayload } from "./types";
+import type { DownloadInfo, HealthInfo, QueueInfo, SystemStatsInfo, SnapshotPayload } from "./types";
 
 function parseQueueRecord(item: unknown): QueueInfo {
   const record = (item ?? {}) as Record<string, unknown>;
@@ -69,6 +69,24 @@ function toNumber(value: unknown): number {
   return 0;
 }
 
+function parseSystemStats(value: unknown): SystemStatsInfo | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    status: String(record.status ?? ""),
+    diskTotalBytes: toNumber(record.diskTotalBytes),
+    diskFreeBytes: toNumber(record.diskFreeBytes),
+    memoryTotalBytes: toNumber(record.memoryTotalBytes),
+    memoryUsedBytes: toNumber(record.memoryUsedBytes),
+    memoryUsedPercent: toNumber(record.memoryUsedPercent),
+    cpuUsagePercent: toNumber(record.cpuUsagePercent),
+    networkRxBytesPerSec: toNumber(record.networkRxBytesPerSec),
+    networkTxBytesPerSec: toNumber(record.networkTxBytesPerSec),
+  };
+}
+
 export function parseSnapshotPayload(raw: unknown): SnapshotPayload | null {
   if (!raw || typeof raw !== "object") {
     return null;
@@ -83,7 +101,19 @@ export function parseSnapshotPayload(raw: unknown): SnapshotPayload | null {
     downloads: Array.isArray(record.downloads)
       ? record.downloads.map((item) => parseDownloadItem(item))
       : undefined,
+    stats: parseSystemStats(record.stats),
   };
+}
+
+export function parseStreamStatsPayload(raw: unknown): SystemStatsInfo | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== "stats") {
+    return null;
+  }
+  return parseSystemStats(record) ?? null;
 }
 
 export { parseDownloadItem, parseQueueRecord };

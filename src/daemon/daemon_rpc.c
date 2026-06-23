@@ -1039,10 +1039,15 @@ bool daemon_rpc_build_snapshot(char **json_out) {
         }
     }
 
+    cJSON *stats = handle_system_stats();
+
     cJSON_AddStringToObject(root, "type", "snapshot");
     cJSON_AddItemToObject(root, "health", health);
     cJSON_AddItemToObject(root, "queues", queues);
     cJSON_AddItemToObject(root, "downloads", downloads);
+    if (stats != NULL) {
+        cJSON_AddItemToObject(root, "stats", stats);
+    }
 
     char *printed = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -1118,6 +1123,31 @@ void daemon_rpc_stream_attach_ws(struct mg_connection *connection) {
 
 void daemon_rpc_stream_detach(struct mg_connection *connection) {
     stream_client_unregister(connection);
+}
+
+void daemon_rpc_stream_handle_ws_message(struct mg_connection *connection, const char *payload,
+                                         const size_t len) {
+    if (connection == NULL || payload == NULL || len < 4U ||
+        memcmp(payload, "ping", 4) != 0) {
+        return;
+    }
+
+    daemon_rpc_note_frontend_activity();
+
+    cJSON *stats = handle_system_stats();
+    if (stats == NULL) {
+        return;
+    }
+    cJSON_AddStringToObject(stats, "type", "stats");
+
+    char *printed = cJSON_PrintUnformatted(stats);
+    cJSON_Delete(stats);
+    if (printed == NULL) {
+        return;
+    }
+
+    mg_ws_send(connection, printed, strlen(printed), WEBSOCKET_OP_TEXT);
+    free(printed);
 }
 
 static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
@@ -1254,12 +1284,6 @@ static bool daemon_rpc_handle_http_unlocked(const char *uri, const char *body, c
     }
 
     daemon_rpc_note_frontend_activity();
-
-    if (strcmp(uri, "/api/ping") == 0) {
-        *body_out = strdup("{\"status\":\"ok\"}\n");
-        *status_out = 200;
-        return *body_out != NULL;
-    }
 
     if (strcmp(uri, "/api/health") == 0) {
         cJSON *health = handle_health();

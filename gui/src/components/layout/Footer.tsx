@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faTableColumns, faTerminal } from "@fortawesome/free-solid-svg-icons";
@@ -13,7 +12,6 @@ import { useStatsHistory } from "@/hooks/useStatsHistory";
 import { formatBytes, formatPercent } from "@/lib/formatBytes";
 import { appLogger } from "@/lib/appLogger";
 import { toggleDetailPanelWithSelection } from "@/lib/detailPanel";
-import type { SystemStatsInfo } from "@/api/types";
 
 function formatUptime(seconds: number): string {
   const h = Math.floor(seconds / 3600);
@@ -67,8 +65,8 @@ function MonitorStat({
 export function Footer() {
   const { t } = useTranslation();
   const health = useDataStore((s) => s.health);
+  const stats = useDataStore((s) => s.stats);
   const visibleDownloadOrder = useDataStore((s) => s.visibleDownloadOrder);
-  const client = useConnectionStore((s) => s.client);
   const connection = useConnectionStore((s) => s.connection);
   const footerMonitors = useConfigStore((s) => s.config.footerMonitors);
   const consoleOpen = useConsoleStore((s) => s.open);
@@ -76,40 +74,12 @@ export function Footer() {
   const toggleConsole = useConsoleStore((s) => s.toggleOpen);
   const detailPanelOpen = useLayoutStore((s) => s.detailPanelOpen);
 
-  const [stats, setStats] = useState<SystemStatsInfo | null>(null);
   const monitorsEnabled =
     footerMonitors.disk || footerMonitors.memory || footerMonitors.cpu || footerMonitors.network;
   const showHistogram = footerMonitors.display === "histogram";
   const history = useStatsHistory(stats, monitorsEnabled && showHistogram);
 
-  useEffect(() => {
-    if (!client || connection !== "connected" || !monitorsEnabled) {
-      setStats(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    async function poll() {
-      try {
-        const next = await client!.systemStats();
-        if (!cancelled) {
-          setStats(next);
-        }
-      } catch {
-        if (!cancelled) {
-          setStats(null);
-        }
-      }
-    }
-
-    void poll();
-    const timer = window.setInterval(() => void poll(), 3000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [client, connection, monitorsEnabled]);
+  const monitorsAvailable = connection === "connected" && monitorsEnabled;
 
   const diskUsedPercent =
     stats && stats.diskTotalBytes > 0
@@ -133,7 +103,7 @@ export function Footer() {
               <span className="avar-footer__stat-label">{t("health.queues")}</span>
               <strong>{health.queueCount}</strong>
             </div>
-            {footerMonitors.disk && stats ? (
+            {footerMonitors.disk && monitorsAvailable && stats ? (
               <div className="avar-footer__stat">
                 <span className="avar-footer__stat-label">{t("health.disk")}</span>
                 <strong>
@@ -142,7 +112,7 @@ export function Footer() {
                 </strong>
               </div>
             ) : null}
-            {footerMonitors.memory && stats ? (
+            {footerMonitors.memory && monitorsAvailable && stats ? (
               <MonitorStat
                 label={t("health.memory")}
                 textValue={`${formatBytes(stats.memoryUsedBytes)} / ${formatBytes(stats.memoryTotalBytes)} (${formatPercent(stats.memoryUsedPercent)})`}
@@ -151,7 +121,7 @@ export function Footer() {
                 showHistogram={showHistogram}
               />
             ) : null}
-            {footerMonitors.cpu && stats ? (
+            {footerMonitors.cpu && monitorsAvailable && stats ? (
               <MonitorStat
                 label={t("health.cpu")}
                 textValue={formatPercent(stats.cpuUsagePercent)}
@@ -160,7 +130,7 @@ export function Footer() {
                 showHistogram={showHistogram}
               />
             ) : null}
-            {footerMonitors.network && stats ? (
+            {footerMonitors.network && monitorsAvailable && stats ? (
               <MonitorStat
                 label={t("health.network")}
                 textValue={`${formatBytes(stats.networkRxBytesPerSec)}/s`}

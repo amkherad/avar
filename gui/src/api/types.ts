@@ -124,6 +124,8 @@ export interface SnapshotPayload {
 
   downloads?: DownloadInfo[];
 
+  stats?: SystemStatsInfo;
+
 }
 
 

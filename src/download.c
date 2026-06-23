@@ -116,8 +116,6 @@ static struct {
     size_t capacity;
 } g_progress_watchers = {0};
 
-static void sync_active_progress_detail(const char *id);
-
 static void progress_watchers_init(void) {
     if (g_progress_watchers.mutex == NULL) {
         g_progress_watchers.mutex = avar_mutex_create();
@@ -178,7 +176,6 @@ void download_progress_watch(const char *id) {
     entry->refcount = 1U;
 
     avar_mutex_unlock(g_progress_watchers.mutex);
-    sync_active_progress_detail(id);
 }
 
 void download_progress_unwatch(const char *id) {
@@ -208,7 +205,6 @@ void download_progress_unwatch(const char *id) {
     g_progress_watchers.count--;
 
     avar_mutex_unlock(g_progress_watchers.mutex);
-    sync_active_progress_detail(id);
 }
 
 bool download_progress_is_watched(const char *id) {
@@ -932,15 +928,6 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
         log_job_status(job, status);
     }
     return rc;
-}
-
-static void sync_active_progress_detail(const char *id) {
-    DownloadJob *job = active_jobs_find(id);
-    if (job == NULL || job->done || job->failed) {
-        return;
-    }
-
-    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
 }
 
 static void clear_progress_line(DownloadJob *job) {
