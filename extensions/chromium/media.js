@@ -920,10 +920,52 @@ function rangeContainsNode(range, node) {
   }
 }
 
+function snapshotSelectionRanges(selection) {
+  const ranges = [];
+  if (!selection) {
+    return ranges;
+  }
+  try {
+    const count = selection.rangeCount;
+    for (let i = 0; i < count; i += 1) {
+      ranges.push(selection.getRangeAt(i));
+    }
+  } catch {
+    // Selection may be invalid or change while reading ranges.
+  }
+  return ranges;
+}
+
+function rangeSearchRoot(range) {
+  const node = range.commonAncestorContainer;
+  if (node.nodeType === Node.ELEMENT_NODE) {
+    return node;
+  }
+  return node.parentElement;
+}
+
+function forEachAnchorsNearRange(range, callback) {
+  const root = rangeSearchRoot(range);
+  if (!root || typeof root.querySelectorAll !== "function") {
+    return;
+  }
+  try {
+    for (const anchor of root.querySelectorAll("a[href]")) {
+      try {
+        callback(anchor);
+      } catch {
+        // Anchor may be detached or its href may be inaccessible.
+      }
+    }
+  } catch {
+    // querySelectorAll can fail on non-HTML roots.
+  }
+}
+
 function collectUrlsInSelectionRange(doc, range) {
   const urls = new Set();
 
-  doc.querySelectorAll("a[href]").forEach((anchor) => {
+  forEachAnchorsNearRange(range, (anchor) => {
     const href = anchor.href;
     if (!href || href.startsWith("javascript:")) {
       return;
@@ -972,8 +1014,8 @@ function collectSelectedLinkItems(doc) {
   }
 
   const urls = new Set();
-  for (let i = 0; i < selection.rangeCount; i += 1) {
-    for (const url of collectUrlsInSelectionRange(doc, selection.getRangeAt(i))) {
+  for (const range of snapshotSelectionRanges(selection)) {
+    for (const url of collectUrlsInSelectionRange(doc, range)) {
       urls.add(url);
     }
   }
@@ -1016,6 +1058,8 @@ if (typeof globalThis !== "undefined") {
     formatFileSize,
     formatDisplayUrl,
     rangeContainsNode,
+    snapshotSelectionRanges,
+    forEachAnchorsNearRange,
     MEDIA_EXT,
   };
 }

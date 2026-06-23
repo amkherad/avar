@@ -32,9 +32,19 @@ const refreshBtn = document.getElementById("refreshBtn");
 const defaultQueueSelect = document.getElementById("defaultQueue");
 const defaultMediaFilterSelect = document.getElementById("defaultMediaFilter");
 const showSelectionWidgetInput = document.getElementById("showSelectionWidget");
+const selectedLinksInSeparateTabInput = document.getElementById("selectedLinksInSeparateTab");
 const mediaTypeFilterSelect = document.getElementById("mediaTypeFilter");
 const mediaSortSelect = document.getElementById("mediaSort");
 const queueManagementEl = document.getElementById("queueManagement");
+const viewTabs = document.getElementById("viewTabs");
+const mediaScroll = document.getElementById("mediaScroll");
+const viewTabSelected = document.getElementById("viewTabSelected");
+const viewTabMedia = document.getElementById("viewTabMedia");
+const viewTabSelectedCount = document.getElementById("viewTabSelectedCount");
+const viewTabMediaCount = document.getElementById("viewTabMediaCount");
+
+let selectedLinksInSeparateTab = false;
+let activeListTab = "media";
 
 let lastMediaItems = [];
 let lastSelectedItems = [];
@@ -119,6 +129,70 @@ function appendStreamBadge(nameEl, item) {
     badge.textContent = item.kind;
     nameEl.appendChild(badge);
   }
+}
+
+function getVisibleMediaCount() {
+  const selectedUrls = new Set(lastSelectedItems.map((item) => item.url));
+  return getVisibleMediaItems(lastMediaItems).filter((item) => !selectedUrls.has(item.url)).length;
+}
+
+function updateTabCounts() {
+  if (!selectedLinksInSeparateTab) {
+    return;
+  }
+  viewTabSelectedCount.textContent = String(lastSelectedItems.length);
+  viewTabMediaCount.textContent = String(getVisibleMediaCount());
+}
+
+function setActiveListTab(tab, { userInitiated = false } = {}) {
+  if (!selectedLinksInSeparateTab) {
+    return;
+  }
+  activeListTab = tab === "selected" ? "selected" : "media";
+  viewTabSelected.setAttribute("aria-selected", activeListTab === "selected" ? "true" : "false");
+  viewTabMedia.setAttribute("aria-selected", activeListTab === "media" ? "true" : "false");
+
+  if (selectedLinksInSeparateTab) {
+    selectedSection.removeAttribute("hidden");
+    selectedSection.classList.toggle("media-panel--hidden", activeListTab !== "selected");
+  } else if (lastSelectedItems.length > 0) {
+    selectedSection.removeAttribute("hidden");
+    selectedSection.classList.remove("media-panel--hidden");
+  } else {
+    selectedSection.setAttribute("hidden", "");
+    selectedSection.classList.remove("media-panel--hidden");
+  }
+
+  mediaList.classList.toggle("media-panel--hidden", selectedLinksInSeparateTab && activeListTab !== "media");
+  downloadSelectedBtn.hidden = lastSelectedItems.length === 0 || activeListTab !== "selected";
+  downloadAllBtn.hidden = getVisibleMediaCount() === 0 || activeListTab !== "media";
+
+  if (userInitiated) {
+    void api.storage.local.set({ activeListTab });
+  }
+}
+
+function applyListViewLayout({ preferSelectedTabOnOpen = false } = {}) {
+  if (selectedLinksInSeparateTab) {
+    viewTabs.hidden = false;
+    mediaScroll.classList.add("media-scroll--tabbed");
+    updateTabCounts();
+    if (preferSelectedTabOnOpen && lastSelectedItems.length > 0) {
+      setActiveListTab("selected");
+      return;
+    }
+    if (activeListTab === "selected" && lastSelectedItems.length === 0) {
+      setActiveListTab("media");
+      return;
+    }
+    setActiveListTab(activeListTab);
+    return;
+  }
+
+  viewTabs.hidden = true;
+  mediaScroll.classList.remove("media-scroll--tabbed");
+  selectedSection.classList.remove("media-panel--hidden");
+  mediaList.classList.remove("media-panel--hidden");
 }
 
 function updateScanStatus(totalCount) {
@@ -700,19 +774,29 @@ function renderSelectedLinksList(items) {
   selectedLinksList.innerHTML = "";
 
   if (items.length === 0) {
-    selectedSection.setAttribute("hidden", "");
+    if (!selectedLinksInSeparateTab) {
+      selectedSection.setAttribute("hidden", "");
+    } else {
+      selectedSection.removeAttribute("hidden");
+    }
     downloadSelectedBtn.hidden = true;
+    applyListViewLayout();
+    updateTabCounts();
+    updateScanStatus(lastMediaItems.length);
     return;
   }
 
   selectedSection.removeAttribute("hidden");
-  downloadSelectedBtn.hidden = false;
+  downloadSelectedBtn.hidden = selectedLinksInSeparateTab && activeListTab !== "selected";
 
   for (const item of items) {
     appendMediaItemRow(selectedLinksList, item);
   }
 
   queueSizeProbes(items);
+  applyListViewLayout();
+  updateTabCounts();
+  updateScanStatus(lastMediaItems.length);
 }
 
 function renderMediaList(items) {
@@ -725,7 +809,13 @@ function renderMediaList(items) {
     appendMediaItemRow(mediaList, item);
   }
 
-  downloadAllBtn.hidden = visibleItems.length === 0;
+  if (selectedLinksInSeparateTab) {
+    downloadAllBtn.hidden = visibleItems.length === 0 || activeListTab !== "media";
+  } else {
+    downloadAllBtn.hidden = visibleItems.length === 0;
+  }
+  updateTabCounts();
+  applyListViewLayout();
   updateScanStatus(lastMediaItems.length);
   queueSizeProbes(visibleItems);
 }
@@ -762,6 +852,8 @@ async function loadConfig() {
     "popupWidth",
     "popupHeight",
     "showSelectionWidget",
+    "selectedLinksInSeparateTab",
+    "activeListTab",
   ]);
   bridgeUrlInput.value =
     AvarExtensionProtocol.normalizeBridgeUrl(
@@ -773,6 +865,9 @@ async function loadConfig() {
   mediaTypeFilterSelect.value = defaultFilter;
   mediaSortSelect.value = stored.mediaSort || DEFAULT_MEDIA_SORT;
   showSelectionWidgetInput.checked = stored.showSelectionWidget !== false;
+  selectedLinksInSeparateTab = stored.selectedLinksInSeparateTab === true;
+  selectedLinksInSeparateTabInput.checked = selectedLinksInSeparateTab;
+  activeListTab = stored.activeListTab === "selected" ? "selected" : "media";
 
   applyPopupSize(stored.popupWidth, stored.popupHeight);
   installPopupResizePersistence();
@@ -875,6 +970,7 @@ async function scanPage() {
 
   renderSelectedLinksList(selectedItems);
   renderMediaList(items);
+  applyListViewLayout({ preferSelectedTabOnOpen: true });
 
   const hlsCount = items.filter((item) => item.kind === "hls").length;
   if (hlsCount > 0 && bridgeConnected) {
@@ -908,20 +1004,33 @@ mediaSortSelect.addEventListener("change", () => {
   renderMediaList(lastMediaItems);
 });
 
+viewTabSelected.addEventListener("click", () => {
+  setActiveListTab("selected", { userInitiated: true });
+});
+
+viewTabMedia.addEventListener("click", () => {
+  setActiveListTab("media", { userInitiated: true });
+});
+
 document.getElementById("save").addEventListener("click", async () => {
   const bridgeUrl = AvarExtensionProtocol.normalizeBridgeUrl(
     bridgeUrlInput.value.trim() || DEFAULT_BRIDGE,
   );
   bridgeUrlInput.value = bridgeUrl;
   const defaultMediaFilter = defaultMediaFilterSelect.value || DEFAULT_MEDIA_FILTER;
+  const nextSelectedLinksInSeparateTab = selectedLinksInSeparateTabInput.checked;
   await api.runtime.sendMessage({
     type: "avar-set-config",
     bridgeUrl,
     defaultQueueId: defaultQueueSelect.value,
     defaultMediaFilter,
     showSelectionWidget: showSelectionWidgetInput.checked,
+    selectedLinksInSeparateTab: nextSelectedLinksInSeparateTab,
   });
+  selectedLinksInSeparateTab = nextSelectedLinksInSeparateTab;
   mediaTypeFilterSelect.value = defaultMediaFilter;
+  applyListViewLayout({ preferSelectedTabOnOpen: false });
+  renderSelectedLinksList(lastSelectedItems);
   renderMediaList(lastMediaItems);
   setStatus("Settings saved.");
   await refreshBridgeStatus();

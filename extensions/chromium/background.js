@@ -459,6 +459,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (typeof message.showSelectionWidget === "boolean") {
       storageUpdate.showSelectionWidget = message.showSelectionWidget;
     }
+    if (typeof message.selectedLinksInSeparateTab === "boolean") {
+      storageUpdate.selectedLinksInSeparateTab = message.selectedLinksInSeparateTab;
+    }
     chrome.storage.local
       .set(storageUpdate)
       .then(() => sendResponse({ ok: true }))

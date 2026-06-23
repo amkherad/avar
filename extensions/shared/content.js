@@ -245,7 +245,12 @@ function applyWidgetPosition(host, left, top) {
 
 function getSelectedAnchorsBoundingRect() {
   const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) {
+  if (!selection || selection.rangeCount === 0 || typeof AvarMedia === "undefined") {
+    return null;
+  }
+
+  const ranges = AvarMedia.snapshotSelectionRanges(selection);
+  if (ranges.length === 0) {
     return null;
   }
 
@@ -255,25 +260,27 @@ function getSelectedAnchorsBoundingRect() {
   let right = -Infinity;
   let found = false;
 
-  document.querySelectorAll("a[href]").forEach((anchor) => {
-    const href = anchor.href;
-    if (!href || href.startsWith("javascript:")) {
-      return;
+  try {
+    for (const range of ranges) {
+      AvarMedia.forEachAnchorsNearRange(range, (anchor) => {
+        const href = anchor.href;
+        if (!href || href.startsWith("javascript:")) {
+          return;
+        }
+        if (!AvarMedia.rangeContainsNode(range, anchor)) {
+          return;
+        }
+        const rect = anchor.getBoundingClientRect();
+        top = Math.min(top, rect.top);
+        left = Math.min(left, rect.left);
+        bottom = Math.max(bottom, rect.bottom);
+        right = Math.max(right, rect.right);
+        found = true;
+      });
     }
-
-    for (let i = 0; i < selection.rangeCount; i += 1) {
-      if (!AvarMedia?.rangeContainsNode?.(selection.getRangeAt(i), anchor)) {
-        continue;
-      }
-      const rect = anchor.getBoundingClientRect();
-      top = Math.min(top, rect.top);
-      left = Math.min(left, rect.left);
-      bottom = Math.max(bottom, rect.bottom);
-      right = Math.max(right, rect.right);
-      found = true;
-      break;
-    }
-  });
+  } catch {
+    return null;
+  }
 
   if (!found) {
     return null;
@@ -295,7 +302,12 @@ function getSelectionAnchorRect() {
     return getSelectedAnchorsBoundingRect();
   }
 
-  const range = selection.getRangeAt(0);
+  let range;
+  try {
+    range = selection.getRangeAt(0);
+  } catch {
+    return getSelectedAnchorsBoundingRect();
+  }
   let rect = range.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) {
     const clientRects = range.getClientRects();

@@ -120,5 +120,8 @@ export function themeToCssVars(theme: ThemeTokens): Record<string, string> {
     "--avar-shadow": theme.shadow,
     "--avar-radius": theme.radius,
     "--avar-font": theme.font,
+    "--avar-scrollbar-track": theme.bgMuted,
+    "--avar-scrollbar-thumb": theme.border,
+    "--avar-scrollbar-thumb-hover": theme.textMuted,
   };
 }

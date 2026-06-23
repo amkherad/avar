@@ -517,6 +517,82 @@
         flex-shrink: 0;
       }
 
+      .view-tabs {
+        flex-shrink: 0;
+        margin-top: 8px;
+      }
+
+      .view-tabs[hidden] {
+        display: none;
+      }
+
+      .view-tabs__bar {
+        display: flex;
+        gap: 4px;
+        padding: 3px;
+        border-radius: 8px;
+        background: #1e293b;
+      }
+
+      .view-tabs__tab {
+        flex: 1;
+        margin: 0;
+        padding: 6px 10px;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: #94a3b8;
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .view-tabs__tab:hover {
+        color: #e2e8f0;
+        background: #334155;
+      }
+
+      .view-tabs__tab[aria-selected="true"] {
+        background: #334155;
+        color: #e2e8f0;
+      }
+
+      .view-tabs__count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.25rem;
+        padding: 1px 5px;
+        border-radius: 999px;
+        font-size: 0.62rem;
+        font-weight: 700;
+        background: #0f172a;
+        color: #cbd5e1;
+      }
+
+      .view-tabs__tab[aria-selected="true"] .view-tabs__count {
+        background: #0f172a;
+        color: #7dd3fc;
+      }
+
+      .media-scroll--tabbed #selectedSection.media-panel--hidden,
+      .media-scroll--tabbed #mediaList.media-panel--hidden {
+        display: none;
+      }
+
+      .media-scroll--tabbed #selectedSection[hidden] {
+        display: none;
+      }
+
+      .media-scroll--tabbed .section-label,
+      .media-scroll--tabbed .list-separator {
+        display: none;
+      }
+
       #downloadSelected {
         margin-top: 4px;
         margin-bottom: 8px;
@@ -643,7 +719,34 @@
           </select>
         </div>
 
-        <div class="media-scroll">
+        <div id="viewTabs" class="view-tabs" hidden>
+          <div class="view-tabs__bar" role="tablist" aria-label="Media list tabs">
+            <button
+              id="viewTabSelected"
+              class="view-tabs__tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="selectedSection"
+            >
+              Selected
+              <span id="viewTabSelectedCount" class="view-tabs__count">0</span>
+            </button>
+            <button
+              id="viewTabMedia"
+              class="view-tabs__tab"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              aria-controls="mediaList"
+            >
+              Media
+              <span id="viewTabMediaCount" class="view-tabs__count">0</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="mediaScroll" class="media-scroll">
           <section id="selectedSection" hidden>
             <p class="section-label">Selected links</p>
             <button id="downloadSelected" class="primary" type="button">Download all selected</button>
@@ -692,6 +795,11 @@
           <label class="settings-checkbox">
             <input id="showSelectionWidget" type="checkbox" checked />
             Show download widget when multiple links are selected
+          </label>
+
+          <label class="settings-checkbox">
+            <input id="selectedLinksInSeparateTab" type="checkbox" />
+            Put selected links in a separate tab
           </label>
 
           <p class="settings-section-title">Queue management</p>

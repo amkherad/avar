@@ -49,6 +49,36 @@ a {
   min-height: 100vh;
   background: var(--avar-bg);
   color: var(--avar-text);
+  scrollbar-width: thin;
+  scrollbar-color: var(--avar-scrollbar-thumb) var(--avar-scrollbar-track);
+}
+
+.avar-root * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--avar-scrollbar-thumb) var(--avar-scrollbar-track);
+}
+
+.avar-root *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.avar-root *::-webkit-scrollbar-track {
+  background: var(--avar-scrollbar-track);
+}
+
+.avar-root *::-webkit-scrollbar-thumb {
+  background: var(--avar-scrollbar-thumb);
+  border: 2px solid var(--avar-scrollbar-track);
+  border-radius: 999px;
+}
+
+.avar-root *::-webkit-scrollbar-thumb:hover {
+  background: var(--avar-scrollbar-thumb-hover);
+}
+
+.avar-root *::-webkit-scrollbar-corner {
+  background: var(--avar-scrollbar-track);
 }
 
 [dir="rtl"] .avar-icon-flip {
