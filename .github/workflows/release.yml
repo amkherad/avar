@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows
+            arch: x86_64
+          - runner: windows-11-vs2026-arm
+            platform: windows
+            arch: arm64
+          - runner: ubuntu-latest
+            platform: linux
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
+          - runner: macos-15-intel
+            platform: mac
+            arch: x86_64
+          - runner: macos-latest
+            platform: mac
+            arch: arm64
+
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup CMake and Ninja
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "~4.1.0"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: gui/package-lock.json
+
+      - name: Install Linux GUI dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libnotify4 libnss3 libxss1 libasound2t64 libxtst6
+
+      - name: Resolve release version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build avar (CLI)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
+          cmake --build build --parallel
+
+      - name: Package avar release
+        run: |
+          if [ "${{ matrix.platform }}" = windows ]; then
+            exe="build/avar.exe"
+          else
+            exe="build/avar"
+          fi
+          python scripts/package_release.py \
+            --exe "$exe" \
+            --kind avar \
+            --version "${{ steps.version.outputs.version }}" \
+            --os "${{ matrix.platform }}" \
+            --arch "${{ matrix.arch }}" \
+            --output-dir dist
+
+      - name: Build all-in-one avar-gui
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: python scripts/build_all.py --build-dir build-all --config Release --output-dir dist-all
+
+      - name: Package avar-gui release
+        run: |
+          if [ "${{ matrix.platform }}" = windows ]; then
+            exe="dist-all/avar.exe"
+          else
+            exe="dist-all/avar"
+          fi
+          python scripts/package_release.py \
+            --exe "$exe" \
+            --kind avar-gui \
+            --version "${{ steps.version.outputs.version }}" \
+            --os "${{ matrix.platform }}" \
+            --arch "${{ matrix.arch }}" \
+            --output-dir dist
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

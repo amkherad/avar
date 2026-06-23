@@ -126,7 +126,7 @@ bundle exec jekyll serve
 ctest --test-dir build --output-on-failure
 ```
 
-CI builds `avar`, the GUI, and `avar-gui` on every push to `main` / `master` and publishes release assets for version tags (`v*`).
+CI builds `avar`, the GUI, and `avar-gui` on every push to `main` / `master`. Tagged releases (`v*`) publish installers for Windows (`.exe`), Linux (`.deb`), and macOS (`.dmg`) on `x86_64` and `arm64`, including all-in-one `avar-gui-*` builds with embedded Electron.
 
 ## Contributing
 
