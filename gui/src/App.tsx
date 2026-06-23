@@ -107,11 +107,8 @@ function AppContent() {
 
 function PopupContent() {
   const [popupRoute, setPopupRoute] = useState(() => parsePopupHash(window.location.hash));
-  useEffect(() => {
-    useConnectionStore.getState().reconnectClient();
-    useConnectionStore.getState().startPingMonitor();
-    return () => useConnectionStore.getState().stopPingMonitor();
-  }, []);
+
+  useEffect(() => initSyncCoordinator(), []);
 
   useEffect(() => {
     const onHashChange = () => setPopupRoute(parsePopupHash(window.location.hash));

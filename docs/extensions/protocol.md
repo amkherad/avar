@@ -78,7 +78,7 @@ The bridge translates extension messages into daemon JSON-RPC calls on the activ
 | `18766` | Extension bridge (Electron) |
 | `18765` | Daemon API proxy (Electron internal) |
 | `8000` | Daemon HTTP API (default) |
-| `5173` | Vite dev server (web dev fallback) |
+| `56821` | Vite dev server (web dev fallback) |
 
 ## Shared code
 

@@ -46,7 +46,7 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
   const [submitting, setSubmitting] = useState(false);
 
   const displayQueues = withDefaultQueue(
-    queues,
+    queues.length > 0 ? queues : (payload?.queues ?? []),
     createDefaultQueueInfo(t("queue.defaultName"), t("queue.defaultDescription")),
   );
 
@@ -292,6 +292,7 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
             selectAllLabel={t("download.batchAdd.selectAll")}
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
+            onRowClick={(row) => toggleSelect(row.id)}
             emptyMessage={t("download.batchAdd.empty")}
             variant="flex"
             interactive

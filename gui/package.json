@@ -12,8 +12,8 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
-    "dev:desktop": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
-    "dev:tiny": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 node tiny/main.cjs\"",
+    "dev:desktop": "concurrently -k \"vite\" \"node scripts/wait-dev-server.cjs electron .\"",
+    "dev:tiny": "concurrently -k \"vite\" \"node scripts/wait-dev-server.cjs node tiny/main.cjs\"",
     "prebuild": "python ../scripts/generate_version.py --root .. --out-env .avar-build.env",
     "build": "vite build",
     "lint": "tsc --noEmit",

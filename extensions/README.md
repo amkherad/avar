@@ -19,7 +19,7 @@ Browser extensions that send media links from web pages to the Avar download man
 
 ## Configuration
 
-The extension stores the Avar **bridge URL** in browser storage. When Avar Desktop (Electron) is running, the extension auto-detects the dedicated bridge at `http://127.0.0.1:18766`. For web-only development, it falls back to the Vite dev server at `http://127.0.0.1:5173`.
+The extension stores the Avar **bridge URL** in browser storage. When Avar Desktop (Electron) is running, the extension auto-detects the dedicated bridge at `http://127.0.0.1:18766`. For web-only development, it falls back to the Vite dev server at `http://127.0.0.1:56821`.
 
 ## Messaging protocol (v1)
 

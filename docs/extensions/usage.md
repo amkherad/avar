@@ -55,7 +55,7 @@ Downloads are forwarded to the **active daemon session** configured in the GUI. 
 | Mode | Bridge | Notes |
 |------|--------|-------|
 | **Electron desktop** | `http://127.0.0.1:18766` | Auto-detected; most reliable |
-| **Web GUI (dev)** | `http://127.0.0.1:5173` | Requires `npm run dev` |
+| **Web GUI (dev)** | `http://127.0.0.1:56821` | Requires `npm run dev` |
 | **Web GUI (production)** | Configured bridge URL | Set manually in extension popup |
 
 ## Privacy

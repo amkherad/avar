@@ -1,4 +1,5 @@
 import { getExtensionBridgeUrl } from "@/lib/browserExtensionBridge";
+import type { QueueInfo } from "@/api/types";
 
 const BATCH_STORAGE_PREFIX = "avar.popup.batch.";
 
@@ -18,6 +19,8 @@ export interface BatchAddDownloadsPayload {
   items: BatchAddDownloadItem[];
   defaultQueueId?: string | null;
   pageTitle?: string;
+  /** Snapshot from the opener so popup windows can show queues before sync completes. */
+  queues?: QueueInfo[];
 }
 
 function normalizeBatchItem(

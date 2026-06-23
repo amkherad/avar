@@ -45,7 +45,7 @@ The extension auto-detects the bridge based on what is running:
 | Context | Bridge URL |
 |---------|------------|
 | Electron desktop | `http://127.0.0.1:18766` (auto-detected) |
-| Web dev (`npm run dev`) | `http://127.0.0.1:5173` (fallback) |
+| Web dev (`npm run dev`) | `http://127.0.0.1:56821` (fallback) |
 | Custom | Paste the URL from **Settings → Browser integration** |
 
 If auto-detection fails, copy the **bridge URL** from the GUI settings and paste it in the extension popup.

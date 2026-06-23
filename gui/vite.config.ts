@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import fs from "node:fs";
@@ -5,6 +6,9 @@ import path from "node:path";
 import { extensionsPlugin } from "./vite-extensions";
 import { extensionBridgePlugin } from "./vite-extension-bridge";
 import { serviceWorkerCacheVersionPlugin } from "./vite-sw-cache";
+
+const require = createRequire(import.meta.url);
+const { DEV_SERVER_PORT } = require("./dev-server.cjs") as { DEV_SERVER_PORT: number };
 
 function loadAvarBuildEnv(root: string): Record<string, string> {
   const envPath = path.join(root, ".avar-build.env");
@@ -64,6 +68,8 @@ export default defineConfig(({ mode }) => {
       ),
     },
     server: {
+      port: DEV_SERVER_PORT,
+      strictPort: true,
       proxy: {
         "/api": {
           target: "http://127.0.0.1:8000",

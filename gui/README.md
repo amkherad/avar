@@ -16,7 +16,7 @@ avar daemon start --http --port=8000
 ```bash
 cd gui
 npm install
-npm run dev          # http://localhost:5173 (proxies /api to daemon)
+npm run dev          # http://localhost:56821 (proxies /api to daemon)
 npm run dev:desktop  # Electron + Vite dev server
 npm run dev:tiny     # Tiny webview experiment + Vite dev server
 ```

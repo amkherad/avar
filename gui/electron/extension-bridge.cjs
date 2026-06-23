@@ -11,6 +11,7 @@ const {
   createResponse,
   createErrorResponse,
 } = require("./extension-protocol.cjs");
+const { EXTENSION_GUI_URL } = require("../dev-server.cjs");
 
 const EXTENSION_PING_TTL_MS = 30_000;
 const BATCH_STASH_TTL_MS = 10 * 60 * 1000;
@@ -930,7 +931,7 @@ module.exports = {
   setAddDownloadPopupOpener,
   getExtensionBridgeState,
   createExtensionBridgeServer,
-  DEFAULT_EXTENSION_GUI_URL: "http://127.0.0.1:5173",
+  DEFAULT_EXTENSION_GUI_URL: EXTENSION_GUI_URL,
   ELECTRON_EXTENSION_BRIDGE_URL: `http://${EXTENSION_BRIDGE_HOST}:${EXTENSION_BRIDGE_PORT}`,
   EXTENSION_BRIDGE_HOST,
   EXTENSION_BRIDGE_PORT,

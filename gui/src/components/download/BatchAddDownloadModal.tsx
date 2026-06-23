@@ -14,6 +14,7 @@ export interface BatchAddDownloadModalProps {
 export function BatchAddDownloadModal({ open, onClose }: BatchAddDownloadModalProps) {
   const { t } = useTranslation();
   const defaultQueueId = useDataStore(selectEffectiveQueueId);
+  const queues = useDataStore((s) => s.queues);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +36,7 @@ export function BatchAddDownloadModal({ open, onClose }: BatchAddDownloadModalPr
     }
 
     void openBatchAddPopup(
-      { items, defaultQueueId },
+      { items, defaultQueueId, queues },
       t("download.batchAdd.title"),
     );
     resetForm();
