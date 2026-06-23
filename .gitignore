@@ -33,8 +33,6 @@ coverage.xml
 /build-test/
 daemon_transport.c.gcov
 /.cmake.tar.gz
-/build-all/
-/dist-all/
 
 ###########
 

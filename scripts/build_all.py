@@ -18,6 +18,15 @@ if str(_SCRIPTS_DIR) not in sys.path:
 from paths import BUILD_ALL_DIR, DIST_ALL_DIR, ROOT, rel
 
 
+def resolve_npm() -> str:
+    """Return an npm executable path (npm.cmd on Windows)."""
+    for name in ("npm.cmd", "npm") if platform.system() == "Windows" else ("npm",):
+        path = shutil.which(name)
+        if path:
+            return path
+    raise SystemExit("npm not found on PATH")
+
+
 def run(cmd: list[str], *, cwd: Path | None = None) -> None:
     print("+", " ".join(cmd), flush=True)
     subprocess.run(cmd, check=True, cwd=cwd or ROOT)
@@ -66,8 +75,9 @@ def main() -> int:
     )
 
     if not args.skip_electron:
-        run(["npm", "ci"], cwd=gui_dir)
-        run(["npm", "run", "build:desktop:current"], cwd=gui_dir)
+        npm = resolve_npm()
+        run([npm, "ci"], cwd=gui_dir)
+        run([npm, "run", "build:desktop:current"], cwd=gui_dir)
 
     run(
         [

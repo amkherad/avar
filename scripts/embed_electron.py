@@ -25,11 +25,11 @@ def find_electron_unpacked(gui_dir: Path) -> Path:
     system = platform.system()
     patterns: list[str]
     if system == "Windows":
-        patterns = ["win-unpacked", "win-*/win-unpacked"]
+        patterns = ["win-unpacked", "win-*-unpacked", "win-*/win-unpacked"]
     elif system == "Darwin":
-        patterns = ["mac", "mac-*", "mac-arm64", "mac-x64"]
+        patterns = ["mac", "mac-*", "mac-arm64", "mac-x64", "mac-*-unpacked"]
     else:
-        patterns = ["linux-unpacked", "linux-*/linux-unpacked"]
+        patterns = ["linux-unpacked", "linux-*-unpacked", "linux-*/linux-unpacked"]
 
     for pattern in patterns:
         for path in sorted(release.glob(pattern)):

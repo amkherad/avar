@@ -2,7 +2,7 @@
 #define AVAR_UTILS_H
 
 #include <stdint.h>
-#include <uchar.h>
+#include <wchar.h>
 
 #define string      const wchar_t  *
 #define stringa     const char  *
