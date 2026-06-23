@@ -9,6 +9,7 @@
 #include "config.h"
 #include "download.h"
 #include "file-system.h"
+#include "queue.h"
 #include "thread_pool.h"
 
 #ifndef AVAR_SOURCE_DIR
@@ -67,6 +68,49 @@ static bool setup_paths(void) {
 
 static void build_url(const char *path, char *out, size_t out_size) {
     AVAR_ASSERT(test_guard_http_url(&g_guard, path, out, out_size));
+}
+
+static char *find_item_status(const char *item_id) {
+    if (item_id == NULL) {
+        return NULL;
+    }
+
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < count; ++i) {
+        char *id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
+        if (id == NULL) {
+            continue;
+        }
+
+        const bool match = strcmp(id, item_id) == 0;
+        free(id);
+        if (!match) {
+            continue;
+        }
+
+        return get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_STATUS);
+    }
+
+    return NULL;
+}
+
+static bool wait_for_item_status(const char *item_id, const char *expected,
+                                 const unsigned timeout_ms) {
+    const unsigned step_ms = 50U;
+    for (unsigned elapsed = 0U; elapsed < timeout_ms; elapsed += step_ms) {
+        char *status = find_item_status(item_id);
+        if (status != NULL && strcmp(status, expected) == 0) {
+            free(status);
+            return true;
+        }
+        free(status);
+#if defined(_WIN32)
+        Sleep(step_ms);
+#else
+        usleep((useconds_t)step_ms * 1000U);
+#endif
+    }
+    return false;
 }
 
 AVAR_TEST(download_lifecycle_enqueue_and_remove) {
@@ -182,6 +226,62 @@ AVAR_TEST(download_lifecycle_start_stop_background) {
     free(item_id);
 }
 
+AVAR_TEST(download_lifecycle_resume_interrupted) {
+    AVAR_ASSERT(setup_paths());
+    thread_pool_reset_global();
+
+    char url[256];
+    build_url("plain.txt", url, sizeof url);
+
+    char item_json[512];
+    snprintf(item_json, sizeof item_json,
+             "{\"" AVAR_FIELD_ID "\":\"dl-resume\",\""
+             AVAR_FIELD_URL "\":\"%s\",\""
+             AVAR_FIELD_FILENAME "\":\"plain.txt\",\""
+             AVAR_FIELD_STATUS "\":\"" AVAR_DL_STATUS_DOWNLOADING "\"}",
+             url);
+    AVAR_ASSERT_EQ(append_config_array_item(AVAR_CFG_DM_ITEMS, item_json), 0);
+
+    download_resume_interrupted();
+    AVAR_ASSERT(wait_for_item_status("dl-resume", AVAR_DL_STATUS_COMPLETED, 60000U));
+    AVAR_ASSERT(download_wait_idle(60000U));
+
+    thread_pool_reset_global();
+    AVAR_ASSERT_EQ(download_remove("dl-resume", true, true, false), EXIT_SUCCESS);
+}
+
+AVAR_TEST(download_lifecycle_resume_interrupted_started_queue) {
+    AVAR_ASSERT(setup_paths());
+    thread_pool_reset_global();
+
+    char *queue_id = NULL;
+    AVAR_ASSERT_EQ(queue_add("resume-q", NULL, &queue_id), QueueErrorNone);
+    AVAR_ASSERT_NOT_NULL(queue_id);
+    AVAR_ASSERT_EQ(queue_start(queue_id), QueueErrorNone);
+
+    char url[256];
+    build_url("plain.txt", url, sizeof url);
+
+    char item_json[768];
+    snprintf(item_json, sizeof item_json,
+             "{\"" AVAR_FIELD_ID "\":\"dl-q-resume\",\""
+             AVAR_FIELD_URL "\":\"%s\",\""
+             AVAR_FIELD_FILENAME "\":\"plain.txt\",\""
+             AVAR_FIELD_QUEUE_ID "\":\"%s\",\""
+             AVAR_FIELD_STATUS "\":\"" AVAR_DL_STATUS_QUEUED "\"}",
+             url, queue_id);
+    AVAR_ASSERT_EQ(append_config_array_item(AVAR_CFG_DM_ITEMS, item_json), 0);
+
+    download_resume_interrupted();
+    AVAR_ASSERT(wait_for_item_status("dl-q-resume", AVAR_DL_STATUS_COMPLETED, 60000U));
+    AVAR_ASSERT(download_wait_idle(60000U));
+
+    thread_pool_reset_global();
+    AVAR_ASSERT_EQ(download_remove("dl-q-resume", true, true, false), EXIT_SUCCESS);
+    AVAR_ASSERT_EQ(queue_remove(queue_id, false, false), QueueErrorNone);
+    free(queue_id);
+}
+
 AVAR_TEST(download_lifecycle_invalid_operations) {
     AVAR_ASSERT_EQ(download_pause(NULL), EXIT_FAILURE);
     AVAR_ASSERT_EQ(download_resume("missing"), EXIT_FAILURE);
@@ -193,5 +293,7 @@ AVAR_TEST_MAIN(
         run_download_lifecycle_pause_resume_background();
         run_download_lifecycle_enqueue_proxy_and_active_list();
         run_download_lifecycle_start_stop_background();
+        run_download_lifecycle_resume_interrupted();
+        run_download_lifecycle_resume_interrupted_started_queue();
         run_download_lifecycle_invalid_operations();
         test_guard_http_server_stop(&g_http_server);)

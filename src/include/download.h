@@ -57,6 +57,9 @@ int download_resume(const char *id);
 int download_start(const char *id);
 int download_stop(const char *id);
 
+/** Resumes downloads left in the downloading state and restarts started queues. */
+void download_resume_interrupted(void);
+
 /**
  * Resolves the on-disk path of a completed download item.
  * Writes a newly allocated path to path_out on success. Caller must free(*path_out).

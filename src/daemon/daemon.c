@@ -724,6 +724,7 @@ int daemon_start(const DaemonConfig *cfg) {
     install_ctrl_c_handler(handle_ctrl_c);
     logger_apply_config();
     LOG_INFO("Daemon started (pid file: %s)", cfg->server.pid_file);
+    download_resume_interrupted();
 
     time_t idle_since = 0;
     bool auto_shutdown_idle =

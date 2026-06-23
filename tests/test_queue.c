@@ -130,9 +130,27 @@ AVAR_TEST(queue_stop_resets_downloading_items) {
     free(id);
 }
 
+AVAR_TEST(queue_is_started_tracks_scheduler_flag) {
+    setup_temp_config();
+
+    char *id = NULL;
+    AVAR_ASSERT_EQ(queue_add("running", NULL, &id), QueueErrorNone);
+    AVAR_ASSERT_NOT_NULL(id);
+    AVAR_ASSERT(!queue_is_started(id));
+
+    AVAR_ASSERT_EQ(queue_start(id), QueueErrorNone);
+    AVAR_ASSERT(queue_is_started(id));
+
+    AVAR_ASSERT_EQ(queue_stop(id), QueueErrorNone);
+    AVAR_ASSERT(!queue_is_started(id));
+
+    free(id);
+}
+
 AVAR_TEST_MAIN(
         run_queue_add_and_list();
         run_queue_edit_and_resolve();
         run_queue_remove_detaches_items();
         run_queue_remove_purges_items();
-        run_queue_stop_resets_downloading_items();)
+        run_queue_stop_resets_downloading_items();
+        run_queue_is_started_tracks_scheduler_flag();)

@@ -63,6 +63,9 @@ QueueError queue_start(const char *id);
 /** Stops active downloads in the queue by resetting their persisted status. */
 QueueError queue_stop(const char *id);
 
+/** Returns true when the queue scheduler flag is set. */
+bool queue_is_started(const char *id);
+
 size_t queue_count(void);
 
 /**

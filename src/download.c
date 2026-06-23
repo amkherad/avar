@@ -3536,6 +3536,51 @@ static void background_download_task_by_id(void *arg) {
     (void)start_by_id_thread(arg);
 }
 
+static bool download_should_resume_on_startup(const char *status, const char *queue_id) {
+    if (status == NULL) {
+        return false;
+    }
+
+    if (strcmp(status, AVAR_DL_STATUS_DOWNLOADING) == 0) {
+        return true;
+    }
+
+    if (strcmp(status, AVAR_DL_STATUS_QUEUED) == 0 && queue_id != NULL && queue_id[0] != '\0'
+        && queue_is_started(queue_id)) {
+        return true;
+    }
+
+    return false;
+}
+
+void download_resume_interrupted(void) {
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < count; ++i) {
+        char *id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
+        char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_STATUS);
+        char *queue_id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_QUEUE_ID);
+
+        if (id == NULL || !download_should_resume_on_startup(status, queue_id)) {
+            free(id);
+            free(status);
+            free(queue_id);
+            continue;
+        }
+
+        free(status);
+        free(queue_id);
+
+        if (active_jobs_find(id) != NULL) {
+            free(id);
+            continue;
+        }
+
+        LOG_INFO("Resuming download %s after daemon start", id);
+        (void)spawn_download_by_id(id, NULL);
+        free(id);
+    }
+}
+
 int download_pause(const char *id) {
     if (id == NULL) {
         return EXIT_FAILURE;

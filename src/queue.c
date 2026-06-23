@@ -375,6 +375,34 @@ QueueError queue_start(const char *id) {
     return QueueErrorNone;
 }
 
+bool queue_is_started(const char *id) {
+    if (id == NULL || id[0] == '\0') {
+        return false;
+    }
+
+    const int index = queue_find_index(AVAR_FIELD_ID, id);
+    if (index < 0) {
+        return false;
+    }
+
+    char *json = get_config_array_item_json(AVAR_CFG_DM_QUEUES, (size_t)index);
+    if (json == NULL) {
+        return false;
+    }
+
+    cJSON *obj = cJSON_Parse(json);
+    cJSON_free(json);
+    if (obj == NULL || !cJSON_IsObject(obj)) {
+        cJSON_Delete(obj);
+        return false;
+    }
+
+    const cJSON *started = cJSON_GetObjectItemCaseSensitive(obj, AVAR_QUEUE_FIELD_STARTED);
+    const bool running = cJSON_IsTrue(started);
+    cJSON_Delete(obj);
+    return running;
+}
+
 QueueError queue_stop(const char *id) {
     if (id == NULL || id[0] == '\0') {
         return QueueErrorInvalidArg;
