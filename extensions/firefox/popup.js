@@ -8,7 +8,10 @@ const POPUP_WIDTH_MAX = 760;
 const POPUP_HEIGHT_MIN = 400;
 const POPUP_HEIGHT_MAX = 600;
 
+const SELECTION_REFRESH_MS = 400;
+
 let verticalResizeEnabled = false;
+let selectionRefreshTimer = null;
 
 const api = typeof browser !== "undefined" ? browser : chrome;
 
@@ -769,7 +772,7 @@ async function loadConfig() {
   defaultMediaFilterSelect.value = defaultFilter;
   mediaTypeFilterSelect.value = defaultFilter;
   mediaSortSelect.value = stored.mediaSort || DEFAULT_MEDIA_SORT;
-  showSelectionWidgetInput.checked = stored.showSelectionWidget === true;
+  showSelectionWidgetInput.checked = stored.showSelectionWidget !== false;
 
   applyPopupSize(stored.popupWidth, stored.popupHeight);
   installPopupResizePersistence();
@@ -806,6 +809,40 @@ async function expandHlsInBackground(items) {
   if (expanded?.ok && Array.isArray(expanded.items)) {
     renderMediaList(expanded.items);
   }
+}
+
+async function refreshSelectedFromPage() {
+  const response = await api.runtime.sendMessage({ type: "avar-list-media" });
+  if (!response?.ok) {
+    return;
+  }
+
+  const selectedItems = response.selectedItems || [];
+  const sameCount = selectedItems.length === lastSelectedItems.length;
+  const sameUrls =
+    sameCount &&
+    selectedItems.every((item, index) => item.url === lastSelectedItems[index]?.url);
+  if (sameUrls) {
+    return;
+  }
+
+  renderSelectedLinksList(selectedItems);
+  renderMediaList(lastMediaItems);
+}
+
+function startSelectionRefresh() {
+  if (selectionRefreshTimer) {
+    return;
+  }
+  selectionRefreshTimer = setInterval(() => void refreshSelectedFromPage(), SELECTION_REFRESH_MS);
+}
+
+function stopSelectionRefresh() {
+  if (!selectionRefreshTimer) {
+    return;
+  }
+  clearInterval(selectionRefreshTimer);
+  selectionRefreshTimer = null;
 }
 
 async function scanPage() {
@@ -905,6 +942,8 @@ void (async () => {
   await loadConfig();
   void loadQueues();
   installPopupResizeHandles();
+  startSelectionRefresh();
+  window.addEventListener("unload", stopSelectionRefresh);
   await scanPage();
 })();
 

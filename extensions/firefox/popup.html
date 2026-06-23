@@ -518,8 +518,8 @@
       }
 
       #downloadSelected {
-        margin-top: 8px;
-        margin-bottom: 0;
+        margin-top: 4px;
+        margin-bottom: 8px;
       }
 
       .settings-checkbox {
@@ -646,8 +646,8 @@
         <div class="media-scroll">
           <section id="selectedSection" hidden>
             <p class="section-label">Selected links</p>
+            <button id="downloadSelected" class="primary" type="button">Download all selected</button>
             <ul id="selectedLinksList"></ul>
-            <button id="downloadSelected" class="secondary" type="button">Download all selected</button>
             <hr class="list-separator" aria-hidden="true" />
           </section>
           <ul id="mediaList"></ul>
@@ -690,7 +690,7 @@
           </label>
 
           <label class="settings-checkbox">
-            <input id="showSelectionWidget" type="checkbox" />
+            <input id="showSelectionWidget" type="checkbox" checked />
             Show download widget when multiple links are selected
           </label>
 

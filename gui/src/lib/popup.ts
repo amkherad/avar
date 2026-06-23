@@ -15,6 +15,8 @@ const CONFIRM_STORAGE_PREFIX = "avar.popup.confirm.";
 export interface PopupWindowOptions {
   width?: number;
   height?: number;
+  minWidth?: number;
+  minHeight?: number;
   title?: string;
 }
 
@@ -127,7 +129,14 @@ export function openPopupWindow(
   const url = buildPopupUrl(hash);
 
   if (window.avar?.isElectron) {
-    void window.avar.openPopup({ hash, title, width, height });
+    void window.avar.openPopup({
+      hash,
+      title,
+      width,
+      height,
+      minWidth: options.minWidth,
+      minHeight: options.minHeight,
+    });
     return Promise.resolve();
   }
 
@@ -155,6 +164,8 @@ export function openBatchAddPopup(
   return openPopupWindow(hash, {
     width: 1920,
     height: 960,
+    minWidth: 400,
+    minHeight: 250,
     ...options,
     title,
   });

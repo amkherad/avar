@@ -6,6 +6,8 @@ export interface AvarPopupOptions {
   title?: string;
   width?: number;
   height?: number;
+  minWidth?: number;
+  minHeight?: number;
 }
 
 export interface AvarNotificationOptions {

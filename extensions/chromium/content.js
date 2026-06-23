@@ -1,13 +1,14 @@
 const api = typeof browser !== "undefined" ? browser : chrome;
 
-const MIN_SELECTED_LINKS_FOR_WIDGET = 2;
+const MIN_SELECTED_LINKS_FOR_WIDGET = 1;
 const SELECTION_WIDGET_DEBOUNCE_MS = 100;
 const SELECTED_LINKS_CACHE_MS = 60_000;
+const CONTEXT_MENU_SNAPSHOT_MS = 30_000;
 
 /** @type {Map<string, object>} */
 const hookedMediaItems = new Map();
 
-let showSelectionWidget = false;
+let showSelectionWidget = true;
 /** @type {HTMLElement | null} */
 let selectionWidgetHost = null;
 let selectionChangeTimer = null;
@@ -16,6 +17,9 @@ let lastWidgetLinkCount = 0;
 /** @type {object[]} */
 let cachedSelectedItems = [];
 let cachedSelectedAt = 0;
+/** @type {object[]} */
+let contextMenuSnapshot = [];
+let contextMenuSnapshotAt = 0;
 
 const WIDGET_MARGIN_PX = 8;
 const WIDGET_VIEWPORT_PADDING_PX = 8;
@@ -100,31 +104,69 @@ function rememberSelectedLinks(items) {
   if (items.length > 0) {
     cachedSelectedItems = items;
     cachedSelectedAt = Date.now();
+    return;
   }
+  cachedSelectedItems = [];
+  cachedSelectedAt = 0;
 }
 
-function collectSelectedLinks() {
+function readSelectedLinksFromDom() {
   if (typeof AvarMedia === "undefined") {
     return [];
   }
-  const items = AvarMedia.collectSelectedLinkItems(document);
+  return AvarMedia.collectSelectedLinkItems(document);
+}
+
+function collectSelectedLinks() {
+  const items = readSelectedLinksFromDom();
   rememberSelectedLinks(items);
   return items;
 }
 
-function getSelectedLinksFromPage({ allowCache = false } = {}) {
-  const current = collectSelectedLinks();
+function getSelectedLinksForContextMenu() {
+  if (
+    contextMenuSnapshot.length > 0 &&
+    Date.now() - contextMenuSnapshotAt < CONTEXT_MENU_SNAPSHOT_MS
+  ) {
+    return contextMenuSnapshot;
+  }
+
+  const current = readSelectedLinksFromDom();
   if (current.length > 0) {
     return current;
   }
+
   if (
-    allowCache &&
     cachedSelectedItems.length > 0 &&
     Date.now() - cachedSelectedAt < SELECTED_LINKS_CACHE_MS
   ) {
     return cachedSelectedItems;
   }
+
   return [];
+}
+
+function refreshContextMenuSnapshot() {
+  const current = readSelectedLinksFromDom();
+  if (current.length > 0) {
+    contextMenuSnapshot = current;
+    contextMenuSnapshotAt = Date.now();
+    rememberSelectedLinks(current);
+    return contextMenuSnapshot;
+  }
+
+  if (
+    cachedSelectedItems.length > 0 &&
+    Date.now() - cachedSelectedAt < SELECTED_LINKS_CACHE_MS
+  ) {
+    contextMenuSnapshot = cachedSelectedItems;
+    contextMenuSnapshotAt = Date.now();
+    return contextMenuSnapshot;
+  }
+
+  contextMenuSnapshot = [];
+  contextMenuSnapshotAt = 0;
+  return contextMenuSnapshot;
 }
 
 function removeSelectionWidget() {
@@ -134,10 +176,56 @@ function removeSelectionWidget() {
   }
 }
 
+function getSelectedAnchorsBoundingRect() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  let top = Infinity;
+  let left = Infinity;
+  let bottom = -Infinity;
+  let right = -Infinity;
+  let found = false;
+
+  document.querySelectorAll("a[href]").forEach((anchor) => {
+    const href = anchor.href;
+    if (!href || href.startsWith("javascript:")) {
+      return;
+    }
+
+    for (let i = 0; i < selection.rangeCount; i += 1) {
+      if (!AvarMedia?.rangeContainsNode?.(selection.getRangeAt(i), anchor)) {
+        continue;
+      }
+      const rect = anchor.getBoundingClientRect();
+      top = Math.min(top, rect.top);
+      left = Math.min(left, rect.left);
+      bottom = Math.max(bottom, rect.bottom);
+      right = Math.max(right, rect.right);
+      found = true;
+      break;
+    }
+  });
+
+  if (!found) {
+    return null;
+  }
+
+  return {
+    top,
+    left,
+    bottom,
+    right,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
 function getSelectionAnchorRect() {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-    return null;
+    return getSelectedAnchorsBoundingRect();
   }
 
   const range = selection.getRangeAt(0);
@@ -150,7 +238,7 @@ function getSelectionAnchorRect() {
   }
 
   if (rect.width === 0 && rect.height === 0) {
-    return null;
+    return getSelectedAnchorsBoundingRect();
   }
 
   return rect;
@@ -159,6 +247,8 @@ function getSelectionAnchorRect() {
 function positionSelectionWidget(host) {
   const anchor = getSelectionAnchorRect();
   if (!anchor) {
+    host.style.left = `${WIDGET_VIEWPORT_PADDING_PX}px`;
+    host.style.top = `${WIDGET_VIEWPORT_PADDING_PX}px`;
     return;
   }
 
@@ -350,12 +440,13 @@ function updateSelectionWidget() {
 
 async function loadWidgetSetting() {
   const stored = await api.storage.local.get(["showSelectionWidget"]);
-  showSelectionWidget = stored.showSelectionWidget === true;
+  showSelectionWidget = stored.showSelectionWidget !== false;
   updateSelectionWidget();
 }
 
 function scheduleSelectionWidgetUpdate() {
-  notifySelectionChanged();
+  const count = collectSelectedLinks().length;
+  void api.runtime.sendMessage({ type: "avar-selection-changed", count }).catch(() => {});
 
   if (selectionChangeTimer) {
     clearTimeout(selectionChangeTimer);
@@ -364,11 +455,6 @@ function scheduleSelectionWidgetUpdate() {
     selectionChangeTimer = null;
     updateSelectionWidget();
   }, SELECTION_WIDGET_DEBOUNCE_MS);
-}
-
-function notifySelectionChanged() {
-  const count = collectSelectedLinks().length;
-  void api.runtime.sendMessage({ type: "avar-selection-changed", count }).catch(() => {});
 }
 
 api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -382,7 +468,9 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   const items = collectPageMedia();
-  const selectedItems = getSelectedLinksFromPage({ allowCache: true });
+  const selectedItems = message.forContextMenu
+    ? getSelectedLinksForContextMenu()
+    : collectSelectedLinks();
   sendResponse({
     urls: items.map((item) => item.url),
     items,
@@ -408,15 +496,18 @@ api.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || !changes.showSelectionWidget) {
     return;
   }
-  showSelectionWidget = changes.showSelectionWidget.newValue === true;
+  showSelectionWidget = changes.showSelectionWidget.newValue !== false;
   updateSelectionWidget();
 });
 
 document.addEventListener(
   "contextmenu",
   () => {
+    const snapshot = refreshContextMenuSnapshot();
+    void api.runtime
+      .sendMessage({ type: "avar-selection-changed", count: snapshot.length })
+      .catch(() => {});
     updateSelectionWidget();
-    notifySelectionChanged();
   },
   true,
 );
@@ -424,5 +515,6 @@ document.addEventListener(
 installPageHooks();
 void (async () => {
   await loadWidgetSetting();
-  notifySelectionChanged();
+  const count = collectSelectedLinks().length;
+  void api.runtime.sendMessage({ type: "avar-selection-changed", count }).catch(() => {});
 })();

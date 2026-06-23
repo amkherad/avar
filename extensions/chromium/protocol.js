@@ -14,6 +14,7 @@
   const DEFAULT_ELECTRON_BRIDGE = "http://127.0.0.1:18766";
   const ELECTRON_BRIDGE_PORT = 18766;
   const LOCAL_BRIDGE_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+  const BRIDGE_UNREACHABLE = "Cannot reach Avar bridge";
 
   /**
    * @param {string} type
@@ -34,9 +35,17 @@
    * @param {string} type
    * @param {Record<string, unknown>} [payload]
    */
+  async function fetchBridge(url, init) {
+    try {
+      return await fetch(url, init);
+    } catch {
+      throw new Error(BRIDGE_UNREACHABLE);
+    }
+  }
+
   async function sendMessage(baseUrl, type, payload) {
     const url = normalizeBridgeUrl(baseUrl);
-    const response = await fetch(`${url}/v1`, {
+    const response = await fetchBridge(`${url}/v1`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(createMessage(type, payload)),
@@ -56,7 +65,7 @@
    */
   async function pingBridge(baseUrl) {
     const url = normalizeBridgeUrl(baseUrl);
-    const response = await fetch(`${url}/v1/ping`);
+    const response = await fetchBridge(`${url}/v1/ping`);
     if (!response.ok) {
       throw new Error(`Bridge HTTP ${response.status}`);
     }
@@ -101,7 +110,15 @@
       await pingBridge(normalized);
       return normalized;
     } catch {
-      return DEFAULT_ELECTRON_BRIDGE;
+      if (normalized !== DEFAULT_ELECTRON_BRIDGE) {
+        try {
+          await pingBridge(DEFAULT_ELECTRON_BRIDGE);
+          return DEFAULT_ELECTRON_BRIDGE;
+        } catch {
+          throw new Error(BRIDGE_UNREACHABLE);
+        }
+      }
+      throw new Error(BRIDGE_UNREACHABLE);
     }
   }
 
@@ -111,6 +128,7 @@
       PROTOCOL_VERSION,
       DEFAULT_ELECTRON_BRIDGE,
       ELECTRON_BRIDGE_PORT,
+      BRIDGE_UNREACHABLE,
       createMessage,
       sendMessage,
       pingBridge,

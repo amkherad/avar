@@ -2,7 +2,7 @@ const EXTENSION_VERSION = "0.1.0";
 const api = typeof browser !== "undefined" ? browser : chrome;
 const { IDS: MENU_IDS } = globalThis.AvarContextMenu;
 
-const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE } =
+const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE } =
   globalThis.AvarExtensionProtocol;
 
 const networkCapture = globalThis.AvarNetworkCapture.createNetworkMediaCapture(api);
@@ -19,12 +19,16 @@ async function getConfig() {
 
 async function resolveBridgeUrl() {
   const { bridgeUrl } = await getConfig();
-  const discovered = await discoverBridgeUrl(bridgeUrl);
-  const normalized = normalizeBridgeUrl(discovered);
-  if (normalized !== bridgeUrl) {
-    await api.storage.local.set({ bridgeUrl: normalized, guiUrl: normalized, daemonUrl: normalized });
+  try {
+    const discovered = await discoverBridgeUrl(bridgeUrl);
+    const normalized = normalizeBridgeUrl(discovered);
+    if (normalized !== bridgeUrl) {
+      await api.storage.local.set({ bridgeUrl: normalized, guiUrl: normalized, daemonUrl: normalized });
+    }
+    return normalized;
+  } catch {
+    return normalizeBridgeUrl(bridgeUrl);
   }
-  return normalized;
 }
 
 async function pingBridgeEndpoint() {
@@ -142,9 +146,12 @@ async function controlQueue(action, queueId) {
   await sendMessage(bridgeUrl, action, { id: queueId });
 }
 
-async function collectFromTab(tabId) {
+async function collectFromTab(tabId, { forContextMenu = false } = {}) {
   try {
-    const response = await api.tabs.sendMessage(tabId, { type: "avar-get-page-media" });
+    const response = await api.tabs.sendMessage(tabId, {
+      type: "avar-get-page-media",
+      forContextMenu,
+    });
     const domItems = response?.items || [];
     const capturedItems = networkCapture.getForTab(tabId);
     const items = AvarMedia.mergeMediaItems(domItems, capturedItems);
@@ -186,7 +193,23 @@ async function refreshContextMenus(hasSelectedLinks) {
   await globalThis.AvarContextMenu.setHasSelectedLinks(api.contextMenus, hasSelectedLinks);
 }
 
+function isBridgeUnreachableError(error) {
+  const message = String(error?.message || error);
+  return message.includes(BRIDGE_UNREACHABLE) || message.includes("Failed to fetch");
+}
+
+async function requireReachableBridge() {
+  const result = await pingBridgeEndpoint();
+  if (!result.ok) {
+    return false;
+  }
+  return true;
+}
+
 async function openBatchAllMedia(tab) {
+  if (!(await requireReachableBridge())) {
+    return;
+  }
   const { items, urls, pageTitle } = await collectFromTab(tab.id);
   const media = items.length > 0 ? items : urls.map((url) => ({ url, kind: "direct" }));
   const listed = media.filter((item) => AvarMedia.shouldListMediaItem(item));
@@ -203,7 +226,10 @@ async function openBatchAllMedia(tab) {
 }
 
 async function openBatchSelectedMedia(tab) {
-  const { selectedItems, pageTitle } = await collectFromTab(tab.id);
+  if (!(await requireReachableBridge())) {
+    return;
+  }
+  const { selectedItems, pageTitle } = await collectFromTab(tab.id, { forContextMenu: true });
   const listed = selectedItems.filter((item) => item?.url);
   if (listed.length === 0) {
     return;
@@ -218,6 +244,9 @@ async function openBatchSelectedMedia(tab) {
 }
 
 async function openLinkDownloadDialog(linkUrl, tab) {
+  if (!(await requireReachableBridge())) {
+    return;
+  }
   const stored = await api.storage.local.get(["defaultQueueId"]);
   const classified = AvarMedia.classifyMediaUrl(linkUrl);
   const item = classified || { url: linkUrl, kind: "direct" };
@@ -243,7 +272,7 @@ if (api.contextMenus.onShown) {
       return;
     }
     try {
-      const { selectedItems } = await collectFromTab(tab.id);
+      const { selectedItems } = await collectFromTab(tab.id, { forContextMenu: true });
       const count = selectedItems.length;
       lastSelectionCount = count;
       await refreshContextMenus(count > 0);
@@ -251,7 +280,7 @@ if (api.contextMenus.onShown) {
         api.contextMenus.refresh();
       }
     } catch {
-      await refreshContextMenus(lastSelectionCount > 0);
+      await refreshContextMenus(false);
     }
   });
 }
@@ -277,7 +306,9 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
       return;
     }
   } catch (error) {
-    console.error("Avar extension:", error);
+    if (!isBridgeUnreachableError(error)) {
+      console.error("Avar extension:", error);
+    }
   }
 });
 

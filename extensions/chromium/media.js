@@ -1015,6 +1015,7 @@ if (typeof globalThis !== "undefined") {
     shouldListMediaItem,
     formatFileSize,
     formatDisplayUrl,
+    rangeContainsNode,
     MEDIA_EXT,
   };
 }
