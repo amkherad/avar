@@ -14,6 +14,12 @@ let selectionWidgetHost = null;
 let selectionChangeTimer = null;
 let widgetDismissed = false;
 let lastWidgetLinkCount = 0;
+/** @type {{ left: number; top: number } | null} */
+let widgetManualPosition = null;
+/** @type {{ startX: number; startY: number; origLeft: number; origTop: number } | null} */
+let widgetDragState = null;
+/** @type {{ x: number; y: number }} */
+let lastPointer = { x: 0, y: 0 };
 /** @type {object[]} */
 let cachedSelectedItems = [];
 let cachedSelectedAt = 0;
@@ -174,6 +180,31 @@ function removeSelectionWidget() {
     selectionWidgetHost.remove();
     selectionWidgetHost = null;
   }
+  widgetDragState = null;
+}
+
+function clampWidgetPosition(left, top, width, height) {
+  const clampedLeft = Math.max(
+    WIDGET_VIEWPORT_PADDING_PX,
+    Math.min(left, window.innerWidth - width - WIDGET_VIEWPORT_PADDING_PX),
+  );
+  const clampedTop = Math.max(
+    WIDGET_VIEWPORT_PADDING_PX,
+    Math.min(top, window.innerHeight - height - WIDGET_VIEWPORT_PADDING_PX),
+  );
+  return { left: clampedLeft, top: clampedTop };
+}
+
+function applyWidgetPosition(host, left, top) {
+  host.style.visibility = "hidden";
+  host.style.display = "block";
+  const widgetRect = host.getBoundingClientRect();
+  host.style.visibility = "";
+
+  const clamped = clampWidgetPosition(left, top, widgetRect.width, widgetRect.height);
+  host.style.left = `${Math.round(clamped.left)}px`;
+  host.style.top = `${Math.round(clamped.top)}px`;
+  return clamped;
 }
 
 function getSelectedAnchorsBoundingRect() {
@@ -244,11 +275,27 @@ function getSelectionAnchorRect() {
   return rect;
 }
 
+function getPointerAnchorRect() {
+  const size = 1;
+  return {
+    top: lastPointer.y,
+    left: lastPointer.x,
+    bottom: lastPointer.y + size,
+    right: lastPointer.x + size,
+    width: size,
+    height: size,
+  };
+}
+
 function positionSelectionWidget(host) {
-  const anchor = getSelectionAnchorRect();
+  if (widgetManualPosition) {
+    applyWidgetPosition(host, widgetManualPosition.left, widgetManualPosition.top);
+    return;
+  }
+
+  const anchor = getSelectionAnchorRect() || getPointerAnchorRect();
   if (!anchor) {
-    host.style.left = `${WIDGET_VIEWPORT_PADDING_PX}px`;
-    host.style.top = `${WIDGET_VIEWPORT_PADDING_PX}px`;
+    applyWidgetPosition(host, WIDGET_VIEWPORT_PADDING_PX, WIDGET_VIEWPORT_PADDING_PX);
     return;
   }
 
@@ -264,17 +311,66 @@ function positionSelectionWidget(host) {
     top = anchor.top - widgetRect.height - WIDGET_MARGIN_PX;
   }
 
-  left = Math.max(
-    WIDGET_VIEWPORT_PADDING_PX,
-    Math.min(left, window.innerWidth - widgetRect.width - WIDGET_VIEWPORT_PADDING_PX),
-  );
-  top = Math.max(
-    WIDGET_VIEWPORT_PADDING_PX,
-    Math.min(top, window.innerHeight - widgetRect.height - WIDGET_VIEWPORT_PADDING_PX),
-  );
+  if (left + widgetRect.width > window.innerWidth - WIDGET_VIEWPORT_PADDING_PX) {
+    left = anchor.right - widgetRect.width;
+  }
 
-  host.style.left = `${Math.round(left)}px`;
-  host.style.top = `${Math.round(top)}px`;
+  const clamped = clampWidgetPosition(left, top, widgetRect.width, widgetRect.height);
+  host.style.left = `${Math.round(clamped.left)}px`;
+  host.style.top = `${Math.round(clamped.top)}px`;
+}
+
+function installWidgetDrag(shadow, host) {
+  const widget = shadow.querySelector(".widget");
+  const dragHandle = shadow.querySelector(".drag-handle");
+  if (!widget || !dragHandle) {
+    return;
+  }
+
+  dragHandle.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const rect = host.getBoundingClientRect();
+    widgetDragState = {
+      startX: event.clientX,
+      startY: event.clientY,
+      origLeft: rect.left,
+      origTop: rect.top,
+    };
+    dragHandle.style.cursor = "grabbing";
+    widget.style.cursor = "grabbing";
+  });
+}
+
+function handleWidgetDragMove(event) {
+  if (!widgetDragState || !selectionWidgetHost) {
+    return;
+  }
+
+  const dx = event.clientX - widgetDragState.startX;
+  const dy = event.clientY - widgetDragState.startY;
+  const clamped = applyWidgetPosition(
+    selectionWidgetHost,
+    widgetDragState.origLeft + dx,
+    widgetDragState.origTop + dy,
+  );
+  widgetManualPosition = clamped;
+}
+
+function handleWidgetDragEnd() {
+  if (!widgetDragState) {
+    return;
+  }
+  widgetDragState = null;
+  const shadow = selectionWidgetHost?.shadowRoot;
+  const widget = shadow?.querySelector(".widget");
+  const dragHandle = shadow?.querySelector(".drag-handle");
+  if (dragHandle) {
+    dragHandle.style.cursor = "grab";
+  }
+  if (widget) {
+    widget.style.cursor = "";
+  }
 }
 
 function ensureSelectionWidget() {
@@ -297,7 +393,7 @@ function ensureSelectionWidget() {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 8px 8px 12px;
+        padding: 8px 8px 8px 4px;
         border-radius: 8px;
         background: #0f172a;
         color: #e2e8f0;
@@ -305,6 +401,24 @@ function ensureSelectionWidget() {
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
         font-size: 13px;
         line-height: 1.2;
+      }
+      .drag-handle {
+        margin: 0;
+        padding: 4px 2px;
+        border: none;
+        border-radius: 4px;
+        background: transparent;
+        color: #64748b;
+        font: inherit;
+        line-height: 1;
+        cursor: grab;
+        user-select: none;
+        touch-action: none;
+        letter-spacing: -0.15em;
+      }
+      .drag-handle:hover {
+        color: #94a3b8;
+        background: #1e293b;
       }
       .count {
         color: #94a3b8;
@@ -348,6 +462,7 @@ function ensureSelectionWidget() {
       }
     </style>
     <div class="widget" role="region" aria-label="Avar download selection">
+      <button type="button" class="drag-handle" id="dragHandle" aria-label="Move" title="Drag to move">⋮⋮</button>
       <span class="count" id="count"></span>
       <button type="button" class="download-btn" id="downloadBtn">Download all</button>
       <button type="button" class="close-btn" id="closeBtn" aria-label="Dismiss">×</button>
@@ -359,8 +474,11 @@ function ensureSelectionWidget() {
   });
   shadow.getElementById("closeBtn").addEventListener("click", () => {
     widgetDismissed = true;
+    widgetManualPosition = null;
     removeSelectionWidget();
   });
+
+  installWidgetDrag(shadow, host);
 
   document.documentElement.appendChild(host);
   selectionWidgetHost = host;
@@ -413,6 +531,7 @@ function updateSelectionWidget() {
   const items = collectSelectedLinks();
   if (items.length !== lastWidgetLinkCount) {
     widgetDismissed = false;
+    widgetManualPosition = null;
     lastWidgetLinkCount = items.length;
   }
 
@@ -482,8 +601,19 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 document.addEventListener("selectionchange", scheduleSelectionWidgetUpdate);
 
+document.addEventListener(
+  "mouseup",
+  (event) => {
+    lastPointer = { x: event.clientX, y: event.clientY };
+    handleWidgetDragEnd();
+  },
+  true,
+);
+
+document.addEventListener("mousemove", handleWidgetDragMove);
+
 function repositionSelectionWidgetIfVisible() {
-  if (!selectionWidgetHost) {
+  if (!selectionWidgetHost || widgetManualPosition) {
     return;
   }
   positionSelectionWidget(selectionWidgetHost);

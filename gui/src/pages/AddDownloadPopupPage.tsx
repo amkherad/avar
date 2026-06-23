@@ -25,6 +25,7 @@ export interface AddDownloadPopupPageProps {
 export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
+  const connection = useConnectionStore((s) => s.connection);
   const queues = useDataStore((s) => s.queues);
   const defaultQueueId = useDataStore(selectEffectiveQueueId);
 
@@ -74,11 +75,11 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
   }, [addId]);
 
   useEffect(() => {
-    if (!client) {
+    if (!client || connection !== "connected") {
       return;
     }
     void useDataStore.getState().refresh();
-  }, [client]);
+  }, [client, connection]);
 
   async function handleSubmit(startNow: boolean) {
     if (!client || !url.trim()) {

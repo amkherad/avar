@@ -406,8 +406,8 @@ setBatchPopupOpener((batchId, title) => {
     title,
     width: 1920,
     height: 960,
-    minWidth: 400,
-    minHeight: 250,
+    minWidth: 600,
+    minHeight: 400,
   });
 });
 

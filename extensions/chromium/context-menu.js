@@ -45,22 +45,17 @@ const AvarContextMenu = {
       id: this.IDS.ROOT,
       title: "Avar integration",
       contexts: pageContexts,
-      visible: false,
     });
     await this.createMenuItem(menusApi, {
       id: this.IDS.DOWNLOAD_SELECTED,
       parentId: this.IDS.ROOT,
       title: "Download selected item(s)",
       contexts: pageContexts,
+      enabled: false,
     });
     await this.createMenuItem(menusApi, {
       id: this.IDS.DOWNLOAD_ALL_SUB,
       parentId: this.IDS.ROOT,
-      title: "Download all media",
-      contexts: pageContexts,
-    });
-    await this.createMenuItem(menusApi, {
-      id: this.IDS.DOWNLOAD_ALL,
       title: "Download all media",
       contexts: pageContexts,
     });
@@ -75,8 +70,7 @@ const AvarContextMenu = {
 
   async setHasSelectedLinks(menusApi, hasSelectedLinks) {
     await this.ensureMenus(menusApi);
-    await menusApi.update(this.IDS.ROOT, { visible: hasSelectedLinks });
-    await menusApi.update(this.IDS.DOWNLOAD_ALL, { visible: !hasSelectedLinks });
+    await menusApi.update(this.IDS.DOWNLOAD_SELECTED, { enabled: hasSelectedLinks });
     if (typeof menusApi.refresh === "function") {
       menusApi.refresh();
     }

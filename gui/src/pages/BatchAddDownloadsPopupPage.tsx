@@ -34,6 +34,7 @@ function truncateUrl(url: string, max = 72): string {
 export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPageProps) {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
+  const connection = useConnectionStore((s) => s.connection);
   const queues = useDataStore((s) => s.queues);
   const defaultQueueId = useDataStore(selectEffectiveQueueId);
 
@@ -78,11 +79,11 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
   }, [batchId]);
 
   useEffect(() => {
-    if (!client) {
+    if (!client || connection !== "connected") {
       return;
     }
     void useDataStore.getState().refresh();
-  }, [client]);
+  }, [client, connection]);
 
   const columns = useMemo<DataTableColumn<BatchAddDownloadItem>[]>(
     () => [
@@ -266,6 +267,7 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
           </div>
           <div className="avar-batch-add-popup__queue">
             <Select
+              compact
               label={t("download.targetQueue")}
               value={effectiveQueueId}
               onChange={(e) => setQueueId(e.target.value)}

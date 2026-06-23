@@ -169,6 +169,7 @@ export function ConsolePanel() {
             <div className="avar-console__severity-inline">
               <span className="avar-console__severity-label">{t("console.guiSeverity")}</span>
               <Select
+                compact
                 className="avar-console__severity-select"
                 value={settings.guiMinLevel}
                 onChange={(e) =>
@@ -193,6 +194,7 @@ export function ConsolePanel() {
             <div className="avar-console__severity-inline">
               <span className="avar-console__severity-label">{t("console.daemonSeverity")}</span>
               <Select
+                compact
                 className="avar-console__severity-select"
                 value={settings.daemonMinLevel}
                 onChange={(e) =>

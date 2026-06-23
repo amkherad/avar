@@ -190,7 +190,11 @@ export function Select({
               aria-selected={isSelected}
               className={`avar-dropdown__option ${isSelected ? "avar-dropdown__option--selected" : ""}`}
               disabled={option.disabled}
-              onClick={() => selectOption(option)}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                selectOption(option);
+              }}
             >
               <span className="avar-dropdown__option-label">{option.label}</span>
               {isSelected ? (
