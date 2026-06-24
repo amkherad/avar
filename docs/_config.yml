@@ -1,5 +1,7 @@
 title: Avar
-lang: [en, fa]
+# BCP 47 tag for the active site language (used by jekyll-rtd-theme i18n includes).
+# Must be a single value, not a list — the theme loads _includes/i18n/<lang>.liquid.
+lang: en
 description: A cross-platform download manager with CLI, daemon, GUI, and browser extensions.
 
 remote_theme: Appdynamics/jekyll-rtd-theme
