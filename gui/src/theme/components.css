@@ -2079,6 +2079,39 @@
   min-width: min(100%, 16rem);
 }
 
+.avar-batch-add-popup__toolbar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0 1rem 0.75rem;
+}
+
+.avar-batch-add-popup__search {
+  flex: 1 1 12rem;
+  min-width: 10rem;
+  margin: 0;
+}
+
+.avar-batch-add-popup__search .avar-input {
+  min-height: 2rem;
+  padding-block: 0.35rem;
+}
+
+.avar-batch-add-popup__toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.avar-batch-add-popup__selection-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--avar-text-muted);
+}
+
 .avar-batch-add-popup__table {
   flex: 1;
   min-height: 0;

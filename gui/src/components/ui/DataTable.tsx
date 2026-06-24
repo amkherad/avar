@@ -72,7 +72,7 @@ export interface DataTableProps<T> {
   selectAllLabel?: string;
   isRowSelectable?: (row: T) => boolean;
   getCheckboxLabel?: (row: T) => string;
-  onToggleSelect?: (id: string) => void;
+  onToggleSelect?: (id: string, event?: MouseEvent) => void;
   onSelectAll?: (checked: boolean) => void;
   sort?: TableSort;
   onSortChange?: (sort: TableSort) => void;
@@ -507,7 +507,10 @@ export function DataTable<T>({
                           aria-label={getCheckboxLabel?.(row) ?? rowId}
                           checked={selected}
                           disabled={!selectable}
-                          onChange={() => onToggleSelect?.(rowId)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onToggleSelect?.(rowId, event.nativeEvent);
+                          }}
                         />
                       </div>
                     ) : null}

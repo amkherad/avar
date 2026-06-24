@@ -14,6 +14,7 @@ let selectionWidgetHost = null;
 let selectionChangeTimer = null;
 let widgetDismissed = false;
 let lastWidgetLinkCount = 0;
+let lastWidgetSelectionKey = "";
 /** @type {{ left: number; top: number } | null} */
 let widgetManualPosition = null;
 /** @type {{ startX: number; startY: number; origLeft: number; origTop: number } | null} */
@@ -335,13 +336,72 @@ function getPointerAnchorRect() {
   };
 }
 
+function getNearestSelectedAnchorRect() {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || typeof AvarMedia === "undefined") {
+    return null;
+  }
+
+  const ranges = AvarMedia.snapshotSelectionRanges(selection);
+  if (ranges.length === 0) {
+    return null;
+  }
+
+  let bestRect = null;
+  let bestDistance = Infinity;
+
+  try {
+    for (const range of ranges) {
+      AvarMedia.forEachAnchorsNearRange(range, (anchor) => {
+        const href = anchor.href;
+        if (!href || href.startsWith("javascript:")) {
+          return;
+        }
+        if (!AvarMedia.rangeContainsNode(range, anchor)) {
+          return;
+        }
+
+        const rect = anchor.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const distance =
+          (centerX - lastPointer.x) * (centerX - lastPointer.x) +
+          (centerY - lastPointer.y) * (centerY - lastPointer.y);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestRect = rect;
+        }
+      });
+    }
+  } catch {
+    return null;
+  }
+
+  if (!bestRect) {
+    return null;
+  }
+
+  return {
+    top: bestRect.top,
+    left: bestRect.left,
+    bottom: bestRect.bottom,
+    right: bestRect.right,
+    width: bestRect.width,
+    height: bestRect.height,
+  };
+}
+
+function getWidgetAnchorRect() {
+  return getNearestSelectedAnchorRect() || getSelectionAnchorRect() || getPointerAnchorRect();
+}
+
 function positionSelectionWidget(host) {
   if (widgetManualPosition) {
     applyWidgetPosition(host, widgetManualPosition.left, widgetManualPosition.top);
     return;
   }
 
-  const anchor = getSelectionAnchorRect() || getPointerAnchorRect();
+  const anchor = getWidgetAnchorRect();
   if (!anchor) {
     applyWidgetPosition(host, WIDGET_VIEWPORT_PADDING_PX, WIDGET_VIEWPORT_PADDING_PX);
     return;
@@ -352,15 +412,14 @@ function positionSelectionWidget(host) {
   const widgetRect = host.getBoundingClientRect();
   host.style.visibility = "";
 
-  let top = anchor.bottom + WIDGET_MARGIN_PX;
   let left = anchor.left;
-
-  if (top + widgetRect.height > window.innerHeight - WIDGET_VIEWPORT_PADDING_PX) {
-    top = anchor.top - widgetRect.height - WIDGET_MARGIN_PX;
+  if (lastPointer.x >= anchor.left && lastPointer.x <= anchor.right) {
+    left = Math.min(lastPointer.x, anchor.right - widgetRect.width);
   }
 
-  if (left + widgetRect.width > window.innerWidth - WIDGET_VIEWPORT_PADDING_PX) {
-    left = anchor.right - widgetRect.width;
+  let top = anchor.bottom + WIDGET_MARGIN_PX;
+  if (top + widgetRect.height > window.innerHeight - WIDGET_VIEWPORT_PADDING_PX) {
+    top = anchor.top - widgetRect.height - WIDGET_MARGIN_PX;
   }
 
   const clamped = clampWidgetPosition(left, top, widgetRect.width, widgetRect.height);
@@ -584,7 +643,13 @@ function updateSelectionWidget() {
     return;
   }
   const items = collectSelectedLinks();
-  if (items.length !== lastWidgetLinkCount) {
+  const selectionKey = items.map((item) => item.url).join("\n");
+  if (selectionKey !== lastWidgetSelectionKey) {
+    widgetDismissed = false;
+    widgetManualPosition = null;
+    lastWidgetLinkCount = items.length;
+    lastWidgetSelectionKey = selectionKey;
+  } else if (items.length !== lastWidgetLinkCount) {
     widgetDismissed = false;
     widgetManualPosition = null;
     lastWidgetLinkCount = items.length;

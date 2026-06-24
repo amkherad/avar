@@ -11,6 +11,8 @@ Click **Add download** in the downloads panel header (or press **Ctrl+N**) to op
 
 Use **Batch add** (beside **Add download** in the downloads panel header) to paste multiple URLs (one per line), review them in the batch dialog, then queue or start them together.
 
+In the batch review window you can filter the list, use **Shift+click** for range selection, **Ctrl+click** (or **Cmd+click** on macOS) to add or remove individual rows, invert the selection, or remove unselected items before queuing.
+
 The dialog closes after either action succeeds.
 
 ## 🔍 Search and filters

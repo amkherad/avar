@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faListCheck, faPlay } from "@fortawesome/free-solid-svg-icons";
@@ -10,11 +10,13 @@ import {
 } from "@/lib/batchAddDownloads";
 import { formatBytes } from "@/lib/formatBytes";
 import { appLogger } from "@/lib/appLogger";
+import { applyTableSelection } from "@/lib/tableSelection";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore, selectEffectiveQueueId, selectSelectedQueue } from "@/stores/dataStore";
 import { createDefaultQueueInfo, isDefaultQueue, withDefaultQueue } from "@/queue/defaultQueue";
 import { Button } from "@/components/ui/Button";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Spinner } from "@/components/ui/Spinner";
 
@@ -31,6 +33,29 @@ function truncateUrl(url: string, max = 72): string {
   return `${url.slice(0, head)}…${url.slice(-tail)}`;
 }
 
+function filterBatchItems(items: BatchAddDownloadItem[], query: string): BatchAddDownloadItem[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return items;
+  }
+  return items.filter((item) => {
+    const haystack = [
+      item.filename,
+      item.linkName,
+      item.url,
+      item.originalUrl,
+      item.referer,
+      item.fileType,
+      item.streamKind,
+      typeof item.fileSize === "number" ? String(item.fileSize) : "",
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(needle);
+  });
+}
+
 export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPageProps) {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
@@ -42,8 +67,19 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
   const [payload, setPayload] = useState<BatchAddDownloadsPayload | null>(null);
   const [items, setItems] = useState<BatchAddDownloadItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [queueId, setQueueId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const selectionAnchorRef = useRef<string | null>(null);
+
+  const filteredItems = useMemo(
+    () => filterBatchItems(items, searchQuery),
+    [items, searchQuery],
+  );
+  const visibleIds = useMemo(
+    () => filteredItems.map((item) => item.id),
+    [filteredItems],
+  );
 
   const displayQueues = withDefaultQueue(
     queues.length > 0 ? queues : (payload?.queues ?? []),
@@ -69,6 +105,8 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
       const nextItems = next?.items ?? [];
       setItems(nextItems);
       setSelectedIds(nextItems.map((item) => item.id));
+      const lastId = nextItems[nextItems.length - 1]?.id ?? null;
+      selectionAnchorRef.current = lastId;
       setQueueId(next?.defaultQueueId ?? null);
       setLoading(false);
     });
@@ -159,14 +197,58 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
     [t],
   );
 
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id],
-    );
+  function applySelection(id: string, event?: MouseEvent) {
+    const additive = Boolean(event?.ctrlKey || event?.metaKey);
+    const range = Boolean(event?.shiftKey);
+    const next = applyTableSelection({
+      id,
+      orderedIds: visibleIds,
+      selectedIds,
+      anchorId: selectionAnchorRef.current,
+      additive,
+      range,
+    });
+    setSelectedIds(next.selectedIds);
+    selectionAnchorRef.current = next.anchorId;
+  }
+
+  function toggleSelect(id: string, event?: MouseEvent) {
+    if (event?.shiftKey || event?.ctrlKey || event?.metaKey) {
+      applySelection(id, event);
+      return;
+    }
+    setSelectedIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id];
+      selectionAnchorRef.current = next.includes(id) ? id : (next[next.length - 1] ?? null);
+      return next;
+    });
   }
 
   function selectAll(checked: boolean) {
-    setSelectedIds(checked ? items.map((item) => item.id) : []);
+    if (!checked) {
+      setSelectedIds([]);
+      selectionAnchorRef.current = null;
+      return;
+    }
+    setSelectedIds(visibleIds);
+    selectionAnchorRef.current = visibleIds[visibleIds.length - 1] ?? null;
+  }
+
+  function deselectAll() {
+    setSelectedIds([]);
+    selectionAnchorRef.current = null;
+  }
+
+  function invertSelection() {
+    const next = visibleIds.filter((id) => !selectedIds.includes(id));
+    setSelectedIds(next);
+    selectionAnchorRef.current = next[next.length - 1] ?? null;
+  }
+
+  function removeUnselected() {
+    const keep = new Set(selectedIds);
+    setItems((prev) => prev.filter((item) => keep.has(item.id)));
+    setSearchQuery("");
   }
 
   async function handleSubmit(startQueueAfter: boolean) {
@@ -281,10 +363,43 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
           </div>
         </header>
 
+        <div className="avar-batch-add-popup__toolbar">
+          <Input
+            className="avar-batch-add-popup__search"
+            type="search"
+            value={searchQuery}
+            placeholder={t("download.batchAdd.searchPlaceholder")}
+            aria-label={t("download.batchAdd.searchLabel")}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <div className="avar-batch-add-popup__toolbar-actions">
+            <Button size="sm" variant="ghost" onClick={deselectAll} disabled={selectedIds.length === 0}>
+              {t("download.batchAdd.deselectAll")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={invertSelection}
+              disabled={filteredItems.length === 0}
+            >
+              {t("download.batchAdd.invertSelection")}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={removeUnselected}
+              disabled={selectedIds.length === 0 || selectedIds.length === items.length}
+            >
+              {t("download.batchAdd.removeUnselected")}
+            </Button>
+          </div>
+          <p className="avar-batch-add-popup__selection-hint">{t("download.batchAdd.selectionHint")}</p>
+        </div>
+
         <div className="avar-batch-add-popup__table">
           <DataTable
             className="avar-batch-add-popup__data-table"
-            rows={items}
+            rows={filteredItems}
             columns={columns}
             getRowId={(row) => row.id}
             selectedIds={selectedIds}
@@ -292,8 +407,10 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
             selectAllLabel={t("download.batchAdd.selectAll")}
             onToggleSelect={toggleSelect}
             onSelectAll={selectAll}
-            onRowClick={(row) => toggleSelect(row.id)}
-            emptyMessage={t("download.batchAdd.empty")}
+            onRowClick={(row, event) => applySelection(row.id, event)}
+            emptyMessage={
+              searchQuery.trim() ? t("download.batchAdd.searchEmpty") : t("download.batchAdd.empty")
+            }
             variant="flex"
             interactive
           />
