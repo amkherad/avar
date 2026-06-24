@@ -1367,6 +1367,42 @@ static void reset_chunk_progress(DownloadState *state) {
     state->done_range_capacity = 0U;
 }
 
+static bool job_has_partial_progress(const DownloadJob *job) {
+    if (job == NULL) {
+        return false;
+    }
+
+    if (job_bytes_done(job) > 0U) {
+        return true;
+    }
+
+    if (job->temp_path != NULL && existing_file_size(job->temp_path) > 0U) {
+        return true;
+    }
+
+    return false;
+}
+
+static void handle_resume_unsupported(DownloadJob *job) {
+    if (job == NULL) {
+        return;
+    }
+
+    close_file(job);
+    job->streaming = false;
+    job->done = true;
+    job->failed = false;
+    job->error[0] = '\0';
+
+    if (job->state != NULL) {
+        free(job->state->description);
+        job->state->description = strdup(AVAR_DL_DESC_RESUME_UNSUPPORTED);
+    }
+
+    (void)dm_item_upsert(job, AVAR_DL_STATUS_STOPPED);
+    LOG_INFO("Download %s paused: server does not support resume", job->item_id);
+}
+
 static void disable_segment_mode(DownloadJob *job) {
     if (job == NULL) {
         return;
@@ -2303,9 +2339,17 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
     if (status == 416) {
         if (job->step == DL_STEP_CHUNK && download_state_all_chunks_done(job->state)) {
             (void)finalize_download(job);
+        } else if (job_has_partial_progress(job)) {
+            handle_resume_unsupported(job);
         } else {
             set_error(job, "Server rejected range request");
         }
+        request_close(job, c, false);
+        return;
+    }
+
+    if (job->step == DL_STEP_STREAM && job->stream_received > 0U && status == 200) {
+        handle_resume_unsupported(job);
         request_close(job, c, false);
         return;
     }
@@ -2807,7 +2851,7 @@ static void job_free(DownloadJob *job) {
 static int run_transient_download_ex(const char *url, const char *queue, const char *name,
                                      const char *proxy_override, const bool start_immediately,
                                      char **id_out, const char *stream_kind, const char *referer,
-                                     const char *preset_item_id) {
+                                     const bool force_new_id, const char *preset_item_id) {
     char *normalized_url = url != NULL ? strdup(url) : NULL;
     if (normalized_url == NULL) {
         LOG_ERROR("Out of memory");
@@ -2841,7 +2885,10 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
         return EXIT_FAILURE;
     }
 
-    char *item_id = find_resumable_item_id(url);
+    char *item_id = NULL;
+    if (!force_new_id) {
+        item_id = find_resumable_item_id(url);
+    }
     if (item_id == NULL) {
         if (preset_item_id != NULL && preset_item_id[0] != '\0') {
             item_id = strdup(preset_item_id);
@@ -3034,20 +3081,20 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
 
 static int run_transient_download(const char *url, const char *queue, const char *name,
                                   const char *proxy_override, const char *preset_item_id) {
-    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL, NULL, NULL,
+    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL, NULL, NULL, false,
                                      preset_item_id);
 }
 
 int download_enqueue_with_proxy(const char *url, const char *queue, const char *name,
                                 const char *proxy_url, char **id_out) {
-    return download_enqueue_ex(url, queue, name, proxy_url, NULL, NULL, id_out);
+    return download_enqueue_ex(url, queue, name, proxy_url, NULL, NULL, false, id_out);
 }
 
 int download_enqueue_ex(const char *url, const char *queue, const char *name,
                         const char *proxy_url, const char *stream_kind, const char *referer,
-                        char **id_out) {
+                        const bool force_new_id, char **id_out) {
     return run_transient_download_ex(url, queue, name, proxy_url, false, id_out, stream_kind,
-                                     referer, NULL);
+                                     referer, force_new_id, NULL);
 }
 
 int transient_download(const char *url, const char *queue, const char *name, const char *proxy_url,
@@ -3788,6 +3835,174 @@ int download_stop(const char *id) {
     }
 
     return update_download_item_status(id, AVAR_DL_STATUS_STOPPED) == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+static char *download_item_state_path(const char *item_id) {
+    if (item_id == NULL) {
+        return NULL;
+    }
+
+    char *temp_dir = default_temp_path();
+    if (temp_dir == NULL) {
+        return NULL;
+    }
+
+    char *job_dir = build_job_dir(temp_dir, item_id);
+    free(temp_dir);
+    if (job_dir == NULL) {
+        return NULL;
+    }
+
+    char *state_path = build_state_path(job_dir);
+    free(job_dir);
+    return state_path;
+}
+
+static int clear_download_item_description(const char *item_id) {
+    if (item_id == NULL) {
+        return -1;
+    }
+
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return -1;
+    }
+
+    char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, (size_t)index);
+    if (json == NULL) {
+        return -1;
+    }
+
+    cJSON *obj = cJSON_Parse(json);
+    free(json);
+    if (obj == NULL) {
+        return -1;
+    }
+
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_DESCRIPTION);
+    cJSON_AddNullToObject(obj, AVAR_FIELD_DESCRIPTION);
+
+    char *updated = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    if (updated == NULL) {
+        return -1;
+    }
+
+    const int rc = replace_config_array_item_at(AVAR_CFG_DM_ITEMS, (size_t)index, updated);
+    cJSON_free(updated);
+    return rc;
+}
+
+static int reset_download_progress_for_restart(const char *item_id) {
+    if (item_id == NULL) {
+        return -1;
+    }
+
+    char *state_path = download_item_state_path(item_id);
+    DownloadState *state = state_path != NULL ? download_state_load(state_path) : NULL;
+    if (state != NULL) {
+        if (state->temp_path != NULL) {
+            (void)remove(state->temp_path);
+        }
+        reset_chunk_progress(state);
+        state->bytes_downloaded = 0U;
+        state->total_size = 0U;
+        free(state->etag);
+        state->etag = NULL;
+        free(state->last_modified);
+        state->last_modified = NULL;
+        free(state->description);
+        state->description = NULL;
+        (void)download_state_save(state, state_path);
+        download_state_free(state);
+    }
+    free(state_path);
+
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return -1;
+    }
+
+    char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, (size_t)index);
+    if (json == NULL) {
+        return -1;
+    }
+
+    cJSON *obj = cJSON_Parse(json);
+    free(json);
+    if (obj == NULL) {
+        return -1;
+    }
+
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_BYTES_DOWNLOADED);
+    cJSON_AddNumberToObject(obj, AVAR_FIELD_BYTES_DOWNLOADED, 0.0);
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_TOTAL_BYTES);
+    cJSON_AddNumberToObject(obj, AVAR_FIELD_TOTAL_BYTES, 0.0);
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_ERROR_COUNT);
+    cJSON_AddNumberToObject(obj, AVAR_FIELD_ERROR_COUNT, 0.0);
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_DESCRIPTION);
+    cJSON_AddNullToObject(obj, AVAR_FIELD_DESCRIPTION);
+
+    char *updated = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    if (updated == NULL) {
+        return -1;
+    }
+
+    const int rc = replace_config_array_item_at(AVAR_CFG_DM_ITEMS, (size_t)index, updated);
+    cJSON_free(updated);
+    return rc;
+}
+
+int download_restart(const char *id) {
+    if (id == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    DownloadJob *job = active_jobs_find(id);
+    if (job != NULL) {
+        job->cancel_requested = true;
+    }
+
+    if (reset_download_progress_for_restart(id) != 0) {
+        return EXIT_FAILURE;
+    }
+
+    return spawn_download_by_id(id, NULL);
+}
+
+int download_dismiss_resume_prompt(const char *id) {
+    if (id == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    const int index = find_download_item_index(id, true);
+    if (index < 0) {
+        return EXIT_FAILURE;
+    }
+
+    char *description =
+            get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_DESCRIPTION);
+    const bool resume_prompt = description != NULL
+                               && strcmp(description, AVAR_DL_DESC_RESUME_UNSUPPORTED) == 0;
+    free(description);
+    if (!resume_prompt) {
+        return EXIT_FAILURE;
+    }
+
+    char *state_path = download_item_state_path(id);
+    if (state_path != NULL) {
+        DownloadState *state = download_state_load(state_path);
+        if (state != NULL) {
+            free(state->description);
+            state->description = NULL;
+            (void)download_state_save(state, state_path);
+            download_state_free(state);
+        }
+        free(state_path);
+    }
+
+    return clear_download_item_description(id) == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 static void purge_download_files(const char *item_id) {

@@ -33,7 +33,13 @@ int download_enqueue_with_proxy(const char *url, const char *queue, const char *
 
 int download_enqueue_ex(const char *url, const char *queue, const char *name,
                         const char *proxy_url, const char *stream_kind, const char *referer,
-                        char **id_out);
+                        bool force_new_id, char **id_out);
+
+/** Clears partial progress and starts the same download item from the beginning. */
+int download_restart(const char *id);
+
+/** Clears the resume-unsupported prompt without changing download progress. */
+int download_dismiss_resume_prompt(const char *id);
 
 size_t download_active_count(void);
 

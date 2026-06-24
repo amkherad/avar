@@ -190,6 +190,9 @@
 #define AVAR_DL_STATUS_PAUSED "paused"
 #define AVAR_DL_STATUS_STOPPED "stopped"
 
+/** Machine-readable description when a partial download cannot be resumed. */
+#define AVAR_DL_DESC_RESUME_UNSUPPORTED "resume_unsupported"
+
 #define AVAR_DL_ADDED_DIRECT "direct"
 
 #define AVAR_PROXY_TYPE_HTTP "http"

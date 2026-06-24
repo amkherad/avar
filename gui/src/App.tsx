@@ -13,6 +13,7 @@ import { useConfigStore } from "@/stores/configStore";
 import { useConsoleStore } from "@/stores/consoleStore";
 import { initSyncCoordinator } from "@/sync/syncManager";
 import { initNotificationWatcher } from "@/lib/notificationWatcher";
+import { initResumeUnsupportedWatcher } from "@/lib/resumeUnsupportedWatcher";
 import { initBrowserExtensionBridge } from "@/lib/browserExtensionBridge";
 import { toggleDetailPanelWithSelection } from "@/lib/detailPanel";
 import { useElectronTrayLabels } from "@/hooks/useElectronTrayLabels";
@@ -57,6 +58,7 @@ function AppContent() {
 
   useEffect(() => initSyncCoordinator(), []);
   useEffect(() => initNotificationWatcher(), []);
+  useEffect(() => initResumeUnsupportedWatcher(), []);
   useEffect(() => initBrowserExtensionBridge(), []);
   useElectronTrayLabels();
   useElectronTrayDownloads();

@@ -155,6 +155,10 @@
     "redownloadConfirmTitle": "دانلود مجدد فایل",
     "redownloadConfirm": "فایل تکمیل‌شده «{{name}}» حذف و دوباره دانلود شود؟",
     "redownloadConfirmBatch": "{{count}} فایل تکمیل‌شده حذف و دوباره دانلود شوند؟",
+    "resumeUnsupportedTitle": "ادامه دانلود پشتیبانی نمی‌شود",
+    "resumeUnsupportedMessage": "سرور «{{name}}» از ادامه دانلود نیمه‌کاره پشتیبانی نمی‌کند. دانلود را از ابتدا دوباره شروع کنید یا یک ورودی دانلود جدید بسازید.",
+    "resumeUnsupportedRestart": "شروع مجدد دانلود",
+    "resumeUnsupportedNew": "دانلود جدید",
     "copyToLocal": "کپی به پوشه محلی",
     "copyToLocalNeedsPath": "پوشه دانلود محلی را در تنظیمات → عمومی مشخص کنید",
     "batchAdd": {

@@ -155,6 +155,10 @@
     "redownloadConfirmTitle": "Redownload file",
     "redownloadConfirm": "Remove the completed file for \"{{name}}\" and download it again?",
     "redownloadConfirmBatch": "Remove {{count}} completed file(s) and download them again?",
+    "resumeUnsupportedTitle": "Resume not supported",
+    "resumeUnsupportedMessage": "The server for \"{{name}}\" does not support resuming a partial download. Restart this download from the beginning, or create a new download entry.",
+    "resumeUnsupportedRestart": "Restart download",
+    "resumeUnsupportedNew": "New download",
     "copyToLocal": "Copy to local folder",
     "copyToLocalNeedsPath": "Set a local download folder in Settings → General",
     "batchAdd": {

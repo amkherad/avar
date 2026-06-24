@@ -28,6 +28,8 @@ static void print_download_command_help(void) {
     puts("  avar dl rm <id|name> [--force] [--purge-files]");
     puts("  avar dl pause <id>");
     puts("  avar dl resume <id>");
+    puts("  avar dl restart <id>");
+    puts("  avar dl dismiss-resume <id>");
     puts("  avar dl start <id>");
     puts("  avar dl stop <id>");
     puts("  avar dl ls [--list]");
@@ -70,6 +72,12 @@ int handle_download(int argc, char *argv[]) {
     }
     if (strcmp(sub, "resume") == 0) {
         return handle_download_control(argc, argv, download_resume);
+    }
+    if (strcmp(sub, "restart") == 0) {
+        return handle_download_control(argc, argv, download_restart);
+    }
+    if (strcmp(sub, "dismiss-resume") == 0) {
+        return handle_download_control(argc, argv, download_dismiss_resume_prompt);
     }
     if (strcmp(sub, "start") == 0) {
         return handle_download_control(argc, argv, download_start);

@@ -488,10 +488,12 @@ static cJSON *handle_download_add(cJSON *params) {
 
     const cJSON *start_now = cJSON_GetObjectItemCaseSensitive(params, "startNow");
     const bool should_start = cJSON_IsTrue(start_now);
+    const cJSON *force_new = cJSON_GetObjectItemCaseSensitive(params, "forceNew");
+    const bool force_new_id = cJSON_IsTrue(force_new);
 
     char *id = NULL;
     int rc = download_enqueue_ex(normalized_url, queue_name, dl_name, proxy_url, stream_kind,
-                                 referer, &id);
+                                 referer, force_new_id, &id);
     if (rc == EXIT_SUCCESS && should_start && id != NULL) {
         rc = download_start(id);
     }

@@ -162,6 +162,10 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_lies_about_ranges()
             return
 
+        if self.path.startswith("/noresume"):
+            self._serve_no_resume()
+            return
+
         if self.path.startswith("/segmented"):
             self._serve_segmented()
             return
@@ -227,6 +231,26 @@ class Handler(BaseHTTPRequestHandler):
         server ignores Range requests instead of replying 206.
         """
         filename = self.path.split("?", 1)[0].lstrip("/") or "liesrange.bin"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Content-Length", str(SEGMENTED_SIZE))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.end_headers()
+        self.wfile.write(SEGMENTED_BODY)
+
+    def _serve_no_resume(self) -> None:
+        """Accepts an initial full download but rejects resume range requests."""
+        filename = self.path.split("?", 1)[0].lstrip("/") or "noresume.bin"
+        range_header = self.headers.get("Range")
+        if range_header is not None:
+            parsed = _parse_range_header(range_header, SEGMENTED_SIZE)
+            if parsed is None or parsed[0] > 0:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{SEGMENTED_SIZE}")
+                self.end_headers()
+                return
+
         self.send_response(200)
         self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Length", str(SEGMENTED_SIZE))

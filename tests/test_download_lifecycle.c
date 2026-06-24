@@ -94,6 +94,30 @@ static char *find_item_status(const char *item_id) {
     return NULL;
 }
 
+static char *find_item_field(const char *item_id, const char *field) {
+    if (item_id == NULL || field == NULL) {
+        return NULL;
+    }
+
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < count; ++i) {
+        char *id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
+        if (id == NULL) {
+            continue;
+        }
+
+        const bool match = strcmp(id, item_id) == 0;
+        free(id);
+        if (!match) {
+            continue;
+        }
+
+        return get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, field);
+    }
+
+    return NULL;
+}
+
 static bool wait_for_item_status(const char *item_id, const char *expected,
                                  const unsigned timeout_ms) {
     const unsigned step_ms = 50U;
@@ -282,6 +306,56 @@ AVAR_TEST(download_lifecycle_resume_interrupted_started_queue) {
     free(queue_id);
 }
 
+AVAR_TEST(download_lifecycle_resume_unsupported_restart) {
+    AVAR_ASSERT(setup_paths());
+    thread_pool_reset_global();
+
+    char url[256];
+    build_url("noresume.bin", url, sizeof url);
+
+    char *item_id = NULL;
+    AVAR_ASSERT_EQ(download_start_background(url, NULL, "noresume-test", &item_id), EXIT_SUCCESS);
+    AVAR_ASSERT_NOT_NULL(item_id);
+
+    bool stopped_mid = false;
+    for (unsigned attempt = 0; attempt < 200U; attempt++) {
+        char *bytes_str = find_item_field(item_id, AVAR_FIELD_BYTES_DOWNLOADED);
+        const uint64_t bytes =
+                bytes_str != NULL ? strtoull(bytes_str, NULL, 10) : 0U;
+        free(bytes_str);
+
+        if (bytes > 0U && download_stop(item_id) == EXIT_SUCCESS) {
+            stopped_mid = true;
+            break;
+        }
+
+#if defined(_WIN32)
+        Sleep(20);
+#else
+        usleep(20000);
+#endif
+    }
+
+    AVAR_ASSERT(stopped_mid);
+    AVAR_ASSERT(download_wait_idle(60000U));
+
+    AVAR_ASSERT_EQ(download_start(item_id), EXIT_SUCCESS);
+    AVAR_ASSERT(wait_for_item_status(item_id, AVAR_DL_STATUS_STOPPED, 60000U));
+
+    char *description = find_item_field(item_id, AVAR_FIELD_DESCRIPTION);
+    AVAR_ASSERT_NOT_NULL(description);
+    AVAR_ASSERT_STR_EQ(description, AVAR_DL_DESC_RESUME_UNSUPPORTED);
+    free(description);
+
+    AVAR_ASSERT_EQ(download_restart(item_id), EXIT_SUCCESS);
+    AVAR_ASSERT(wait_for_item_status(item_id, AVAR_DL_STATUS_COMPLETED, 60000U));
+    AVAR_ASSERT(download_wait_idle(60000U));
+
+    thread_pool_reset_global();
+    AVAR_ASSERT_EQ(download_remove(item_id, true, true, false), EXIT_SUCCESS);
+    free(item_id);
+}
+
 AVAR_TEST(download_lifecycle_invalid_operations) {
     AVAR_ASSERT_EQ(download_pause(NULL), EXIT_FAILURE);
     AVAR_ASSERT_EQ(download_resume("missing"), EXIT_FAILURE);
@@ -295,5 +369,6 @@ AVAR_TEST_MAIN(
         run_download_lifecycle_start_stop_background();
         run_download_lifecycle_resume_interrupted();
         run_download_lifecycle_resume_interrupted_started_queue();
+        run_download_lifecycle_resume_unsupported_restart();
         run_download_lifecycle_invalid_operations();
         test_guard_http_server_stop(&g_http_server);)

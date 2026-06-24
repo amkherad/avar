@@ -24,6 +24,7 @@ export interface AddDownloadParams {
   proxy?: ProxySettings;
   referer?: string;
   streamKind?: string;
+  forceNew?: boolean;
 }
 
 let requestId = 1;
@@ -252,6 +253,7 @@ export class DaemonClient {
             ...(options.proxy ? { proxy: proxySettingsToRpcParams(options.proxy) } : {}),
             ...(options.referer ? { referer: options.referer } : {}),
             ...(options.streamKind ? { streamKind: options.streamKind } : {}),
+            ...(options.forceNew ? { forceNew: true } : {}),
           };
 
     const controller = new AbortController();
@@ -300,6 +302,20 @@ export class DaemonClient {
     const result = await this.cliExec(["avar", "dl", "stop", id]);
     if (result.exitCode !== 0) {
       throw new DaemonApiError("Failed to stop download", result.exitCode);
+    }
+  }
+
+  async restartDownload(id: string): Promise<void> {
+    const result = await this.cliExec(["avar", "dl", "restart", id]);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to restart download", result.exitCode);
+    }
+  }
+
+  async dismissResumePrompt(id: string): Promise<void> {
+    const result = await this.cliExec(["avar", "dl", "dismiss-resume", id]);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to dismiss resume prompt", result.exitCode);
     }
   }
 

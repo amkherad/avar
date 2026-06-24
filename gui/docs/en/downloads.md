@@ -59,6 +59,8 @@ The same actions are available from:
 
 For **completed** downloads you can **Redownload** — the existing file is removed and the download is queued again with the same URL.
 
+If a server does not support resuming a partial download, Avar stops the item and asks whether to **Restart download** (clear progress and reuse the same entry) or **New download** (keep the partial entry and queue a separate fresh download).
+
 When connected to a **remote daemon**, **Copy to local folder** fetches the completed file from the remote server and saves it to the **Local download folder** configured under **Settings → General**. The remote daemon must have **`daemon.server.fileDownload.enabled`** set to `true` in `config.json` (off by default); enable it under **Settings → Daemon** when connected.
 
 ## ⌨️ Keyboard shortcuts
