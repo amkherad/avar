@@ -613,6 +613,26 @@
         margin: 0;
       }
 
+      .settings-range {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+      }
+
+      .settings-range input[type="range"] {
+        flex: 1;
+        margin: 0;
+        padding: 0;
+      }
+
+      .settings-range__value {
+        min-width: 2.75rem;
+        text-align: right;
+        color: #e2e8f0;
+        font-variant-numeric: tabular-nums;
+      }
+
       .resize-handle {
         position: absolute;
         z-index: 20;
@@ -795,6 +815,21 @@
           <label class="settings-checkbox">
             <input id="showSelectionWidget" type="checkbox" checked />
             Show download widget when multiple links are selected
+          </label>
+
+          <label>
+            Selection widget opacity
+            <div class="settings-range">
+              <input
+                id="selectionWidgetOpacity"
+                type="range"
+                min="40"
+                max="100"
+                step="1"
+                value="100"
+              />
+              <span id="selectionWidgetOpacityValue" class="settings-range__value">100%</span>
+            </div>
           </label>
 
           <label class="settings-checkbox">

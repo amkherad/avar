@@ -460,6 +460,12 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (typeof message.showSelectionWidget === "boolean") {
       storageUpdate.showSelectionWidget = message.showSelectionWidget;
     }
+    if (typeof message.selectionWidgetOpacity === "number") {
+      storageUpdate.selectionWidgetOpacity = Math.max(
+        40,
+        Math.min(100, Math.round(message.selectionWidgetOpacity)),
+      );
+    }
     if (typeof message.selectedLinksInSeparateTab === "boolean") {
       storageUpdate.selectedLinksInSeparateTab = message.selectedLinksInSeparateTab;
     }

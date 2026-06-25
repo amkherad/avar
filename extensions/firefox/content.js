@@ -9,6 +9,9 @@ const CONTEXT_MENU_SNAPSHOT_MS = 30_000;
 const hookedMediaItems = new Map();
 
 let showSelectionWidget = true;
+let selectionWidgetOpacity = 100;
+const MIN_SELECTION_WIDGET_OPACITY = 40;
+const MAX_SELECTION_WIDGET_OPACITY = 100;
 /** @type {HTMLElement | null} */
 let selectionWidgetHost = null;
 let selectionChangeTimer = null;
@@ -232,13 +235,33 @@ function clampWidgetPosition(left, top, width, height) {
   return { left: clampedLeft, top: clampedTop };
 }
 
-function applyWidgetPosition(host, left, top) {
-  host.style.visibility = "hidden";
-  host.style.display = "block";
-  const widgetRect = host.getBoundingClientRect();
-  host.style.visibility = "";
+function clampWidgetOpacity(value) {
+  const parsed = Number(value);
+  const opacity = Number.isFinite(parsed) ? parsed : MAX_SELECTION_WIDGET_OPACITY;
+  return Math.max(
+    MIN_SELECTION_WIDGET_OPACITY,
+    Math.min(MAX_SELECTION_WIDGET_OPACITY, Math.round(opacity)),
+  );
+}
 
-  const clamped = clampWidgetPosition(left, top, widgetRect.width, widgetRect.height);
+function getWidgetDimensions(host) {
+  const widget = host.shadowRoot?.querySelector(".widget");
+  if (!widget) {
+    return { width: 0, height: 0 };
+  }
+  return { width: widget.offsetWidth, height: widget.offsetHeight };
+}
+
+function applyWidgetOpacity(shadow) {
+  const widget = shadow?.querySelector(".widget");
+  if (widget) {
+    widget.style.opacity = String(clampWidgetOpacity(selectionWidgetOpacity) / 100);
+  }
+}
+
+function applyWidgetPosition(host, left, top) {
+  const { width, height } = getWidgetDimensions(host);
+  const clamped = clampWidgetPosition(left, top, width, height);
   host.style.left = `${Math.round(clamped.left)}px`;
   host.style.top = `${Math.round(clamped.top)}px`;
   return clamped;
@@ -297,31 +320,61 @@ function getSelectedAnchorsBoundingRect() {
   };
 }
 
+function unionRectBounds(target, rect) {
+  if (!rect || (rect.width === 0 && rect.height === 0)) {
+    return target;
+  }
+  if (!target) {
+    return {
+      top: rect.top,
+      left: rect.left,
+      bottom: rect.bottom,
+      right: rect.right,
+      width: rect.width,
+      height: rect.height,
+    };
+  }
+  const top = Math.min(target.top, rect.top);
+  const left = Math.min(target.left, rect.left);
+  const bottom = Math.max(target.bottom, rect.bottom);
+  const right = Math.max(target.right, rect.right);
+  return {
+    top,
+    left,
+    bottom,
+    right,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
 function getSelectionAnchorRect() {
   const selection = window.getSelection();
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+  if (!selection || selection.rangeCount === 0 || typeof AvarMedia === "undefined") {
     return getSelectedAnchorsBoundingRect();
   }
 
-  let range;
+  if (selection.isCollapsed) {
+    return getSelectedAnchorsBoundingRect();
+  }
+
+  let bounds = null;
   try {
-    range = selection.getRangeAt(0);
+    for (const range of AvarMedia.snapshotSelectionRanges(selection)) {
+      const clientRects = range.getClientRects();
+      if (clientRects.length > 0) {
+        for (let i = 0; i < clientRects.length; i += 1) {
+          bounds = unionRectBounds(bounds, clientRects[i]);
+        }
+      } else {
+        bounds = unionRectBounds(bounds, range.getBoundingClientRect());
+      }
+    }
   } catch {
     return getSelectedAnchorsBoundingRect();
   }
-  let rect = range.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) {
-    const clientRects = range.getClientRects();
-    if (clientRects.length > 0) {
-      rect = clientRects[clientRects.length - 1];
-    }
-  }
 
-  if (rect.width === 0 && rect.height === 0) {
-    return getSelectedAnchorsBoundingRect();
-  }
-
-  return rect;
+  return bounds || getSelectedAnchorsBoundingRect();
 }
 
 function getPointerAnchorRect() {
@@ -392,39 +445,56 @@ function getNearestSelectedAnchorRect() {
 }
 
 function getWidgetAnchorRect() {
-  return getNearestSelectedAnchorRect() || getSelectionAnchorRect() || getPointerAnchorRect();
+  return (
+    getSelectionAnchorRect() ||
+    getSelectedAnchorsBoundingRect() ||
+    getNearestSelectedAnchorRect() ||
+    getPointerAnchorRect()
+  );
 }
 
-function positionSelectionWidget(host) {
+function positionSelectionWidgetNow(host) {
   if (widgetManualPosition) {
     applyWidgetPosition(host, widgetManualPosition.left, widgetManualPosition.top);
     return;
   }
 
   const anchor = getWidgetAnchorRect();
+  const { width: widgetWidth, height: widgetHeight } = getWidgetDimensions(host);
   if (!anchor) {
     applyWidgetPosition(host, WIDGET_VIEWPORT_PADDING_PX, WIDGET_VIEWPORT_PADDING_PX);
     return;
   }
-
-  host.style.visibility = "hidden";
-  host.style.display = "block";
-  const widgetRect = host.getBoundingClientRect();
-  host.style.visibility = "";
+  if (widgetWidth === 0 || widgetHeight === 0) {
+    requestAnimationFrame(() => {
+      if (selectionWidgetHost === host) {
+        positionSelectionWidgetNow(host);
+      }
+    });
+    return;
+  }
 
   let left = anchor.left;
   if (lastPointer.x >= anchor.left && lastPointer.x <= anchor.right) {
-    left = Math.min(lastPointer.x, anchor.right - widgetRect.width);
+    left = Math.min(lastPointer.x, anchor.right - widgetWidth);
   }
 
   let top = anchor.bottom + WIDGET_MARGIN_PX;
-  if (top + widgetRect.height > window.innerHeight - WIDGET_VIEWPORT_PADDING_PX) {
-    top = anchor.top - widgetRect.height - WIDGET_MARGIN_PX;
+  if (top + widgetHeight > window.innerHeight - WIDGET_VIEWPORT_PADDING_PX) {
+    top = anchor.top - widgetHeight - WIDGET_MARGIN_PX;
   }
 
-  const clamped = clampWidgetPosition(left, top, widgetRect.width, widgetRect.height);
+  const clamped = clampWidgetPosition(left, top, widgetWidth, widgetHeight);
   host.style.left = `${Math.round(clamped.left)}px`;
   host.style.top = `${Math.round(clamped.top)}px`;
+}
+
+function positionSelectionWidget(host) {
+  requestAnimationFrame(() => {
+    if (selectionWidgetHost === host) {
+      positionSelectionWidgetNow(host);
+    }
+  });
 }
 
 function installWidgetDrag(shadow, host) {
@@ -487,13 +557,14 @@ function ensureSelectionWidget() {
 
   const host = document.createElement("div");
   host.id = "avar-selection-widget-host";
-  host.style.cssText = "all: initial; position: fixed; z-index: 2147483646; left: 0; top: 0;";
+  host.style.cssText =
+    "position: fixed; z-index: 2147483646; left: 0; top: 0; display: block; margin: 0; padding: 0; border: 0;";
 
   const shadow = host.attachShadow({ mode: "closed" });
   shadow.innerHTML = `
     <style>
       :host {
-        all: initial;
+        display: block;
         font-family: system-ui, sans-serif;
       }
       .widget {
@@ -674,6 +745,7 @@ function updateSelectionWidget() {
     countEl.textContent = `${items.length} link(s) selected`;
   }
 
+  applyWidgetOpacity(shadow);
   positionSelectionWidget(host);
 }
 
@@ -681,8 +753,9 @@ async function loadWidgetSetting() {
   if (!ensureExtensionContext()) {
     return;
   }
-  const stored = await api.storage.local.get(["showSelectionWidget"]);
+  const stored = await api.storage.local.get(["showSelectionWidget", "selectionWidgetOpacity"]);
   showSelectionWidget = stored.showSelectionWidget !== false;
+  selectionWidgetOpacity = clampWidgetOpacity(stored.selectionWidgetOpacity);
   updateSelectionWidget();
 }
 
@@ -734,6 +807,25 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 document.addEventListener("selectionchange", scheduleSelectionWidgetUpdate);
 
 document.addEventListener(
+  "mousedown",
+  (event) => {
+    lastPointer = { x: event.clientX, y: event.clientY };
+  },
+  true,
+);
+
+document.addEventListener(
+  "mousemove",
+  (event) => {
+    if (event.buttons !== 0) {
+      lastPointer = { x: event.clientX, y: event.clientY };
+    }
+    handleWidgetDragMove(event);
+  },
+  true,
+);
+
+document.addEventListener(
   "mouseup",
   (event) => {
     lastPointer = { x: event.clientX, y: event.clientY };
@@ -742,13 +834,11 @@ document.addEventListener(
   true,
 );
 
-document.addEventListener("mousemove", handleWidgetDragMove);
-
 function repositionSelectionWidgetIfVisible() {
   if (!selectionWidgetHost || widgetManualPosition) {
     return;
   }
-  positionSelectionWidget(selectionWidgetHost);
+  positionSelectionWidgetNow(selectionWidgetHost);
 }
 
 window.addEventListener("scroll", repositionSelectionWidgetIfVisible, true);
@@ -758,11 +848,21 @@ api.storage.onChanged.addListener((changes, area) => {
   if (!ensureExtensionContext()) {
     return;
   }
-  if (area !== "local" || !changes.showSelectionWidget) {
+  if (area !== "local") {
     return;
   }
-  showSelectionWidget = changes.showSelectionWidget.newValue !== false;
-  updateSelectionWidget();
+  let shouldUpdate = false;
+  if (changes.showSelectionWidget) {
+    showSelectionWidget = changes.showSelectionWidget.newValue !== false;
+    shouldUpdate = true;
+  }
+  if (changes.selectionWidgetOpacity) {
+    selectionWidgetOpacity = clampWidgetOpacity(changes.selectionWidgetOpacity.newValue);
+    shouldUpdate = true;
+  }
+  if (shouldUpdate) {
+    updateSelectionWidget();
+  }
 });
 
 document.addEventListener(

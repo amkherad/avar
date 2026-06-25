@@ -9,6 +9,24 @@ const POPUP_HEIGHT_MIN = 400;
 const POPUP_HEIGHT_MAX = 600;
 
 const SELECTION_REFRESH_MS = 400;
+const MIN_SELECTION_WIDGET_OPACITY = 40;
+const MAX_SELECTION_WIDGET_OPACITY = 100;
+
+function clampSelectionWidgetOpacity(value) {
+  const parsed = Number(value);
+  const opacity = Number.isFinite(parsed) ? parsed : MAX_SELECTION_WIDGET_OPACITY;
+  return Math.max(
+    MIN_SELECTION_WIDGET_OPACITY,
+    Math.min(MAX_SELECTION_WIDGET_OPACITY, Math.round(opacity)),
+  );
+}
+
+function updateSelectionWidgetOpacityLabel() {
+  if (!selectionWidgetOpacityInput || !selectionWidgetOpacityValue) {
+    return;
+  }
+  selectionWidgetOpacityValue.textContent = `${selectionWidgetOpacityInput.value}%`;
+}
 
 let verticalResizeEnabled = false;
 let selectionRefreshTimer = null;
@@ -32,6 +50,8 @@ const refreshBtn = document.getElementById("refreshBtn");
 const defaultQueueSelect = document.getElementById("defaultQueue");
 const defaultMediaFilterSelect = document.getElementById("defaultMediaFilter");
 const showSelectionWidgetInput = document.getElementById("showSelectionWidget");
+const selectionWidgetOpacityInput = document.getElementById("selectionWidgetOpacity");
+const selectionWidgetOpacityValue = document.getElementById("selectionWidgetOpacityValue");
 const selectedLinksInSeparateTabInput = document.getElementById("selectedLinksInSeparateTab");
 const mediaTypeFilterSelect = document.getElementById("mediaTypeFilter");
 const mediaSortSelect = document.getElementById("mediaSort");
@@ -852,6 +872,7 @@ async function loadConfig() {
     "popupWidth",
     "popupHeight",
     "showSelectionWidget",
+    "selectionWidgetOpacity",
     "selectedLinksInSeparateTab",
     "activeListTab",
   ]);
@@ -865,6 +886,10 @@ async function loadConfig() {
   mediaTypeFilterSelect.value = defaultFilter;
   mediaSortSelect.value = stored.mediaSort || DEFAULT_MEDIA_SORT;
   showSelectionWidgetInput.checked = stored.showSelectionWidget !== false;
+  selectionWidgetOpacityInput.value = String(
+    clampSelectionWidgetOpacity(stored.selectionWidgetOpacity ?? MAX_SELECTION_WIDGET_OPACITY),
+  );
+  updateSelectionWidgetOpacityLabel();
   selectedLinksInSeparateTab = stored.selectedLinksInSeparateTab === true;
   selectedLinksInSeparateTabInput.checked = selectedLinksInSeparateTab;
   activeListTab = stored.activeListTab === "selected" ? "selected" : "media";
@@ -1012,6 +1037,8 @@ viewTabMedia.addEventListener("click", () => {
   setActiveListTab("media", { userInitiated: true });
 });
 
+selectionWidgetOpacityInput.addEventListener("input", updateSelectionWidgetOpacityLabel);
+
 document.getElementById("save").addEventListener("click", async () => {
   const bridgeUrl = AvarExtensionProtocol.normalizeBridgeUrl(
     bridgeUrlInput.value.trim() || DEFAULT_BRIDGE,
@@ -1025,6 +1052,7 @@ document.getElementById("save").addEventListener("click", async () => {
     defaultQueueId: defaultQueueSelect.value,
     defaultMediaFilter,
     showSelectionWidget: showSelectionWidgetInput.checked,
+    selectionWidgetOpacity: clampSelectionWidgetOpacity(selectionWidgetOpacityInput.value),
     selectedLinksInSeparateTab: nextSelectedLinksInSeparateTab,
   });
   selectedLinksInSeparateTab = nextSelectedLinksInSeparateTab;

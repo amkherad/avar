@@ -61,6 +61,7 @@ jobs:
         working-directory: gui
         run: |
           npm ci
+          npm test
           npm run build
 
       - name: Build avar-gui (embedded frontend)

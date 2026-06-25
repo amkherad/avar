@@ -16,6 +16,8 @@
     "dev:tiny": "concurrently -k \"vite\" \"node scripts/wait-dev-server.cjs node tiny/main.cjs\"",
     "prebuild": "python ../scripts/generate_version.py --root .. --out-env .avar-build.env",
     "build": "vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "preview": "vite preview",
     "build:desktop": "npm run build && electron-builder --mac --win --linux",
@@ -39,6 +41,8 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@types/react-i18next": "^7.8.3",
@@ -50,6 +54,8 @@
     "node-gyp": "^10.3.1",
     "typescript": "^5.8.3",
     "vite": "^6.3.4",
+    "vitest": "^3.2.4",
+    "jsdom": "^26.1.0",
     "wait-on": "^8.0.3"
   },
   "build": {
