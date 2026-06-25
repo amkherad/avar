@@ -47,7 +47,10 @@ Use **Reset all** to restore defaults.
 
 ### 📥 Downloads
 
-Configure default download paths, segmentation, progress display, and **proxy** settings:
+Configure default download paths, segmentation, progress display, and **proxy** settings. Parallel segments are **enabled by default** (up to four concurrent segments per download). New queues default to four parallel downloads unless you set a per-queue limit.
+
+- **Enable parallel segments** — Split large files into concurrent range requests (on by default).
+- **Max concurrent segments** — Parallel segments per download item (default: 4).
 
 - **Use proxy** — Enable a global HTTP, HTTPS, or SOCKS5 proxy for downloads that do not specify their own proxy.
 - **Host / Port / Username / Password** — Proxy server credentials. Stored in `config.json` under `dm.proxy.*`.

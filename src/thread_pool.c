@@ -1,5 +1,7 @@
 #include <thread_pool.h>
 
+#include <avar.h>
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -250,7 +252,7 @@ bool thread_pool_submit(ThreadPool *pool, ThreadPoolTask task, void *arg) {
 
 ThreadPool *thread_pool_global(void) {
     if (g_global_pool == NULL) {
-        g_global_pool = thread_pool_create(4U);
+        g_global_pool = thread_pool_create(DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS);
     }
     return g_global_pool;
 }

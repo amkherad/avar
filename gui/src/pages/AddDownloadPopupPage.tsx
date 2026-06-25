@@ -125,7 +125,7 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
     );
   }
 
-  if (!prefill) {
+  if (!prefill && addId.startsWith("add-")) {
     return (
       <div className="avar-popup-page avar-add-download-popup">
         <p className="avar-empty">{t("download.addPrefillNotFound")}</p>
@@ -133,15 +133,17 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
     );
   }
 
+  const pageTitle = prefill?.pageTitle;
+
   return (
     <div className="avar-popup-page avar-add-download-popup">
       <div className="avar-add-download-popup__card">
         <header className="avar-add-download-popup__header">
           <div className="avar-add-download-popup__heading">
             <h1>{t("download.add")}</h1>
-            {prefill.pageTitle ? (
-              <p className="avar-add-download-popup__subtitle" title={prefill.pageTitle}>
-                {prefill.pageTitle}
+            {pageTitle ? (
+              <p className="avar-add-download-popup__subtitle" title={pageTitle}>
+                {pageTitle}
               </p>
             ) : null}
           </div>

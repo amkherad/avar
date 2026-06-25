@@ -1247,7 +1247,7 @@
 }
 
 .avar-download-detail .avar-progress {
-  height: 30px;
+  min-height: 30px;
   margin-top: 0.5rem;
   border-radius: 4px;
 }

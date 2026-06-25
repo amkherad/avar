@@ -11,7 +11,7 @@ import { useConnectionStore } from "@/stores/connectionStore";
 import { appLogger } from "@/lib/appLogger";
 
 const CONFIG_DEFAULTS = {
-  "dm.segmentation.enabled": "false",
+  "dm.segmentation.enabled": "true",
   "dm.segmentation.strategy": "balanced",
   "dm.segmentation.concurrency": "4",
   "dm.segmentation.chunkSize": "262144",

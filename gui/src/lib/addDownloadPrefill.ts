@@ -11,13 +11,9 @@ export interface AddDownloadPrefill {
   pageTitle?: string;
 }
 
-export function normalizeAddDownloadPrefill(payload: AddDownloadPrefill): AddDownloadPrefill | null {
-  const url = payload.url?.trim() ?? "";
-  if (!url) {
-    return null;
-  }
+export function normalizeAddDownloadPrefill(payload: AddDownloadPrefill): AddDownloadPrefill {
   return {
-    url,
+    url: payload.url?.trim() ?? "",
     filename: payload.filename?.trim() || undefined,
     referer: payload.referer?.trim() || undefined,
     streamKind: payload.streamKind?.trim() || undefined,
@@ -28,9 +24,6 @@ export function normalizeAddDownloadPrefill(payload: AddDownloadPrefill): AddDow
 
 export function stashAddDownloadPrefill(id: string, payload: AddDownloadPrefill): void {
   const normalized = normalizeAddDownloadPrefill(payload);
-  if (!normalized) {
-    return;
-  }
   const key = `${ADD_DOWNLOAD_STORAGE_PREFIX}${id}`;
   const raw = JSON.stringify(normalized);
   sessionStorage.setItem(key, raw);

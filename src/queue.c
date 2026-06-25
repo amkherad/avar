@@ -67,11 +67,12 @@ static char *queue_build_json(const char *id, const char *name, const QueueOptio
         cJSON_AddNullToObject(obj, AVAR_FIELD_DESCRIPTION);
     }
 
-    if (options != NULL && options->max_concurrent_downloads > 0) {
-        cJSON_AddNumberToObject(obj, AVAR_QUEUE_FIELD_MAX_CONCURRENT,
-                                (double)options->max_concurrent_downloads);
-    } else {
-        cJSON_AddNullToObject(obj, AVAR_QUEUE_FIELD_MAX_CONCURRENT);
+    {
+        uint32_t max_concurrent = DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+        if (options != NULL && options->max_concurrent_downloads > 0) {
+            max_concurrent = options->max_concurrent_downloads;
+        }
+        cJSON_AddNumberToObject(obj, AVAR_QUEUE_FIELD_MAX_CONCURRENT, (double)max_concurrent);
     }
 
     if (options != NULL && options->max_connections > 0) {

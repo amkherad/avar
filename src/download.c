@@ -30,10 +30,8 @@
 #if defined(_WIN32)
     #include <direct.h>
     #include <io.h>
-    #include <process.h>
     #include <windows.h>
 #else
-    #include <pthread.h>
     #include <unistd.h>
 #endif
 
@@ -316,6 +314,59 @@ bool download_wait_idle(const unsigned timeout_ms) {
     return download_active_count() == 0U;
 }
 
+static int find_download_item_index(const char *target, bool by_id);
+
+static int spawn_download_by_id(const char *item_id, const char *proxy_override);
+
+static int download_status_exit_code(const char *status) {
+    if (status == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    if (strcmp(status, AVAR_DL_STATUS_COMPLETED) == 0) {
+        return EXIT_SUCCESS;
+    }
+
+    if (strcmp(status, AVAR_DL_STATUS_STOPPED) == 0 || strcmp(status, AVAR_DL_STATUS_PAUSED) == 0) {
+        return EXIT_SUCCESS;
+    }
+
+    return EXIT_FAILURE;
+}
+
+static int wait_for_download_item(const char *item_id) {
+    if (item_id == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    const unsigned step_ms = DL_POLL_MS;
+    for (;;) {
+        const int index = find_download_item_index(item_id, true);
+        if (index < 0) {
+            return EXIT_FAILURE;
+        }
+
+        char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_STATUS);
+        if (status == NULL) {
+            return EXIT_FAILURE;
+        }
+
+        if (strcmp(status, AVAR_DL_STATUS_DOWNLOADING) != 0) {
+            const int rc = download_status_exit_code(status);
+            free(status);
+            return rc;
+        }
+
+        free(status);
+        platform_sleep_ms(step_ms);
+    }
+}
+
+static bool download_pool_submit(ThreadPoolTask task, void *arg) {
+    ThreadPool *pool = thread_pool_global();
+    return pool != NULL && thread_pool_submit(pool, task, arg);
+}
+
 typedef enum {
     DL_STEP_CHUNK,
     DL_STEP_STREAM,
@@ -432,8 +483,6 @@ static char *build_state_path(const char *job_dir);
 static char *format_datetime_iso(void);
 
 static char *find_resumable_item_id(const char *url);
-
-static int find_download_item_index(const char *target, bool by_id);
 
 static char *download_generate_id(void);
 
@@ -2850,7 +2899,8 @@ static void job_free(DownloadJob *job) {
 
 static int run_transient_download_ex(const char *url, const char *queue, const char *name,
                                      const char *proxy_override, const bool start_immediately,
-                                     char **id_out, const char *stream_kind, const char *referer,
+                                     const bool blocking_wait, char **id_out,
+                                     const char *stream_kind, const char *referer,
                                      const bool force_new_id, const char *preset_item_id) {
     char *normalized_url = url != NULL ? strdup(url) : NULL;
     if (normalized_url == NULL) {
@@ -3060,9 +3110,26 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
     if (start_immediately) {
         LOG_INFO("Downloading %s <- %s", dest_path, url);
         (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
-        rc = run_download(job);
-        if (rc != EXIT_SUCCESS && !job->failed) {
-            (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+        if (blocking_wait) {
+            char *spawn_id = strdup(item_id);
+            job_free(job);
+            job = NULL;
+            if (spawn_id == NULL) {
+                return EXIT_FAILURE;
+            }
+            if (spawn_download_by_id(spawn_id, proxy_override) != EXIT_SUCCESS) {
+                free(spawn_id);
+                return EXIT_FAILURE;
+            }
+            rc = wait_for_download_item(spawn_id);
+            free(spawn_id);
+        } else {
+            rc = run_download(job);
+            if (rc != EXIT_SUCCESS && !job->failed) {
+                (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+            }
+            job_free(job);
+            job = NULL;
         }
     } else {
         LOG_INFO("Queued %s <- %s", dest_path, url);
@@ -3075,14 +3142,16 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
         }
     }
 
-    job_free(job);
+    if (job != NULL) {
+        job_free(job);
+    }
     return rc;
 }
 
 static int run_transient_download(const char *url, const char *queue, const char *name,
                                   const char *proxy_override, const char *preset_item_id) {
-    return run_transient_download_ex(url, queue, name, proxy_override, true, NULL, NULL, NULL, false,
-                                     preset_item_id);
+    return run_transient_download_ex(url, queue, name, proxy_override, true, false, NULL, NULL, NULL,
+                                     false, preset_item_id);
 }
 
 int download_enqueue_with_proxy(const char *url, const char *queue, const char *name,
@@ -3093,7 +3162,7 @@ int download_enqueue_with_proxy(const char *url, const char *queue, const char *
 int download_enqueue_ex(const char *url, const char *queue, const char *name,
                         const char *proxy_url, const char *stream_kind, const char *referer,
                         const bool force_new_id, char **id_out) {
-    return run_transient_download_ex(url, queue, name, proxy_url, false, id_out, stream_kind,
+    return run_transient_download_ex(url, queue, name, proxy_url, false, false, id_out, stream_kind,
                                      referer, force_new_id, NULL);
 }
 
@@ -3103,38 +3172,21 @@ int transient_download(const char *url, const char *queue, const char *name, con
         LOG_ERROR("Only --attached downloads are supported in local CLI mode");
         return EXIT_FAILURE;
     }
-    return run_transient_download(url, queue, name, proxy_url, NULL);
-}
-
-#if defined(_WIN32)
-static unsigned __stdcall background_download_thread(void *arg) {
-#else
-static void *background_download_thread(void *arg) {
-#endif
-    BackgroundDownloadArgs *args = (BackgroundDownloadArgs *)arg;
-    if (args == NULL) {
-#if defined(_WIN32)
-        return 0;
-#else
-        return NULL;
-#endif
-    }
-
-    atomic_fetch_add(&g_active_downloads, 1U);
-    (void)run_transient_download(args->url, args->queue, args->name, args->proxy, args->item_id);
-    atomic_fetch_sub(&g_active_downloads, 1U);
-
-    background_args_free(args);
-
-#if defined(_WIN32)
-    return 0;
-#else
-    return NULL;
-#endif
+    return run_transient_download_ex(url, queue, name, proxy_url, true, true, NULL, NULL, NULL, false,
+                                     NULL);
 }
 
 static void background_download_task(void *arg) {
-    (void)background_download_thread(arg);
+    BackgroundDownloadArgs *args = (BackgroundDownloadArgs *)arg;
+    if (args == NULL) {
+        return;
+    }
+
+    atomic_fetch_add(&g_active_downloads, 1U);
+    (void)run_transient_download_ex(args->url, args->queue, args->name, args->proxy, true, false,
+                                    NULL, NULL, NULL, false, args->item_id);
+    atomic_fetch_sub(&g_active_downloads, 1U);
+    background_args_free(args);
 }
 
 int download_start_background(const char *url, const char *queue, const char *name, char **id_out) {
@@ -3183,26 +3235,10 @@ int download_start_background_with_proxy(const char *url, const char *queue, con
         }
     }
 
-    ThreadPool *pool = thread_pool_global();
-    if (pool != NULL && thread_pool_submit(pool, background_download_task, args)) {
-        return EXIT_SUCCESS;
-    }
-
-#if defined(_WIN32)
-    const uintptr_t handle = _beginthreadex(NULL, 0, background_download_thread, args, 0, NULL);
-    if (handle == 0U) {
+    if (!download_pool_submit(background_download_task, args)) {
         background_args_free(args);
         return EXIT_FAILURE;
     }
-    CloseHandle((HANDLE)handle);
-#else
-    pthread_t thread;
-    if (pthread_create(&thread, NULL, background_download_thread, args) != 0) {
-        background_args_free(args);
-        return EXIT_FAILURE;
-    }
-    pthread_detach(thread);
-#endif
 
     return EXIT_SUCCESS;
 }
@@ -3632,31 +3668,7 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
     return rc;
 }
 
-#if defined(_WIN32)
-static unsigned __stdcall start_by_id_thread(void *arg) {
-#else
-static void *start_by_id_thread(void *arg) {
-#endif
-    BackgroundDownloadArgs *args = (BackgroundDownloadArgs *)arg;
-    if (args == NULL || args->item_id == NULL) {
-#if defined(_WIN32)
-        return 0;
-#else
-        return NULL;
-#endif
-    }
-
-    atomic_fetch_add(&g_active_downloads, 1U);
-    (void)run_download_for_item_id(args->item_id, args->proxy);
-    atomic_fetch_sub(&g_active_downloads, 1U);
-    background_args_free(args);
-
-#if defined(_WIN32)
-    return 0;
-#else
-    return NULL;
-#endif
-}
+static void background_download_task_by_id(void *arg);
 
 static int spawn_download_by_id(const char *item_id, const char *proxy_override) {
     BackgroundDownloadArgs *args = calloc(1, sizeof(*args));
@@ -3671,32 +3683,25 @@ static int spawn_download_by_id(const char *item_id, const char *proxy_override)
         return EXIT_FAILURE;
     }
 
-    ThreadPool *pool = thread_pool_global();
-    if (pool != NULL && thread_pool_submit(pool, background_download_task_by_id, args)) {
-        return EXIT_SUCCESS;
-    }
-
-#if defined(_WIN32)
-    const uintptr_t handle = _beginthreadex(NULL, 0, start_by_id_thread, args, 0, NULL);
-    if (handle == 0U) {
+    if (!download_pool_submit(background_download_task_by_id, args)) {
         background_args_free(args);
         return EXIT_FAILURE;
     }
-    CloseHandle((HANDLE)handle);
-#else
-    pthread_t thread;
-    if (pthread_create(&thread, NULL, start_by_id_thread, args) != 0) {
-        background_args_free(args);
-        return EXIT_FAILURE;
-    }
-    pthread_detach(thread);
-#endif
 
     return EXIT_SUCCESS;
 }
 
 static void background_download_task_by_id(void *arg) {
-    (void)start_by_id_thread(arg);
+    BackgroundDownloadArgs *args = (BackgroundDownloadArgs *)arg;
+    if (args == NULL || args->item_id == NULL) {
+        background_args_free(args);
+        return;
+    }
+
+    atomic_fetch_add(&g_active_downloads, 1U);
+    (void)run_download_for_item_id(args->item_id, args->proxy);
+    atomic_fetch_sub(&g_active_downloads, 1U);
+    background_args_free(args);
 }
 
 static bool download_should_resume_on_startup(const char *status, const char *queue_id) {
