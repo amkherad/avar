@@ -63,6 +63,8 @@ If a server does not support resuming a partial download, Avar stops the item an
 
 When connected to a **remote daemon**, **Copy to local folder** fetches the completed file from the remote server and saves it to the **Local download folder** configured under **Settings → General**. The remote daemon must have **`daemon.server.fileDownload.enabled`** set to `true` in `config.json` (off by default); enable it under **Settings → Daemon** when connected.
 
+For **completed** downloads, the detail panel and popup include a **Tools** section with **checksum validation**. Choose an algorithm, optionally paste an expected hash, and click **Compute checksum**. The daemon reads the file from disk and returns the digest; when an expected value is provided, the UI shows whether it matches.
+
 ## ⌨️ Keyboard shortcuts
 
 | Action | Default |

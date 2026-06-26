@@ -157,6 +157,10 @@ avar_add_test(test_daemon_rpc TIMEOUT ${AVAR_TEST_TIMEOUT_UNIT} test_daemon_rpc.
         ${AVAR_TEST_GUARD_SOURCES})
 avar_link_cli_test(test_daemon_rpc)
 
+avar_add_test(test_file_checksum TIMEOUT ${AVAR_TEST_TIMEOUT_UNIT} test_file_checksum.c
+        ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_file_checksum)
+
 avar_add_test(test_stream_hls_integration TIMEOUT ${AVAR_TEST_TIMEOUT_INTEGRATION}
         test_stream_hls_integration.c ${AVAR_TEST_GUARD_SOURCES})
 avar_link_core_test(test_stream_hls_integration)

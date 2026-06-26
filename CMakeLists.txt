@@ -20,6 +20,7 @@ set(AVAR_CORE_SOURCES
         "${SRC_DIR}/utils.c"
         "${SRC_DIR}/instance.c"
         "${SRC_DIR}/file-system.c"
+        "${SRC_DIR}/file_checksum.c"
         "${SRC_DIR}/config.c"
         "${SRC_DIR}/queue.c"
         "${SRC_DIR}/http.c"

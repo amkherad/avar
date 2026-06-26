@@ -1,5 +1,6 @@
 import { proxySettingsToRpcParams, type ProxySettings } from "@/lib/proxySettings";
 import { parseDownloadItem, parseQueueRecord, parseSnapshotPayload } from "./snapshot";
+import type { DownloadChecksumResult } from "./checksumTypes";
 import type {
   CliExecResult,
   DirectoryBrowseResult,
@@ -317,6 +318,23 @@ export class DaemonClient {
     if (result.exitCode !== 0) {
       throw new DaemonApiError("Failed to dismiss resume prompt", result.exitCode);
     }
+  }
+
+  async computeDownloadChecksum(
+    id: string,
+    algorithm: string,
+    expected?: string,
+    signal?: AbortSignal,
+  ): Promise<DownloadChecksumResult> {
+    return this.rpc<DownloadChecksumResult>(
+      "download.checksum",
+      {
+        id,
+        algorithm,
+        ...(expected ? { expected } : {}),
+      },
+      signal,
+    );
   }
 
   async removeDownload(id: string, purgeFiles = false): Promise<void> {

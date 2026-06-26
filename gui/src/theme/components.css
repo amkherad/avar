@@ -1306,6 +1306,49 @@
   gap: 0.5rem;
 }
 
+.avar-download-detail__tools {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--avar-border);
+}
+
+.avar-download-detail__tools-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.avar-download-checksum__hint {
+  margin: 0 0 0.65rem;
+  font-size: 0.75rem;
+  color: var(--avar-text-muted);
+}
+
+.avar-download-checksum .avar-field + .avar-field {
+  margin-top: 0.65rem;
+}
+
+.avar-download-checksum__result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+}
+
+.avar-download-checksum__hash-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.avar-download-checksum__hash {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.72rem;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
 .avar-console {
   flex-shrink: 0;
   border-top: 1px solid var(--avar-border);

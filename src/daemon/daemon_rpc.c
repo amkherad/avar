@@ -7,6 +7,7 @@
 #include <daemon/daemon_session.h>
 #include <daemon/daemon_transport.h>
 #include <download.h>
+#include <file_checksum.h>
 #include <file-system.h>
 #include <http_proxy.h>
 #include <queue.h>
@@ -46,6 +47,9 @@ static DaemonLogRing _log_ring = {0};
 static char _auth_token[128] = {0};
 static time_t _daemon_started_at = 0;
 static time_t _frontend_last_activity = 0;
+static time_t _stream_last_tick = 0;
+static time_t _stream_last_full_send = 0;
+static uint64_t _stream_cached_fingerprint = 0U;
 #if defined(_WIN32)
 static CRITICAL_SECTION _rpc_lock;
 static bool _rpc_lock_ready = false;
@@ -870,6 +874,56 @@ static cJSON *handle_download_unwatch(cJSON *params) {
     return result;
 }
 
+static cJSON *handle_download_checksum(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    const cJSON *algorithm = cJSON_GetObjectItemCaseSensitive(params, "algorithm");
+    const cJSON *expected = cJSON_GetObjectItemCaseSensitive(params, "expected");
+    if (!cJSON_IsString(id) || id->valuestring == NULL || id->valuestring[0] == '\0' ||
+        !cJSON_IsString(algorithm) || algorithm->valuestring == NULL ||
+        algorithm->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    if (!file_checksum_algorithm_supported(algorithm->valuestring)) {
+        cJSON *result = cJSON_CreateObject();
+        if (result != NULL) {
+            cJSON_AddNumberToObject(result, "exitCode", EXIT_FAILURE);
+        }
+        return result;
+    }
+
+    char *path = NULL;
+    if (download_resolve_dest_path(id->valuestring, &path) != EXIT_SUCCESS || path == NULL) {
+        cJSON *result = cJSON_CreateObject();
+        if (result != NULL) {
+            cJSON_AddNumberToObject(result, "exitCode", EXIT_FAILURE);
+        }
+        return result;
+    }
+
+    char *checksum = NULL;
+    const int rc = file_checksum_file(path, algorithm->valuestring, &checksum);
+    free(path);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        free(checksum);
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", rc);
+    if (rc == EXIT_SUCCESS && checksum != NULL) {
+        cJSON_AddStringToObject(result, "checksum", checksum);
+        if (cJSON_IsString(expected) && expected->valuestring != NULL &&
+            expected->valuestring[0] != '\0') {
+            cJSON_AddBoolToObject(result, "match",
+                                  file_checksum_matches(checksum, expected->valuestring));
+        }
+    }
+    free(checksum);
+    return result;
+}
+
 static cJSON *handle_queue_start(cJSON *params) {
     const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
     const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
@@ -946,9 +1000,8 @@ typedef struct StreamClient {
 #define AVAR_FNV1A_PRIME 1099511628211ULL
 
 static StreamClient *_stream_clients = NULL;
-static time_t _stream_last_tick = 0;
-static time_t _stream_last_full_send = 0;
-static uint64_t _stream_cached_fingerprint = 0U;
+
+static void stream_client_unregister(struct mg_connection *connection);
 
 static uint64_t fnv1a_update(uint64_t hash, const unsigned char *data, const size_t len) {
     for (size_t i = 0; i < len; ++i) {
@@ -1306,6 +1359,9 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     }
     if (strcmp(method, "download.unwatch") == 0) {
         return handle_download_unwatch(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "download.checksum") == 0) {
+        return handle_download_checksum(params != NULL ? params : cJSON_CreateObject());
     }
     if (strcmp(method, "fs.browse") == 0) {
         if (!daemon_server_fs_browse_enabled()) {

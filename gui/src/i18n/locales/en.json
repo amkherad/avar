@@ -161,6 +161,33 @@
     "resumeUnsupportedNew": "New download",
     "copyToLocal": "Copy to local folder",
     "copyToLocalNeedsPath": "Set a local download folder in Settings → General",
+    "tools": {
+      "title": "Tools"
+    },
+    "checksum": {
+      "hint": "Compute a checksum for the downloaded file on the daemon and compare it with a published value.",
+      "algorithm": "Algorithm",
+      "expected": "Expected checksum (optional)",
+      "expectedHint": "Paste the reference hash from a release page or checksum file.",
+      "expectedPlaceholder": "e.g. d41d8cd98f00b204e9800998ecf8427e",
+      "compute": "Compute checksum",
+      "computed": "Computed checksum",
+      "copy": "Copy checksum",
+      "match": "Checksum matches",
+      "mismatch": "Checksum does not match",
+      "error": "Could not compute checksum for this file.",
+      "disconnected": "Connect to the daemon to validate checksums.",
+      "algorithms": {
+        "crc32": "CRC-32",
+        "md5": "MD5",
+        "sha1": "SHA-1",
+        "sha224": "SHA-224",
+        "sha256": "SHA-256",
+        "sha384": "SHA-384",
+        "sha512": "SHA-512",
+        "ripemd160": "RIPEMD-160"
+      }
+    },
     "batchAdd": {
       "title": "Add downloads",
       "button": "Batch add",

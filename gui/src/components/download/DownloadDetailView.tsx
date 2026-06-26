@@ -13,6 +13,7 @@ import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useDownloadProgressWatch } from "@/hooks/useDownloadProgressWatch";
 import { formatBytePair, progressPercent } from "./format";
 import { DownloadProgressBar } from "./DownloadProgressBar";
+import { DownloadChecksumTools } from "./DownloadChecksumTools";
 
 export interface DownloadDetailViewProps {
   download: DownloadInfo;
@@ -171,6 +172,8 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
           </Button>
         ) : null}
       </div>
+
+      <DownloadChecksumTools downloadId={download.id} status={download.status} />
     </div>
   );
 }
