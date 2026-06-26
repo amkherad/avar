@@ -137,9 +137,11 @@ function normalizeAddDownloadPayload(payload, pageUrl) {
   const referer =
     typeof payload.referer === "string" && payload.referer.trim()
       ? payload.referer.trim()
-      : typeof pageUrl === "string" && pageUrl.trim()
-        ? pageUrl.trim()
-        : undefined;
+      : typeof payload.pageUrl === "string" && payload.pageUrl.trim()
+        ? payload.pageUrl.trim()
+        : typeof pageUrl === "string" && pageUrl.trim()
+          ? pageUrl.trim()
+          : undefined;
 
   return {
     url,
@@ -314,6 +316,8 @@ async function handleDownloadAdd(payload) {
   }
   if (typeof payload.referer === "string" && payload.referer) {
     params.referer = payload.referer;
+  } else if (typeof payload.pageUrl === "string" && payload.pageUrl) {
+    params.referer = payload.pageUrl;
   }
   if (typeof payload.queue === "string" && payload.queue) {
     params.queue = payload.queue;
@@ -664,6 +668,7 @@ async function handleProtocolMessage(message, origin, res) {
         defaultQueueId:
           typeof payload.defaultQueueId === "string" ? payload.defaultQueueId : null,
         pageTitle: typeof payload.pageTitle === "string" ? payload.pageTitle : undefined,
+        pageUrl: typeof pageUrl === "string" ? pageUrl.trim() : undefined,
       };
       const batchId = stashBatchPayload(batchPayload);
       const title =

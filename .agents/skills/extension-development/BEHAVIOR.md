@@ -179,7 +179,7 @@ When `grabAllDownloads !== false`:
 2. Skip non-http(s)/ftp, blob, extension schemes
 3. Dedupe: same URL within 2000 ms
 4. If `blockBrowserDownloads !== false`: `downloads.cancel`
-5. If bridge reachable: `openSingleAdd` with url, streamKind, filename, referer
+5. If bridge reachable: `openSingleAdd` with url, streamKind, filename, referer (page URL stored as `referer` in download state)
 
 Duplicate within 2 s: still cancel if blocking, but do not re-forward.
 

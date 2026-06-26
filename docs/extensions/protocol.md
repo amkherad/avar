@@ -95,7 +95,7 @@ Error response:
 {
   "url": "https://example.com/file.mp4",
   "streamKind": "direct",
-  "referer": "https://example.com/",
+  "referer": "https://example.com/page",
   "queue": "queue-id",
   "startNow": true
 }

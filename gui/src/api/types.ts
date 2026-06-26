@@ -57,6 +57,8 @@ export interface DownloadInfo {
 
   url?: string;
 
+  referer?: string;
+
   status: DownloadStatus;
 
   queueId?: string;

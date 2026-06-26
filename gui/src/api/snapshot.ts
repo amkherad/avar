@@ -30,6 +30,11 @@ function parseDownloadItem(item: unknown): DownloadInfo {
         ? undefined
         : Boolean(record.filenameInferred),
     url: record.url ? String(record.url) : undefined,
+    referer: record.referer
+      ? String(record.referer)
+      : record.originalPage
+        ? String(record.originalPage)
+        : undefined,
     status,
     queueId: record.queueId ? String(record.queueId) : undefined,
     bytesDownloaded: toNumber(record.bytesDownloaded),

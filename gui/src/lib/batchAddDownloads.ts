@@ -19,6 +19,7 @@ export interface BatchAddDownloadsPayload {
   items: BatchAddDownloadItem[];
   defaultQueueId?: string | null;
   pageTitle?: string;
+  pageUrl?: string;
   /** Snapshot from the opener so popup windows can show queues before sync completes. */
   queues?: QueueInfo[];
 }

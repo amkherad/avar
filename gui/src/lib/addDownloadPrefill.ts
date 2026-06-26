@@ -12,10 +12,14 @@ export interface AddDownloadPrefill {
 }
 
 export function normalizeAddDownloadPrefill(payload: AddDownloadPrefill): AddDownloadPrefill {
+  const referer =
+    payload.referer?.trim() ||
+    (payload as { originalPage?: string }).originalPage?.trim() ||
+    undefined;
   return {
     url: payload.url?.trim() ?? "",
     filename: payload.filename?.trim() || undefined,
-    referer: payload.referer?.trim() || undefined,
+    referer,
     streamKind: payload.streamKind?.trim() || undefined,
     defaultQueueId: payload.defaultQueueId ?? null,
     pageTitle: payload.pageTitle?.trim() || undefined,

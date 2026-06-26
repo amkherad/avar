@@ -84,7 +84,7 @@ async function addDownload(payload) {
       : {
           url: payload.url,
           streamKind: payload.streamKind,
-          referer: payload.referer,
+          referer: payload.referer || payload.pageUrl,
           queue: payload.queue,
           startNow: payload.autoStart !== false,
         };

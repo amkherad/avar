@@ -97,6 +97,16 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
           </div>
         ) : null}
 
+        {download.referer ? (
+          <div className="avar-download-detail__field">
+            <dt>{t("download.referer")}</dt>
+            <dd className="avar-download-detail__value-row">
+              <span className="avar-download-detail__url">{download.referer}</span>
+              <CopyButton text={download.referer} label={t("download.copyReferer")} />
+            </dd>
+          </div>
+        ) : null}
+
         <div className="avar-download-detail__field">
           <dt>{t("download.id")}</dt>
           <dd className="avar-download-detail__value-row">
