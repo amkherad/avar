@@ -34,6 +34,9 @@ let batchPopupOpener = null;
 /** @type {((addId: string, title: string) => void) | null} */
 let addDownloadPopupOpener = null;
 
+/** @type {(() => void) | null} */
+let appFocusHandler = null;
+
 let bridgeConfig = {
   daemonUrl: process.env.AVAR_DAEMON_URL || "http://127.0.0.1:8000",
   authToken: undefined,
@@ -56,6 +59,21 @@ function setBatchPopupOpener(opener) {
 
 function setAddDownloadPopupOpener(opener) {
   addDownloadPopupOpener = typeof opener === "function" ? opener : null;
+}
+
+function setAppFocusHandler(handler) {
+  appFocusHandler = typeof handler === "function" ? handler : null;
+}
+
+function focusAvarApp() {
+  if (!appFocusHandler) {
+    return;
+  }
+  try {
+    appFocusHandler();
+  } catch {
+    // Ignore focus failures.
+  }
 }
 
 function pruneBatchStash() {
@@ -573,6 +591,7 @@ async function handleProtocolMessage(message, origin, res) {
         sendJson(res, 400, createErrorResponse("download.add", id, "Missing url"), origin);
         return;
       }
+      focusAvarApp();
       await handleDownloadAdd(payload);
       sendJson(res, 200, createResponse("download.add", id, {}), origin);
     } catch (error) {
@@ -605,6 +624,7 @@ async function handleProtocolMessage(message, origin, res) {
           ? payload.title.trim()
           : "Add download";
 
+      focusAvarApp();
       if (addDownloadPopupOpener) {
         addDownloadPopupOpener(addId, title);
       }
@@ -651,6 +671,7 @@ async function handleProtocolMessage(message, origin, res) {
           ? payload.title.trim()
           : "Add downloads";
 
+      focusAvarApp();
       if (batchPopupOpener) {
         batchPopupOpener(batchId, title);
       }
@@ -894,6 +915,7 @@ async function handleExtensionBridgeRequest(req, res) {
         sendJson(res, 400, { ok: false, error: "Missing url" }, origin);
         return true;
       }
+      focusAvarApp();
       await handleDownloadAdd({ url: body.url });
       sendJson(res, 200, { ok: true }, origin);
     } catch (error) {
@@ -929,6 +951,7 @@ module.exports = {
   setExtensionBridgeConfig,
   setBatchPopupOpener,
   setAddDownloadPopupOpener,
+  setAppFocusHandler,
   getExtensionBridgeState,
   createExtensionBridgeServer,
   DEFAULT_EXTENSION_GUI_URL: EXTENSION_GUI_URL,

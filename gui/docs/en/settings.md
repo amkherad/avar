@@ -26,18 +26,21 @@ Use the inner sidebar to switch between setting groups.
 Install the Avar browser extension to queue media from web pages through the Avar bridge:
 
 1. Enable **Listen for browser extension connections** (disable to reject extension requests).
-2. Check the status indicator: green when an installed extension can reach the bridge, red when it cannot.
-3. Click your browser icon (Chrome, Firefox, Edge, or Opera) to download the extension package.
-4. Extract the ZIP and load it as an unpacked extension (Developer mode).
-5. The extension auto-detects the Electron bridge (`http://127.0.0.1:18766`). Paste the **bridge URL** from settings if auto-detection fails.
+2. Use **Suspend extension integration** for a temporary pause without changing the listen preference (for example if the extension misbehaves). Resume when ready.
+3. Check the status indicator: green when an installed extension can reach the bridge, red when it cannot.
+4. Click your browser icon (Chrome, Firefox, Edge, or Opera) to download the extension package.
+5. Extract the ZIP and load it as an unpacked extension (Developer mode).
+6. The extension auto-detects the Electron bridge (`http://127.0.0.1:18766`). Paste the **bridge URL** from settings if auto-detection fails.
 
 The extension popup shows a green/red dot for bridge connectivity. Use **Download selected**, **Download all**, or the per-item download button to open the **Add downloads** batch dialog in Avar (a separate window in Electron). Review each file, choose a target queue, then **Queue download** or **Queue and start**.
+
+In the extension **Settings** view, enable **Grab all browser downloads** to send every native browser download to Avar. Pair it with **Prevent the browser from saving files** to cancel the browser download and queue the file in Avar instead.
 
 ### 🖥️ Desktop tray (Electron)
 
 When running the Electron app, Avar stays available in the system tray (Windows, macOS, KDE, GNOME, and other Linux desktops with tray support). Left-click the tray icon to show the main window; right-click for **Show Avar**, up to three active downloads with progress (oldest first), bulk download actions (**Start All**, **Pause All**, **Resume All**, **Stop All**), and **Exit Avar**. The tray tooltip also summarizes active downloads. Closing the main window hides it to the tray instead of quitting.
 
-Use the **puzzle-piece icon** in the header (next to the theme toggle) to open the extension integration panel: connection status, listen toggle, bridge URL, protocol version, and extension update availability.
+Use the **puzzle-piece icon** in the header (next to the theme toggle) to open the extension integration panel: connection status, listen toggle, temporary suspend/resume, bridge URL, protocol version, and extension update availability.
 
 ### ⌨️ Shortcuts
 

@@ -1,4 +1,4 @@
-import { parseSnapshotPayload, parseStreamStatsPayload } from "@/api/snapshot";
+import { parseSnapshotPayload, parseStreamStatsPayload, isUnchangedStreamPayload } from "@/api/snapshot";
 import type { SnapshotPayload, SystemStatsInfo } from "@/api/types";
 import type { DaemonClient } from "@/api/daemon";
 import { isPushSyncChannel, resolveSyncChannel } from "@/lib/syncChannel";
@@ -37,23 +37,41 @@ function applyStreamPayload(payload: SnapshotPayload, stats?: SystemStatsInfo): 
   useConnectionStore.getState().noteStreamActivity(stats ?? payload.stats);
 }
 
+function handleStreamMessage(raw: unknown): void {
+  if (isUnchangedStreamPayload(raw)) {
+    appLogger.gui.debug("Stream unchanged");
+    useConnectionStore.getState().noteStreamActivity();
+    return;
+  }
+
+  const stats = parseStreamStatsPayload(raw);
+  if (stats) {
+    appLogger.gui.debug("WebSocket stats received");
+    useConnectionStore.getState().noteStreamActivity(stats);
+    return;
+  }
+
+  const parsed = parseSnapshotPayload(raw);
+  if (parsed?.type === "snapshot") {
+    applyStreamPayload(parsed);
+  }
+}
+
 function startSseSync(client: DaemonClient): SyncStopFn {
   const url = client.getEventsUrl();
   appLogger.gui.info("SSE sync connecting", url);
   const source = new EventSource(url, { withCredentials: false });
 
-  source.addEventListener("snapshot", (event) => {
+  const onStreamData = (event: MessageEvent<string>) => {
     try {
-      const parsed = parseSnapshotPayload(
-        JSON.parse((event as MessageEvent<string>).data),
-      );
-      if (parsed) {
-        applyStreamPayload(parsed);
-      }
+      handleStreamMessage(JSON.parse(event.data));
     } catch {
-      appLogger.gui.warn("Malformed SSE snapshot event");
+      appLogger.gui.warn("Malformed SSE stream event");
     }
-  });
+  };
+
+  source.addEventListener("snapshot", onStreamData);
+  source.addEventListener("unchanged", onStreamData);
 
   source.onopen = () => {
     appLogger.gui.info("SSE connection opened");
@@ -88,18 +106,7 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
 
     ws.onmessage = (event) => {
       try {
-        const raw = JSON.parse(String(event.data));
-        const stats = parseStreamStatsPayload(raw);
-        if (stats) {
-          appLogger.gui.debug("WebSocket stats received");
-          useConnectionStore.getState().noteStreamActivity(stats);
-          return;
-        }
-
-        const parsed = parseSnapshotPayload(raw);
-        if (parsed?.type === "snapshot") {
-          applyStreamPayload(parsed);
-        }
+        handleStreamMessage(JSON.parse(String(event.data)));
       } catch {
         appLogger.gui.debug("Ignored WebSocket message");
       }

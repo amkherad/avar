@@ -26,6 +26,8 @@ import {
 
   getExtensionGuiUrl,
 
+  setExtensionBridgeSuspended,
+
   useExtensionBridgeStatus,
 
 } from "@/lib/browserExtensionBridge";
@@ -128,15 +130,19 @@ export function BrowserIntegrationSettings() {
 
     ? t("settings.browser.extensionDisabled")
 
-    : bridgeStatus.loading
+    : bridgeStatus.suspended
 
-      ? t("settings.browser.extensionChecking")
+      ? t("settings.browser.extensionSuspended")
 
-      : bridgeStatus.connected
+      : bridgeStatus.loading
 
-        ? t("settings.browser.extensionConnected")
+        ? t("settings.browser.extensionChecking")
 
-        : t("settings.browser.extensionDisconnected");
+        : bridgeStatus.connected
+
+          ? t("settings.browser.extensionConnected")
+
+          : t("settings.browser.extensionDisconnected");
 
 
 
@@ -170,13 +176,71 @@ export function BrowserIntegrationSettings() {
 
 
 
+        {config.browserExtensionEnabled ? (
+
+          <div className="avar-settings-browser__suspend">
+
+            {bridgeStatus.suspended ? (
+
+              <Button
+
+                size="sm"
+
+                variant="primary"
+
+                type="button"
+
+                onClick={() => setExtensionBridgeSuspended(false)}
+
+              >
+
+                {t("settings.browser.resumeExtension")}
+
+              </Button>
+
+            ) : (
+
+              <Button
+
+                size="sm"
+
+                variant="secondary"
+
+                type="button"
+
+                onClick={() => setExtensionBridgeSuspended(true)}
+
+              >
+
+                {t("settings.browser.suspendExtension")}
+
+              </Button>
+
+            )}
+
+            <p className="avar-settings-hint">
+
+              {bridgeStatus.suspended
+
+                ? t("settings.browser.suspendedHint")
+
+                : t("settings.browser.suspendHint")}
+
+            </p>
+
+          </div>
+
+        ) : null}
+
+
+
         <div className="avar-settings-browser__status">
 
           <span
 
             className={`avar-connection__dot ${
 
-              !config.browserExtensionEnabled
+              !config.browserExtensionEnabled || bridgeStatus.suspended
 
                 ? ""
 

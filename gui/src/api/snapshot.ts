@@ -87,6 +87,13 @@ function parseSystemStats(value: unknown): SystemStatsInfo | undefined {
   };
 }
 
+export function isUnchangedStreamPayload(raw: unknown): boolean {
+  if (!raw || typeof raw !== "object") {
+    return false;
+  }
+  return (raw as Record<string, unknown>).type === "unchanged";
+}
+
 export function parseSnapshotPayload(raw: unknown): SnapshotPayload | null {
   if (!raw || typeof raw !== "object") {
     return null;

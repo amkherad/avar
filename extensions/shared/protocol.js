@@ -13,6 +13,7 @@
 
   const DEFAULT_ELECTRON_BRIDGE = "http://127.0.0.1:18766";
   const ELECTRON_BRIDGE_PORT = 18766;
+  const AVAR_FOCUS_URL = "avar://focus";
   const LOCAL_BRIDGE_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
   const BRIDGE_UNREACHABLE = "Cannot reach Avar bridge";
 
@@ -122,18 +123,84 @@
     }
   }
 
+  /**
+   * Open avar://focus to launch or bring the desktop app to the foreground.
+   * @param {{ tabs?: { create: Function, remove?: Function } }} api
+   */
+  function wakeAvarApp(api) {
+    if (!api?.tabs?.create) {
+      return Promise.resolve(false);
+    }
+
+    const created = api.tabs.create({ url: AVAR_FOCUS_URL, active: false });
+    const onTab = (tab) => {
+      const tabId = tab?.id;
+      if (tabId != null && api.tabs?.remove) {
+        const removed = api.tabs.remove(tabId);
+        if (removed?.catch) {
+          removed.catch(() => {});
+        }
+      }
+      return true;
+    };
+
+    if (created && typeof created.then === "function") {
+      return created.then(onTab).catch(() => false);
+    }
+
+    return new Promise((resolve) => {
+      api.tabs.create({ url: AVAR_FOCUS_URL, active: false }, (tab) => {
+        resolve(onTab(tab));
+      });
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  /**
+   * Wake Avar when needed and wait for the extension bridge to respond.
+   * @param {{ tabs?: { create: Function, remove?: Function } }} api
+   * @param {() => Promise<{ ok: boolean }>} pingFn
+   * @param {{ maxAttempts?: number }} [options]
+   */
+  async function ensureBridgeReachable(api, pingFn, options = {}) {
+    const maxAttempts = options.maxAttempts ?? 10;
+    const first = await pingFn();
+    if (first?.ok) {
+      void wakeAvarApp(api);
+      return first;
+    }
+
+    void wakeAvarApp(api);
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await sleep(250 + attempt * 150);
+      const result = await pingFn();
+      if (result?.ok) {
+        return result;
+      }
+    }
+    return pingFn();
+  }
+
   if (typeof globalThis !== "undefined") {
     globalThis.AvarExtensionProtocol = {
       PROTOCOL,
       PROTOCOL_VERSION,
       DEFAULT_ELECTRON_BRIDGE,
       ELECTRON_BRIDGE_PORT,
+      AVAR_FOCUS_URL,
       BRIDGE_UNREACHABLE,
       createMessage,
       sendMessage,
       pingBridge,
       normalizeBridgeUrl,
       discoverBridgeUrl,
+      wakeAvarApp,
+      ensureBridgeReachable,
     };
   }
 })();

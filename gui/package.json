@@ -82,6 +82,12 @@
         "portable"
       ]
     },
+    "protocols": [
+      {
+        "name": "Avar",
+        "schemes": ["avar"]
+      }
+    ],
     "linux": {
       "maintainer": "Ali Kherad <alimousavikherad@gmail.com>",
       "target": [

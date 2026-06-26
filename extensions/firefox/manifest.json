@@ -13,12 +13,14 @@
     "storage",
     "contextMenus",
     "webRequest",
+    "downloads",
+    "tabs",
     "<all_urls>",
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
   "background": {
-    "scripts": ["media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js", "background.js"]
+    "scripts": ["media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js", "download-intercept.js", "background.js"]
   },
   "browser_action": {
     "default_title": "Avar",

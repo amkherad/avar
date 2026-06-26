@@ -1,8 +1,8 @@
-importScripts("media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js");
+importScripts("media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js", "download-intercept.js");
 
 const EXTENSION_VERSION = "0.1.0";
 const { IDS: MENU_IDS } = globalThis.AvarContextMenu;
-const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE } =
+const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE, ensureBridgeReachable } =
   globalThis.AvarExtensionProtocol;
 
 const networkCapture = globalThis.AvarNetworkCapture.createNetworkMediaCapture(chrome);
@@ -42,6 +42,7 @@ async function pingBridgeEndpoint() {
 }
 
 async function addDownload(payload) {
+  await ensureBridgeReachable(chrome, pingBridgeEndpoint);
   const bridgeUrl = await resolveBridgeUrl();
   const body =
     typeof payload === "string"
@@ -57,6 +58,7 @@ async function addDownload(payload) {
 }
 
 async function openBatchAdd(payload) {
+  await ensureBridgeReachable(chrome, pingBridgeEndpoint);
   const bridgeUrl = await resolveBridgeUrl();
   return sendMessage(bridgeUrl, "download.batch.open", {
     items: payload.items,
@@ -68,6 +70,7 @@ async function openBatchAdd(payload) {
 }
 
 async function openSingleAdd(payload) {
+  await ensureBridgeReachable(chrome, pingBridgeEndpoint);
   const bridgeUrl = await resolveBridgeUrl();
   return sendMessage(bridgeUrl, "download.add.open", {
     url: payload.url,
@@ -198,11 +201,8 @@ function isBridgeUnreachableError(error) {
 }
 
 async function requireReachableBridge() {
-  const result = await pingBridgeEndpoint();
-  if (!result.ok) {
-    return false;
-  }
-  return true;
+  const result = await ensureBridgeReachable(chrome, pingBridgeEndpoint);
+  return Boolean(result?.ok);
 }
 
 async function openBatchAllMedia(tab) {
@@ -468,6 +468,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (typeof message.selectedLinksInSeparateTab === "boolean") {
       storageUpdate.selectedLinksInSeparateTab = message.selectedLinksInSeparateTab;
     }
+    if (typeof message.grabAllDownloads === "boolean") {
+      storageUpdate.grabAllDownloads = message.grabAllDownloads;
+    }
+    if (typeof message.blockBrowserDownloads === "boolean") {
+      storageUpdate.blockBrowserDownloads = message.blockBrowserDownloads;
+    }
     chrome.storage.local
       .set(storageUpdate)
       .then(() => sendResponse({ ok: true }))
@@ -487,3 +493,9 @@ void resolveBridgeUrl().then(async (bridgeUrl) => {
 });
 
 void globalThis.AvarContextMenu.ensureMenus(chrome.contextMenus);
+
+globalThis.AvarDownloadIntercept.createDownloadIntercept(chrome, {
+  addDownload,
+  openSingleAdd,
+  requireReachableBridge,
+}).installListeners();

@@ -4,6 +4,8 @@ const MIN_SELECTED_LINKS_FOR_WIDGET = 1;
 const SELECTION_WIDGET_DEBOUNCE_MS = 100;
 const SELECTED_LINKS_CACHE_MS = 60_000;
 const CONTEXT_MENU_SNAPSHOT_MS = 30_000;
+const AVAR_NOT_FOUND_TITLE = "Avar was not found.";
+const BRIDGE_STATUS_REFRESH_MS = 5000;
 
 /** @type {Map<string, object>} */
 const hookedMediaItems = new Map();
@@ -30,6 +32,8 @@ let cachedSelectedAt = 0;
 /** @type {object[]} */
 let contextMenuSnapshot = [];
 let contextMenuSnapshotAt = 0;
+
+let bridgeConnected = false;
 
 let contentScriptRetired = false;
 
@@ -614,12 +618,15 @@ function ensureSelectionWidget() {
         cursor: pointer;
         white-space: nowrap;
       }
-      .download-btn:hover {
+      .download-btn:hover:not(:disabled) {
         background: #7dd3fc;
       }
       .download-btn:disabled {
-        opacity: 0.6;
-        cursor: default;
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .download-btn-wrap[title] {
+        cursor: not-allowed;
       }
       .close-btn {
         margin: 0;
@@ -642,7 +649,9 @@ function ensureSelectionWidget() {
     <div class="widget" role="region" aria-label="Avar download selection">
       <button type="button" class="drag-handle" id="dragHandle" aria-label="Move" title="Drag to move">⋮⋮</button>
       <span class="count" id="count"></span>
-      <button type="button" class="download-btn" id="downloadBtn">Download all</button>
+      <span class="download-btn-wrap" id="downloadBtnWrap">
+        <button type="button" class="download-btn" id="downloadBtn">Download all</button>
+      </span>
       <button type="button" class="close-btn" id="closeBtn" aria-label="Dismiss">×</button>
     </div>
   `;
@@ -676,8 +685,37 @@ function buildContentDownloadItem(item) {
   };
 }
 
+async function refreshBridgeStatus() {
+  if (!ensureExtensionContext()) {
+    return false;
+  }
+  const response = await sendRuntimeMessage({ type: "avar-ping-bridge" });
+  bridgeConnected = Boolean(response?.ok);
+  return bridgeConnected;
+}
+
+function applyWidgetDownloadState(shadow) {
+  if (!shadow) {
+    return;
+  }
+  const btn = shadow.getElementById("downloadBtn");
+  const wrap = shadow.getElementById("downloadBtnWrap");
+  if (!btn) {
+    return;
+  }
+  btn.disabled = !bridgeConnected;
+  const title = bridgeConnected ? "Open downloads in Avar" : AVAR_NOT_FOUND_TITLE;
+  btn.title = title;
+  if (wrap) {
+    wrap.title = bridgeConnected ? "" : AVAR_NOT_FOUND_TITLE;
+  }
+}
+
 async function downloadSelectedLinks(shadow) {
   if (!ensureExtensionContext()) {
+    return;
+  }
+  if (!bridgeConnected) {
     return;
   }
   const items = collectSelectedLinks();
@@ -746,6 +784,7 @@ function updateSelectionWidget() {
   }
 
   applyWidgetOpacity(shadow);
+  applyWidgetDownloadState(shadow);
   positionSelectionWidget(host);
 }
 
@@ -756,6 +795,7 @@ async function loadWidgetSetting() {
   const stored = await api.storage.local.get(["showSelectionWidget", "selectionWidgetOpacity"]);
   showSelectionWidget = stored.showSelectionWidget !== false;
   selectionWidgetOpacity = clampWidgetOpacity(stored.selectionWidgetOpacity);
+  await refreshBridgeStatus();
   updateSelectionWidget();
 }
 
@@ -887,3 +927,14 @@ void (async () => {
   const count = collectSelectedLinks().length;
   void sendRuntimeMessage({ type: "avar-selection-changed", count });
 })();
+
+setInterval(() => {
+  void refreshBridgeStatus().then(() => {
+    if (!ensureExtensionContext()) {
+      return;
+    }
+    if (selectionWidgetHost?.shadowRoot) {
+      applyWidgetDownloadState(selectionWidgetHost.shadowRoot);
+    }
+  });
+}, BRIDGE_STATUS_REFRESH_MS);

@@ -117,6 +117,9 @@ void daemon_rpc_init(void) {
 #endif
     _daemon_started_at = time(NULL);
     _frontend_last_activity = 0;
+    _stream_last_tick = 0;
+    _stream_last_full_send = 0;
+    _stream_cached_fingerprint = 0U;
     memset(&_log_ring, 0, sizeof _log_ring);
 }
 
@@ -937,8 +940,110 @@ typedef struct StreamClient {
     struct StreamClient *next;
 } StreamClient;
 
+#define AVAR_STREAM_FULL_RESYNC_SEC 60
+#define AVAR_STREAM_UNCHANGED_JSON "{\"type\":\"unchanged\"}"
+#define AVAR_FNV1A_OFFSET 14695981039346656037ULL
+#define AVAR_FNV1A_PRIME 1099511628211ULL
+
 static StreamClient *_stream_clients = NULL;
 static time_t _stream_last_tick = 0;
+static time_t _stream_last_full_send = 0;
+static uint64_t _stream_cached_fingerprint = 0U;
+
+static uint64_t fnv1a_update(uint64_t hash, const unsigned char *data, const size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        hash ^= (uint64_t)data[i];
+        hash *= AVAR_FNV1A_PRIME;
+    }
+    return hash;
+}
+
+static uint64_t stream_content_fingerprint(void) {
+    uint64_t fp = AVAR_FNV1A_OFFSET;
+
+    const size_t queue_total = queue_count();
+    fp ^= (uint64_t)queue_total;
+    fp *= AVAR_FNV1A_PRIME;
+    for (size_t i = 0; i < queue_total; ++i) {
+        char *json = get_config_array_item_json(AVAR_CFG_DM_QUEUES, i);
+        if (json != NULL) {
+            fp = fnv1a_update(fp, (const unsigned char *)json, strlen(json));
+            free(json);
+        }
+    }
+
+    const size_t download_total = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    fp ^= (uint64_t)download_total;
+    fp *= AVAR_FNV1A_PRIME;
+    for (size_t i = 0; i < download_total; ++i) {
+        char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, i);
+        if (json != NULL) {
+            fp = fnv1a_update(fp, (const unsigned char *)json, strlen(json));
+            free(json);
+        }
+    }
+
+    const size_t active_total = download_active_list(NULL, 0U);
+    fp ^= (uint64_t)active_total;
+    fp *= AVAR_FNV1A_PRIME;
+    if (active_total > 0U) {
+        DownloadActiveInfo *active_items = calloc(active_total, sizeof(DownloadActiveInfo));
+        if (active_items != NULL) {
+            (void)download_active_list(active_items, active_total);
+            for (size_t i = 0; i < active_total; ++i) {
+                const DownloadActiveInfo *item = &active_items[i];
+                if (item->id != NULL) {
+                    fp = fnv1a_update(fp, (const unsigned char *)item->id, strlen(item->id));
+                }
+                const uint64_t bytes_downloaded = item->bytes_downloaded;
+                const uint64_t total_bytes = item->total_bytes;
+                fp = fnv1a_update(fp, (const unsigned char *)&bytes_downloaded,
+                                  sizeof bytes_downloaded);
+                fp = fnv1a_update(fp, (const unsigned char *)&total_bytes, sizeof total_bytes);
+            }
+            free(active_items);
+        }
+    }
+
+    return fp;
+}
+
+static void stream_note_full_snapshot_sent(void) {
+    _stream_cached_fingerprint = stream_content_fingerprint();
+    _stream_last_full_send = time(NULL);
+}
+
+static void stream_send_to_connection(struct mg_connection *connection, const bool websocket,
+                                      const char *payload, const bool snapshot_event) {
+    if (connection == NULL || payload == NULL) {
+        return;
+    }
+
+    if (websocket) {
+        mg_ws_send(connection, payload, strlen(payload), WEBSOCKET_OP_TEXT);
+        return;
+    }
+
+    if (snapshot_event) {
+        mg_printf(connection, "event: snapshot\ndata: %s\n\n", payload);
+    } else {
+        mg_printf(connection, "event: unchanged\ndata: %s\n\n", payload);
+    }
+}
+
+static void stream_broadcast_payload(const char *payload, const bool snapshot_event) {
+    StreamClient *cursor = _stream_clients;
+    while (cursor != NULL) {
+        StreamClient *next = cursor->next;
+        if (cursor->connection == NULL || cursor->connection->is_closing) {
+            stream_client_unregister(cursor->connection);
+        } else {
+            stream_send_to_connection(cursor->connection, cursor->websocket, payload,
+                                      snapshot_event);
+        }
+        cursor = next;
+    }
+}
 
 static size_t stream_client_count(void) {
     size_t count = 0U;
@@ -1071,12 +1176,8 @@ void daemon_rpc_stream_send(struct mg_connection *connection, const bool websock
         return;
     }
 
-    if (websocket) {
-        mg_ws_send(connection, snapshot, strlen(snapshot), WEBSOCKET_OP_TEXT);
-    } else {
-        mg_printf(connection, "event: snapshot\ndata: %s\n\n", snapshot);
-    }
-
+    stream_send_to_connection(connection, websocket, snapshot, true);
+    stream_note_full_snapshot_sent();
     free(snapshot);
 }
 
@@ -1092,24 +1193,26 @@ void daemon_rpc_streams_tick(struct mg_mgr *mgr) {
     }
     _stream_last_tick = now;
 
+    const bool force_full =
+        _stream_last_full_send == 0 ||
+        now - _stream_last_full_send >= (time_t)AVAR_STREAM_FULL_RESYNC_SEC;
+    const uint64_t fingerprint = stream_content_fingerprint();
+    const bool content_changed = fingerprint != _stream_cached_fingerprint;
+
+    if (!force_full && !content_changed) {
+        stream_broadcast_payload(AVAR_STREAM_UNCHANGED_JSON, false);
+        daemon_rpc_note_frontend_activity();
+        return;
+    }
+
     char *snapshot = NULL;
     if (!daemon_rpc_build_snapshot(&snapshot) || snapshot == NULL) {
         return;
     }
 
-    StreamClient *cursor = _stream_clients;
-    while (cursor != NULL) {
-        StreamClient *next = cursor->next;
-        if (cursor->connection == NULL || cursor->connection->is_closing) {
-            stream_client_unregister(cursor->connection);
-        } else if (cursor->websocket) {
-            mg_ws_send(cursor->connection, snapshot, strlen(snapshot), WEBSOCKET_OP_TEXT);
-        } else {
-            mg_printf(cursor->connection, "event: snapshot\ndata: %s\n\n", snapshot);
-        }
-        cursor = next;
-    }
-
+    stream_broadcast_payload(snapshot, true);
+    _stream_cached_fingerprint = fingerprint;
+    _stream_last_full_send = now;
     free(snapshot);
 }
 

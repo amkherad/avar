@@ -646,8 +646,22 @@
 }
 
 .avar-extension-panel__toggle {
-  margin-bottom: 0.65rem;
+  margin-bottom: 0.5rem;
   font-size: 0.85rem;
+}
+
+.avar-extension-panel__suspend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.65rem;
+}
+
+.avar-extension-panel__suspend-hint {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--avar-text-muted);
+  line-height: 1.35;
 }
 
 .avar-extension-panel__row {
@@ -2817,6 +2831,14 @@
 }
 
 .avar-settings-browser__toggle {
+  margin-bottom: 0.75rem;
+}
+
+.avar-settings-browser__suspend {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
   margin-bottom: 0.75rem;
 }
 

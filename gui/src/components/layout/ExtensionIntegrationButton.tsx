@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { useConfigStore } from "@/stores/configStore";
 import {
   BUNDLED_EXTENSION_VERSION,
+  setExtensionBridgeSuspended,
   useExtensionBridgeStatus,
 } from "@/lib/browserExtensionBridge";
 import { copyTextToClipboard } from "@/lib/curlCommand";
@@ -51,11 +52,13 @@ export function ExtensionIntegrationButton() {
 
   const statusLabel = !bridgeStatus.enabled
     ? t("extensionPanel.disabled")
-    : bridgeStatus.loading
-      ? t("extensionPanel.checking")
-      : bridgeStatus.connected
-        ? t("extensionPanel.connected")
-        : t("extensionPanel.disconnected");
+    : bridgeStatus.suspended
+      ? t("extensionPanel.suspended")
+      : bridgeStatus.loading
+        ? t("extensionPanel.checking")
+        : bridgeStatus.connected
+          ? t("extensionPanel.connected")
+          : t("extensionPanel.disconnected");
 
   async function handleCopyUrl() {
     const ok = await copyTextToClipboard(bridgeStatus.bridgeUrl);
@@ -77,7 +80,7 @@ export function ExtensionIntegrationButton() {
       >
         <span
           className={`avar-extension-panel__dot ${
-            !bridgeStatus.enabled
+            !bridgeStatus.enabled || bridgeStatus.suspended
               ? ""
               : bridgeStatus.connected
                 ? "avar-extension-panel__dot--ok"
@@ -95,7 +98,7 @@ export function ExtensionIntegrationButton() {
           <div className="avar-extension-panel__status">
             <span
               className={`avar-connection__dot ${
-                !bridgeStatus.enabled
+                !bridgeStatus.enabled || bridgeStatus.suspended
                   ? ""
                   : bridgeStatus.connected
                     ? "avar-connection__dot--ok"
@@ -114,6 +117,35 @@ export function ExtensionIntegrationButton() {
             />
             {t("extensionPanel.listen")}
           </label>
+
+          {bridgeStatus.enabled ? (
+            <div className="avar-extension-panel__suspend">
+              {bridgeStatus.suspended ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  type="button"
+                  onClick={() => setExtensionBridgeSuspended(false)}
+                >
+                  {t("extensionPanel.resume")}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  type="button"
+                  onClick={() => setExtensionBridgeSuspended(true)}
+                >
+                  {t("extensionPanel.suspend")}
+                </Button>
+              )}
+              <p className="avar-extension-panel__suspend-hint">
+                {bridgeStatus.suspended
+                  ? t("extensionPanel.suspendedHint")
+                  : t("extensionPanel.suspendHint")}
+              </p>
+            </div>
+          ) : null}
 
           <div className="avar-extension-panel__row">
             <span className="avar-extension-panel__label">{t("extensionPanel.bridgeUrl")}</span>

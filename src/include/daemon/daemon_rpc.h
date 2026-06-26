@@ -64,7 +64,7 @@ bool daemon_rpc_build_snapshot(char **json_out);
 /** Sends a snapshot to an SSE or WebSocket connection. */
 void daemon_rpc_stream_send(struct mg_connection *connection, bool websocket);
 
-/** Pushes snapshots to registered streaming clients (call from HTTP poll loop). */
+/** Pushes snapshots or unchanged signals to registered streaming clients (call from HTTP poll loop). */
 void daemon_rpc_streams_tick(struct mg_mgr *mgr);
 
 /** Registers an SSE connection and sends the initial snapshot. */

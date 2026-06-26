@@ -16,12 +16,19 @@ const {
   setExtensionBridgeConfig,
   setBatchPopupOpener,
   setAddDownloadPopupOpener,
+  setAppFocusHandler,
   getExtensionBridgeState,
   createExtensionBridgeServer,
   ELECTRON_EXTENSION_BRIDGE_URL,
   EXTENSION_BRIDGE_HOST,
   EXTENSION_BRIDGE_PORT,
 } = require("./extension-bridge.cjs");
+const {
+  parseAvarProtocolUrl,
+  extractAvarProtocolUrl,
+  registerAvarProtocol,
+  isFocusAction,
+} = require("./avar-protocol.cjs");
 const { trayMenuIcon } = require("./tray-menu-icons.cjs");
 const { DAEMON_TARGET } = require("../desktop/env.cjs");
 const { startDaemonProxy, stopDaemonProxy, getProxyBaseUrl } = require("../desktop/daemon-proxy.cjs");
@@ -31,6 +38,14 @@ const {
 } = require("../desktop/resolve-gui-url.cjs");
 
 const isDev = !app.isPackaged;
+
+/** @type {string | null} */
+let pendingProtocolUrl = null;
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
 
 function fsExists(filePath) {
   try {
@@ -197,6 +212,40 @@ function showMainWindow() {
   mainWindow.show();
   mainWindow.focus();
 }
+
+function handleAvarProtocolUrl(rawUrl) {
+  const parsed = parseAvarProtocolUrl(rawUrl);
+  if (!parsed) {
+    return;
+  }
+  if (isFocusAction(parsed.action)) {
+    showMainWindow();
+  }
+}
+
+if (gotTheLock) {
+  app.on("second-instance", (_event, argv) => {
+    const protocolUrl = extractAvarProtocolUrl(argv);
+    if (protocolUrl) {
+      handleAvarProtocolUrl(protocolUrl);
+      return;
+    }
+    showMainWindow();
+  });
+}
+
+app.on("open-url", (event, url) => {
+  event.preventDefault();
+  if (app.isReady()) {
+    handleAvarProtocolUrl(url);
+  } else {
+    pendingProtocolUrl = url;
+  }
+});
+
+setAppFocusHandler(() => {
+  showMainWindow();
+});
 
 function buildTrayMenu() {
   const showIcon = loadAppIcon().resize({ width: 16, height: 16 });
@@ -517,20 +566,32 @@ ipcMain.handle("tray:setActiveDownloads", (_event, payload) => {
   }
 });
 
-app.whenReady().then(() => {
-  startExtensionBridge();
-  startDaemonProxy();
-  createWindow();
-  createTray();
+if (gotTheLock) {
+  app.whenReady().then(() => {
+    registerAvarProtocol(app);
 
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    } else {
-      showMainWindow();
+    startExtensionBridge();
+    startDaemonProxy();
+    createWindow();
+    createTray();
+
+    const launchProtocolUrl = extractAvarProtocolUrl(process.argv);
+    if (launchProtocolUrl) {
+      handleAvarProtocolUrl(launchProtocolUrl);
+    } else if (pendingProtocolUrl) {
+      handleAvarProtocolUrl(pendingProtocolUrl);
+      pendingProtocolUrl = null;
     }
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      } else {
+        showMainWindow();
+      }
+    });
   });
-});
+}
 
 app.on("window-all-closed", () => {
   if (tray) {

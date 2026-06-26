@@ -294,6 +294,11 @@
         cursor: pointer;
       }
 
+      button.primary:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
       button.secondary {
         margin-top: 8px;
         width: 100%;
@@ -305,6 +310,11 @@
         font-weight: 600;
         cursor: pointer;
         flex-shrink: 0;
+      }
+
+      button.secondary:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
       }
 
       .status-row {
@@ -445,6 +455,16 @@
         flex-shrink: 0;
       }
 
+      .media-item__download-wrap {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .media-item__download-wrap[title] {
+        cursor: not-allowed;
+      }
+
       .media-item__download {
         margin: 0;
         width: 30px;
@@ -458,6 +478,11 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
+      }
+
+      .media-item__download:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
       }
 
       .media-item__download svg {
@@ -835,6 +860,18 @@
           <label class="settings-checkbox">
             <input id="selectedLinksInSeparateTab" type="checkbox" />
             Put selected links in a separate tab
+          </label>
+
+          <p class="settings-section-title">Browser downloads</p>
+
+          <label class="settings-checkbox">
+            <input id="grabAllDownloads" type="checkbox" />
+            Grab all browser downloads and send them to Avar
+          </label>
+
+          <label class="settings-checkbox">
+            <input id="blockBrowserDownloads" type="checkbox" />
+            Prevent the browser from saving files (queue in Avar instead)
           </label>
 
           <p class="settings-section-title">Queue management</p>

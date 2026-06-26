@@ -11,6 +11,7 @@ const POPUP_HEIGHT_MAX = 600;
 const SELECTION_REFRESH_MS = 400;
 const MIN_SELECTION_WIDGET_OPACITY = 40;
 const MAX_SELECTION_WIDGET_OPACITY = 100;
+const AVAR_NOT_FOUND_TITLE = "Avar was not found.";
 
 function clampSelectionWidgetOpacity(value) {
   const parsed = Number(value);
@@ -53,6 +54,8 @@ const showSelectionWidgetInput = document.getElementById("showSelectionWidget");
 const selectionWidgetOpacityInput = document.getElementById("selectionWidgetOpacity");
 const selectionWidgetOpacityValue = document.getElementById("selectionWidgetOpacityValue");
 const selectedLinksInSeparateTabInput = document.getElementById("selectedLinksInSeparateTab");
+const grabAllDownloadsInput = document.getElementById("grabAllDownloads");
+const blockBrowserDownloadsInput = document.getElementById("blockBrowserDownloads");
 const mediaTypeFilterSelect = document.getElementById("mediaTypeFilter");
 const mediaSortSelect = document.getElementById("mediaSort");
 const queueManagementEl = document.getElementById("queueManagement");
@@ -98,13 +101,47 @@ function setStatus(text) {
   statusEl.textContent = text;
 }
 
+function getDownloadActionTitle() {
+  return bridgeConnected ? "Review in Avar" : AVAR_NOT_FOUND_TITLE;
+}
+
+function updateBulkDownloadButtons() {
+  const disabledTitle = bridgeConnected ? "" : AVAR_NOT_FOUND_TITLE;
+  for (const btn of [downloadSelectedBtn, downloadAllBtn]) {
+    if (!btn) {
+      continue;
+    }
+    btn.disabled = !bridgeConnected;
+    btn.title = disabledTitle;
+  }
+}
+
+function updateItemDownloadButtons() {
+  const title = getDownloadActionTitle();
+  const disabledTitle = bridgeConnected ? "" : AVAR_NOT_FOUND_TITLE;
+  for (const btn of document.querySelectorAll(".media-item__download")) {
+    btn.disabled = !bridgeConnected;
+    btn.title = title;
+    const wrap = btn.closest(".media-item__download-wrap");
+    if (wrap) {
+      wrap.title = disabledTitle;
+    }
+  }
+}
+
+function updateAllDownloadButtons() {
+  updateBulkDownloadButtons();
+  updateItemDownloadButtons();
+}
+
 function setBridgeConnected(connected) {
   bridgeStatusEl.classList.toggle("status-dot--ok", connected);
   bridgeStatusLabel.textContent = connected ? "Connected" : "Disconnected";
   bridgeStatusLabel.classList.toggle("connection-status__label--ok", connected);
   bridgeStatusEl.title = connected
     ? "Connected to Avar bridge"
-    : "Cannot reach Avar bridge";
+    : AVAR_NOT_FOUND_TITLE;
+  updateAllDownloadButtons();
 }
 
 function getActiveMediaFilter() {
@@ -636,7 +673,7 @@ function buildBatchItem(item) {
 
 async function openBatchAddDialog(items) {
   if (!bridgeConnected) {
-    setStatus("Cannot reach Avar bridge.");
+    setStatus(AVAR_NOT_FOUND_TITLE);
     return;
   }
   if (!items.length) {
@@ -659,7 +696,7 @@ async function openBatchAddDialog(items) {
 
 async function openSingleAddDialog(item) {
   if (!bridgeConnected) {
-    setStatus("Cannot reach Avar bridge.");
+    setStatus(AVAR_NOT_FOUND_TITLE);
     return;
   }
 
@@ -679,7 +716,7 @@ async function openSingleAddDialog(item) {
 
 async function openDownloadDialog(items) {
   if (!bridgeConnected) {
-    setStatus("Cannot reach Avar bridge.");
+    setStatus(AVAR_NOT_FOUND_TITLE);
     return;
   }
   if (!items.length) {
@@ -693,21 +730,31 @@ async function openDownloadDialog(items) {
 }
 
 function createDownloadButton(item) {
+  const wrap = document.createElement("span");
+  wrap.className = "media-item__download-wrap";
+  if (!bridgeConnected) {
+    wrap.title = AVAR_NOT_FOUND_TITLE;
+  }
+
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "media-item__download";
   btn.setAttribute("aria-label", "Download");
-  btn.title = bridgeConnected ? "Review in Avar" : "Connect to Avar to download";
+  btn.title = getDownloadActionTitle();
   btn.disabled = !bridgeConnected;
   btn.innerHTML = DOWNLOAD_ICON;
   btn.addEventListener("click", async () => {
+    if (!bridgeConnected) {
+      return;
+    }
     if (lastSelectedItems.length > 1) {
       await openBatchAddDialog(lastSelectedItems);
       return;
     }
     await openSingleAddDialog(item);
   });
-  return btn;
+  wrap.appendChild(btn);
+  return wrap;
 }
 
 function createCopyButton(url) {
@@ -817,6 +864,7 @@ function renderSelectedLinksList(items) {
   applyListViewLayout();
   updateTabCounts();
   updateScanStatus(lastMediaItems.length);
+  updateBulkDownloadButtons();
 }
 
 function renderMediaList(items) {
@@ -838,6 +886,7 @@ function renderMediaList(items) {
   applyListViewLayout();
   updateScanStatus(lastMediaItems.length);
   queueSizeProbes(visibleItems);
+  updateBulkDownloadButtons();
 }
 
 async function refreshBridgeStatus() {
@@ -848,14 +897,18 @@ async function refreshBridgeStatus() {
   if (response?.bridgeUrl && bridgeUrlInput.value !== response.bridgeUrl) {
     bridgeUrlInput.value = response.bridgeUrl;
   }
-  if (wasConnected !== bridgeConnected && (lastMediaItems.length > 0 || lastSelectedItems.length > 0)) {
-    if (lastSelectedItems.length > 0) {
-      renderSelectedLinksList(lastSelectedItems);
-    }
-    renderMediaList(lastMediaItems);
-    if (bridgeConnected) {
-      void expandHlsInBackground(lastMediaItems);
-      queueSizeProbes(getVisibleMediaItems(lastMediaItems));
+  if (wasConnected !== bridgeConnected) {
+    if (lastMediaItems.length > 0 || lastSelectedItems.length > 0) {
+      if (lastSelectedItems.length > 0) {
+        renderSelectedLinksList(lastSelectedItems);
+      }
+      renderMediaList(lastMediaItems);
+      if (bridgeConnected) {
+        void expandHlsInBackground(lastMediaItems);
+        queueSizeProbes(getVisibleMediaItems(lastMediaItems));
+      }
+    } else {
+      updateAllDownloadButtons();
     }
   }
   return response;
@@ -874,6 +927,8 @@ async function loadConfig() {
     "showSelectionWidget",
     "selectionWidgetOpacity",
     "selectedLinksInSeparateTab",
+    "grabAllDownloads",
+    "blockBrowserDownloads",
     "activeListTab",
   ]);
   bridgeUrlInput.value =
@@ -892,6 +947,9 @@ async function loadConfig() {
   updateSelectionWidgetOpacityLabel();
   selectedLinksInSeparateTab = stored.selectedLinksInSeparateTab === true;
   selectedLinksInSeparateTabInput.checked = selectedLinksInSeparateTab;
+  grabAllDownloadsInput.checked = stored.grabAllDownloads === true;
+  blockBrowserDownloadsInput.checked = stored.blockBrowserDownloads === true;
+  updateGrabDownloadsUi();
   activeListTab = stored.activeListTab === "selected" ? "selected" : "media";
 
   applyPopupSize(stored.popupWidth, stored.popupHeight);
@@ -901,8 +959,6 @@ async function loadConfig() {
   if (stored.defaultQueueId) {
     defaultQueueSelect.value = stored.defaultQueueId;
   }
-
-  await refreshBridgeStatus();
 }
 
 async function expandHlsInBackground(items) {
@@ -1037,6 +1093,16 @@ viewTabMedia.addEventListener("click", () => {
   setActiveListTab("media", { userInitiated: true });
 });
 
+function updateGrabDownloadsUi() {
+  const grabEnabled = grabAllDownloadsInput.checked;
+  blockBrowserDownloadsInput.disabled = !grabEnabled;
+  if (!grabEnabled) {
+    blockBrowserDownloadsInput.checked = false;
+  }
+}
+
+grabAllDownloadsInput.addEventListener("change", updateGrabDownloadsUi);
+
 selectionWidgetOpacityInput.addEventListener("input", updateSelectionWidgetOpacityLabel);
 
 document.getElementById("save").addEventListener("click", async () => {
@@ -1054,6 +1120,8 @@ document.getElementById("save").addEventListener("click", async () => {
     showSelectionWidget: showSelectionWidgetInput.checked,
     selectionWidgetOpacity: clampSelectionWidgetOpacity(selectionWidgetOpacityInput.value),
     selectedLinksInSeparateTab: nextSelectedLinksInSeparateTab,
+    grabAllDownloads: grabAllDownloadsInput.checked,
+    blockBrowserDownloads: blockBrowserDownloadsInput.checked,
   });
   selectedLinksInSeparateTab = nextSelectedLinksInSeparateTab;
   mediaTypeFilterSelect.value = defaultMediaFilter;
@@ -1077,10 +1145,11 @@ downloadSelectedBtn.addEventListener("click", async () => {
 
 void (async () => {
   await loadConfig();
-  void loadQueues();
   installPopupResizeHandles();
   startSelectionRefresh();
   window.addEventListener("unload", stopSelectionRefresh);
+  void refreshBridgeStatus();
+  void loadQueues();
   await scanPage();
 })();
 
