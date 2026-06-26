@@ -1,5 +1,7 @@
 #include <stream_hls.h>
 #include <http.h>
+#include <mongoose_log.h>
+#include <tls_debug.h>
 
 #include <mbedtls/aes.h>
 
@@ -145,7 +147,7 @@ static char *http_fetch_body(const char *url, const char *referer, size_t *out_l
 
     HttpFetchCtx ctx = {.url = url, .referer = referer};
     mg_mgr_init(&ctx.mgr);
-    mg_log_set(MG_LL_ERROR);
+    avar_mongoose_log_init();
 
     struct mg_connection *c = mg_http_connect(&ctx.mgr, url, http_fetch_handler, &ctx);
     if (c == NULL) {
@@ -156,7 +158,15 @@ static char *http_fetch_body(const char *url, const char *referer, size_t *out_l
 #if defined(MG_TLS)
     if (mg_url_is_ssl(url)) {
         struct mg_tls_opts opts = {.name = mg_url_host(url)};
+        char sni[256] = {0};
+        if (opts.name.buf != NULL && opts.name.len > 0U) {
+            const size_t sni_len =
+                    opts.name.len < sizeof sni - 1U ? opts.name.len : sizeof sni - 1U;
+            memcpy(sni, opts.name.buf, sni_len);
+        }
+        tls_log_handshake_start(url, sni[0] != '\0' ? sni : NULL);
         mg_tls_init(c, &opts);
+        tls_apply_client_policy(c);
     }
 #endif
 

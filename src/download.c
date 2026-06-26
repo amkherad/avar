@@ -26,6 +26,8 @@
 #include <time.h>
 #include <debug.h>
 #include <logger.h>
+#include <mongoose_log.h>
+#include <tls_debug.h>
 
 #if defined(_WIN32)
     #include <direct.h>
@@ -1594,6 +1596,7 @@ static void init_download_tls(struct mg_connection *c, const char *url) {
     struct mg_tls_opts opts = {0};
     opts.name = mg_url_host(url);
     mg_tls_init(c, &opts);
+    tls_apply_client_policy(c);
 
     if (c->tls == NULL || opts.name.len == 0) {
         return;
@@ -1603,6 +1606,8 @@ static void init_download_tls(struct mg_connection *c, const char *url) {
     const size_t host_len = opts.name.len < sizeof host - 1 ? opts.name.len : sizeof host - 1;
     memcpy(host, opts.name.buf, host_len);
     host[host_len] = '\0';
+
+    tls_log_handshake_start(url, host);
 
 #if MG_TLS == MG_TLS_MBED
     struct mg_tls *tls = (struct mg_tls *) c->tls;
@@ -2556,8 +2561,6 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
         }
 
         if (c->is_tls) {
-            const struct mg_str host = mg_url_host(job->current_url);
-            LOG_DEBUG("Starting TLS to %.*s", (int)host.len, host.buf != NULL ? host.buf : "");
             init_download_tls(c, job->current_url);
         } else {
             send_request_for_slot(job, c, slot);
@@ -2689,8 +2692,11 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
     } else if (ev == MG_EV_ERROR) {
         if (!job->done && !job->failed) {
             const char *message = (const char *)ev_data;
-            LOG_DEBUG("Connection error on %s: %s", job->current_url != NULL ? job->current_url : job->url,
-                      message != NULL && message[0] != '\0' ? message : "(none)");
+            const char *url = job->current_url != NULL ? job->current_url : job->url;
+            const bool has_range = slot != NULL && job->segment_mode;
+            tls_log_download_error(c, url, job->item_id, ctx->use_proxy ? ctx->proxy_url : NULL,
+                                   has_range ? slot->range_start : 0U, has_range ? slot->range_end : 0U,
+                                   has_range, message);
             if (slot != NULL && job->segment_mode) {
                 /* The matching MG_EV_CLOSE drives the retry/budget bookkeeping so
                  * a single failure is not counted twice. */
@@ -2798,7 +2804,7 @@ static int run_download(DownloadJob *job) {
     }
 
     mg_mgr_init(&job->mgr);
-    mg_log_set(MG_LL_ERROR);
+    avar_mongoose_log_init();
 
     job->seg_cfg = download_config_load(job->state != NULL ? job->state->queue_id : NULL);
     job->mutex = avar_mutex_create();

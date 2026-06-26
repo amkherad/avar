@@ -1,6 +1,18 @@
 #include "logger.h"
 #include "mongoose.h"
 
+#if MG_TLS == MG_TLS_MBED
+#include <mbedtls/debug.h>
+
+static void apply_mbedtls_debug_threshold(void) {
+    if (get_log_level() <= LOG_LEVEL_DEBUG) {
+        mbedtls_debug_set_threshold(2);
+    } else {
+        mbedtls_debug_set_threshold(0);
+    }
+}
+#endif
+
 static int loglevel_to_mg_ll(log_level_t log_level) {
     switch (log_level) {
         case LOG_LEVEL_DEBUG:
@@ -18,6 +30,9 @@ static int loglevel_to_mg_ll(log_level_t log_level) {
 
 void avar_mongoose_log_init(void) {
     mg_log_set(loglevel_to_mg_ll(get_log_level()));
+#if MG_TLS == MG_TLS_MBED
+    apply_mbedtls_debug_threshold();
+#endif
 }
 
 static int mg_log_level_ticket = MG_LL_INFO;

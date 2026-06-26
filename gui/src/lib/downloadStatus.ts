@@ -6,11 +6,15 @@ export function isActive(status: string): boolean {
   return status === "downloading";
 }
 
+export function isError(status: string): boolean {
+  return status === "error" || status === "failed";
+}
+
 export function canStart(status: string): boolean {
   return (
     status === "queued" ||
     status === "paused" ||
-    status === "failed" ||
+    isError(status) ||
     status === "stopped"
   );
 }

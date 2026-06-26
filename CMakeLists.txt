@@ -14,6 +14,9 @@ target_include_directories(mbedtls_vendor PUBLIC "${THIRD_PARTY_DIR}/mbedtls/inc
 if (MSVC)
     target_compile_options(mbedtls_vendor PRIVATE /wd4244 /wd4267)
 endif()
+if (WIN32)
+    target_link_libraries(mbedtls_vendor PUBLIC ws2_32 bcrypt)
+endif()
 
 set(AVAR_CORE_SOURCES
         "${SRC_DIR}/logger.c"
@@ -44,6 +47,7 @@ set(AVAR_CORE_SOURCES
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
         "${SRC_DIR}/mongoose_log.c"
+        "${SRC_DIR}/tls_debug.c"
 )
 
 set(AVAR_CLI_SOURCES
