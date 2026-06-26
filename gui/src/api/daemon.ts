@@ -337,6 +337,17 @@ export class DaemonClient {
     );
   }
 
+  async resolveDownloadPath(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<{ exitCode: number; destPath?: string }> {
+    return this.rpc<{ exitCode: number; destPath?: string }>(
+      "download.resolvePath",
+      { id },
+      signal,
+    );
+  }
+
   async removeDownload(id: string, purgeFiles = false): Promise<void> {
     const argv = ["avar", "dl", "rm", id, "--force"];
     if (purgeFiles) {

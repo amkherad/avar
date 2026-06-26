@@ -1,4 +1,4 @@
-import { formatBytePair, progressPercent } from "./format";
+import { formatBytePair, formatTransferRate, progressPercent } from "./format";
 import { Badge } from "@/components/ui/Badge";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import type { DownloadInfo } from "@/api/types";
@@ -33,8 +33,13 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
 }
 
 export function DownloadProgress({ download }: DownloadProgressProps) {
+  const { t } = useTranslation();
   const percent = progressPercent(download.bytesDownloaded, download.totalBytes);
   const progressText = `${formatBytePair(download.bytesDownloaded, download.totalBytes)} (${percent}%)`;
+  const speedText =
+    download.bytesPerSecond !== undefined && download.bytesPerSecond > 0
+      ? formatTransferRate(download.bytesPerSecond)
+      : null;
 
   return (
     <div className="avar-download-progress">
@@ -42,6 +47,12 @@ export function DownloadProgress({ download }: DownloadProgressProps) {
         <div className="avar-progress__bar" style={{ width: `${percent}%` }} />
       </div>
       <TruncateWithTooltip text={progressText} className="avar-list__meta" />
+      {speedText ? (
+        <TruncateWithTooltip
+          text={`${t("download.transferRate")}: ${speedText}`}
+          className="avar-list__meta"
+        />
+      ) : null}
     </div>
   );
 }

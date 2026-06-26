@@ -884,6 +884,7 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         cJSON_AddNullToObject(obj, AVAR_FIELD_PROXY);
     }
     cJSON_AddNumberToObject(obj, AVAR_FIELD_BYTES_DOWNLOADED, (double) done_bytes);
+    cJSON_AddNumberToObject(obj, AVAR_FIELD_BYTES_PER_SECOND, job->last_speed_bps);
     cJSON_AddNumberToObject(obj, AVAR_FIELD_TOTAL_BYTES, (double) total);
     cJSON_AddNumberToObject(obj, AVAR_FIELD_ERROR_COUNT, (double) job->error_count);
 
@@ -933,6 +934,25 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         cJSON_AddStringToObject(obj, AVAR_FIELD_QUEUE_ID, job->state->queue_id);
     } else {
         cJSON_AddNullToObject(obj, AVAR_FIELD_QUEUE_ID);
+    }
+
+    if (strcmp(status, AVAR_DL_STATUS_COMPLETED) == 0) {
+        const char *dest = NULL;
+        char *resolved = NULL;
+        if (job->dest_path != NULL && job->dest_path[0] != '\0') {
+            dest = job->dest_path;
+        } else if (job->state != NULL && job->state->dest_path != NULL &&
+                   job->state->dest_path[0] != '\0') {
+            dest = job->state->dest_path;
+        } else if (job->item_id != NULL &&
+                   download_resolve_dest_path(job->item_id, &resolved) == EXIT_SUCCESS &&
+                   resolved != NULL) {
+            cJSON_AddStringToObject(obj, AVAR_FIELD_DEST_PATH, resolved);
+            free(resolved);
+        }
+        if (dest != NULL) {
+            cJSON_AddStringToObject(obj, AVAR_FIELD_DEST_PATH, dest);
+        }
     }
 
     if (job->state != NULL && job->state->total_size > 0U && job->state->chunk_size > 0U

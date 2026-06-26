@@ -75,6 +75,8 @@ export interface DownloadInfo {
 
   description?: string;
 
+  bytesPerSecond?: number;
+
 }
 
 

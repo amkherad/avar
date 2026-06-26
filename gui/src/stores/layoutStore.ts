@@ -9,6 +9,7 @@ export interface DownloadTableColumns {
   filename: number;
   status: number;
   progress: number;
+  speed: number;
   url: number;
 }
 
@@ -52,6 +53,7 @@ const defaultTableColumns: DownloadTableColumns = {
   filename: 200,
   status: 100,
   progress: 140,
+  speed: 100,
   url: 180,
 };
 
@@ -130,6 +132,21 @@ export const useLayoutStore = create<LayoutState>()(
         downloadTableColumns: state.downloadTableColumns,
         queueTableColumns: state.queueTableColumns,
       }),
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<LayoutState> | undefined;
+        return {
+          ...current,
+          ...saved,
+          downloadTableColumns: {
+            ...defaultTableColumns,
+            ...saved?.downloadTableColumns,
+          },
+          queueTableColumns: {
+            ...defaultQueueTableColumns,
+            ...saved?.queueTableColumns,
+          },
+        };
+      },
     },
   ),
 );

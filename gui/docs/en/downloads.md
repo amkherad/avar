@@ -28,7 +28,7 @@ In **table view**, use the status dropdown in the **Status** column header. Clic
 ## 👁️ View modes
 
 - **Card view** — stacked cards with progress bars.
-- **Table view** — compact columns; drag column borders to resize.
+- **Table view** — compact columns including transfer rate; drag column borders to resize.
 
 ## ☑️ Selection
 
@@ -42,7 +42,9 @@ In **table view**, use the status dropdown in the **Status** column header. Clic
 
 When one or more downloads are selected, batch action buttons appear on the left side of the toolbar: pause/resume, start/stop, and delete.
 
-**Double-click** a download to open the detail popup window. A single click only selects the row.
+**Double-click** a download to open the completed file with your default app (local Electron session, when configured under **Settings → General**) or open the detail popup window. A single click only selects the row.
+
+Active downloads show **transfer rate** in the detail panel, table **Transfer rate** column, and card view.
 
 ## 🗑️ Deleting downloads
 

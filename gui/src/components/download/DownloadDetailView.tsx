@@ -11,7 +11,7 @@ import { canRedownload, isCompleted } from "@/lib/downloadStatus";
 import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useDownloadProgressWatch } from "@/hooks/useDownloadProgressWatch";
-import { formatBytePair, progressPercent } from "./format";
+import { formatBytePair, formatTransferRate, progressPercent } from "./format";
 import { DownloadProgressBar } from "./DownloadProgressBar";
 import { DownloadChecksumTools } from "./DownloadChecksumTools";
 
@@ -70,13 +70,20 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
       <dl className="avar-download-detail__fields">
         <div className="avar-download-detail__field">
           <dt>{t("download.progress")}</dt>
-          <dd>
+          <dd className="avar-download-detail__progress">
             <DownloadProgressBar download={download} />
             <span className="avar-list__meta">
               {formatBytePair(download.bytesDownloaded, download.totalBytes)} ({percent}%)
             </span>
           </dd>
         </div>
+
+        {download.bytesPerSecond !== undefined && download.bytesPerSecond > 0 ? (
+          <div className="avar-download-detail__field">
+            <dt>{t("download.transferRate")}</dt>
+            <dd>{formatTransferRate(download.bytesPerSecond)}</dd>
+          </div>
+        ) : null}
 
         {download.url ? (
           <div className="avar-download-detail__field">

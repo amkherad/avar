@@ -20,7 +20,7 @@
     "http://localhost/*"
   ],
   "background": {
-    "scripts": ["media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js", "download-intercept.js", "background.js"]
+    "scripts": ["media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js", "download-intercept.js", "badge.js", "background.js"]
   },
   "browser_action": {
     "default_title": "Avar",

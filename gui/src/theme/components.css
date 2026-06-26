@@ -1261,13 +1261,25 @@
 }
 
 .avar-download-detail .avar-progress {
-  min-height: 30px;
+  width: 100%;
+  height: 8px;
+  min-height: 8px;
   margin-top: 0.5rem;
   border-radius: 4px;
 }
 
 .avar-download-detail .avar-progress--segmented {
+  height: 24px;
+  min-height: 24px;
   gap: 3px;
+}
+
+.avar-download-detail__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .avar-download-detail .avar-progress__segment {

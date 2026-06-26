@@ -39,6 +39,8 @@ function parseDownloadItem(item: unknown): DownloadInfo {
     errorCount: record.errorCount !== undefined ? toNumber(record.errorCount) : undefined,
     maxRetries,
     description: record.description ? String(record.description) : undefined,
+    bytesPerSecond:
+      record.bytesPerSecond !== undefined ? toNumber(record.bytesPerSecond) : undefined,
   };
 }
 

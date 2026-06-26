@@ -6,7 +6,8 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Select } from "@/components/ui/Select";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import type { DownloadInfo } from "@/api/types";
-import { useLayoutStore, type DownloadViewMode } from "@/stores/layoutStore";import { formatBytePair, progressPercent } from "./format";
+import { useLayoutStore, type DownloadViewMode } from "@/stores/layoutStore";
+import { formatBytePair, formatTransferRate, progressPercent } from "./format";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import type { DownloadSort, DownloadStatusFilter } from "@/lib/downloadFilterSort";
 
@@ -142,6 +143,20 @@ export function DownloadTable({
           const progressText = `${formatBytePair(item.bytesDownloaded, item.totalBytes)} (${percent}%)`;
           return <TruncateWithTooltip text={progressText} className="avar-list__meta" />;
         },
+      },
+      {
+        id: "speed",
+        header: t("download.transferRate"),
+        width: columnWidths.speed,
+        minWidth: 60,
+        maxWidth: 200,
+        onResize: (width) => setColumn("speed", width),
+        render: (item) => (
+          <TruncateWithTooltip
+            text={formatTransferRate(item.bytesPerSecond ?? 0)}
+            className="avar-list__meta"
+          />
+        ),
       },
       {
         id: "url",

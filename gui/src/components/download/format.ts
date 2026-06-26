@@ -22,3 +22,20 @@ export function progressPercent(done: number, total: number): number {
   }
   return Math.min(100, Math.round((done / total) * 100));
 }
+
+export function formatTransferRate(bytesPerSecond: number): string {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
+    return "—";
+  }
+
+  const bitsPerSecond = bytesPerSecond * 8;
+  const units = ["bit/s", "Kbit/s", "Mbit/s", "Gbit/s"];
+  let value = bitsPerSecond;
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit += 1;
+  }
+  const digits = value >= 100 || unit === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(digits)} ${units[unit]}`;
+}

@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/Input";
 import { DirectoryPathInput } from "@/components/ui/DirectoryPathInput";
 import { Button } from "@/components/ui/Button";
 import { useConfigStore } from "@/stores/configStore";
-import type { FooterMonitorSettings, LocaleId, SyncChannelId, ThemeId } from "@/config/defaults";
+import type { DownloadDoubleClickAction, FooterMonitorSettings, LocaleId, SyncChannelId, ThemeId } from "@/config/defaults";
 import { useLocalDirectoryPathMode } from "@/hooks/useDirectoryPathMode";
+import { useCanConfigureDownloadDoubleClick, useCanOpenDownloadFile } from "@/hooks/useDownloadDoubleClickAction";
 import i18n, { isRtlLocale } from "@/i18n";
 import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { isPwaSupported } from "@/lib/pwa";
@@ -17,6 +18,8 @@ export function GeneralSettings() {
   const updateConfig = useConfigStore((s) => s.updateConfig);
   const pwa = usePwaInstall();
   const localDirectoryPathMode = useLocalDirectoryPathMode();
+  const canConfigureDoubleClick = useCanConfigureDownloadDoubleClick();
+  const canOpenDownloadFile = useCanOpenDownloadFile();
 
   function setLocale(locale: LocaleId) {
     void i18n.changeLanguage(locale);
@@ -96,6 +99,27 @@ export function GeneralSettings() {
           }
         }}
       />
+
+      {canConfigureDoubleClick ? (
+        <Select
+          label={t("settings.downloadDoubleClick")}
+          value={
+            config.downloadDoubleClickAction === "openFile" && !canOpenDownloadFile
+              ? "openDetails"
+              : config.downloadDoubleClickAction
+          }
+          onChange={(e) =>
+            updateConfig({
+              downloadDoubleClickAction: e.target.value as DownloadDoubleClickAction,
+            })
+          }
+        >
+          {canOpenDownloadFile ? (
+            <option value="openFile">{t("settings.downloadDoubleClickOpenFile")}</option>
+          ) : null}
+          <option value="openDetails">{t("settings.downloadDoubleClickOpenDetails")}</option>
+        </Select>
+      ) : null}
 
       <section className="avar-settings-group">
         <h3 className="avar-settings-group__heading">{t("settings.remoteCopy.title")}</h3>

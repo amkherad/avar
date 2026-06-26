@@ -1,12 +1,45 @@
-importScripts("media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js", "download-intercept.js");
+importScripts("media.js", "capture.js", "protocol.js", "hls.js", "context-menu.js", "download-intercept.js", "badge.js");
 
 const EXTENSION_VERSION = "0.1.0";
 const { IDS: MENU_IDS } = globalThis.AvarContextMenu;
 const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE, ensureBridgeReachable } =
   globalThis.AvarExtensionProtocol;
 
-const networkCapture = globalThis.AvarNetworkCapture.createNetworkMediaCapture(chrome);
+async function collectFromTab(tabId, { forContextMenu = false } = {}) {
+  try {
+    const response = await chrome.tabs.sendMessage(tabId, {
+      type: "avar-get-page-media",
+      forContextMenu,
+    });
+    const domItems = response?.items || [];
+    const capturedItems = networkCapture.getForTab(tabId);
+    const items = AvarMedia.mergeMediaItems(domItems, capturedItems);
+    return {
+      urls: items.map((item) => item.url),
+      items,
+      selectedItems: response?.selectedItems || [],
+      pageUrl: null,
+      pageTitle: response?.pageTitle || null,
+    };
+  } catch {
+    const capturedItems = networkCapture.getForTab(tabId);
+    const items = AvarMedia.mergeMediaItems(capturedItems);
+    return {
+      urls: items.map((item) => item.url),
+      items,
+      selectedItems: [],
+      pageUrl: null,
+      pageTitle: null,
+    };
+  }
+}
+
+const mediaBadge = globalThis.AvarBadge.createBadgeController(chrome, { collectFromTab });
+const networkCapture = globalThis.AvarNetworkCapture.createNetworkMediaCapture(chrome, {
+  onCaptured: (tabId) => mediaBadge.scheduleRefresh(tabId),
+});
 networkCapture.installListeners();
+mediaBadge.install();
 
 async function getConfig() {
   const stored = await chrome.storage.local.get(["bridgeUrl", "guiUrl", "daemonUrl", "authToken"]);
@@ -150,35 +183,6 @@ async function controlQueue(action, queueId) {
   await sendMessage(bridgeUrl, action, { id: queueId });
 }
 
-async function collectFromTab(tabId, { forContextMenu = false } = {}) {
-  try {
-    const response = await chrome.tabs.sendMessage(tabId, {
-      type: "avar-get-page-media",
-      forContextMenu,
-    });
-    const domItems = response?.items || [];
-    const capturedItems = networkCapture.getForTab(tabId);
-    const items = AvarMedia.mergeMediaItems(domItems, capturedItems);
-    return {
-      urls: items.map((item) => item.url),
-      items,
-      selectedItems: response?.selectedItems || [],
-      pageUrl: null,
-      pageTitle: response?.pageTitle || null,
-    };
-  } catch {
-    const capturedItems = networkCapture.getForTab(tabId);
-    const items = AvarMedia.mergeMediaItems(capturedItems);
-    return {
-      urls: items.map((item) => item.url),
-      items,
-      selectedItems: [],
-      pageUrl: null,
-      pageTitle: null,
-    };
-  }
-}
-
 async function listMediaFromActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) {
@@ -318,6 +322,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "avar-media-changed") {
+    const tabId = sender.tab?.id;
+    if (tabId != null) {
+      mediaBadge.scheduleRefresh(tabId);
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (message?.type === "avar-selection-changed") {
     const count = typeof message.count === "number" ? message.count : 0;
     lastSelectionCount = count;

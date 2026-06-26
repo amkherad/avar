@@ -238,7 +238,7 @@ export function ConsolePanel() {
                 <span className="avar-console__level">{entry.level}</span>
                 <span className="avar-console__message">{entry.message}</span>
                 {entry.detail ? (
-                  <span className="avar-console__detail">{entry.detail}</span>
+                  <span className="avar-console__detail">{String(entry.detail)}</span>
                 ) : null}
               </div>
             ))

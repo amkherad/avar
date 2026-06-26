@@ -30,10 +30,13 @@ import {
 } from "@/lib/downloadFilterSort";
 import { openDownloadPopup } from "@/lib/popup";
 import { openAddDownloadDialog } from "@/lib/openAddDownloadDialog";
+import { openDownloadFile } from "@/lib/openDownloadFile";
+import { getClientOrNull } from "@/lib/downloadActions";
 import { appLogger } from "@/lib/appLogger";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
+import { useDownloadDoubleClickAction } from "@/hooks/useDownloadDoubleClickAction";
 import { useShortcutAction } from "@/shortcuts/useShortcutAction";
-import { canPause, canResume } from "@/lib/downloadStatus";
+import { canPause, canResume, isCompleted } from "@/lib/downloadStatus";
 import {
   selectDownloadsForQueue,
   selectEffectiveQueueId,
@@ -77,6 +80,7 @@ function DownloadPanel({
   const setDownloadViewMode = useLayoutStore((s) => s.setDownloadViewMode);
   const [batchAddOpen, setBatchAddOpen] = useState(false);
   const downloadActions = useDownloadActions();
+  const doubleClickAction = useDownloadDoubleClickAction();
 
   const [contextMenu, setContextMenu] = useState<{
     download: DownloadInfo;
@@ -237,9 +241,22 @@ function DownloadPanel({
 
   function handleOpen(downloadId: string) {
     const download = queueDownloads.find((d) => d.id === downloadId);
-    if (download) {
-      void openDownloadPopup(download, t("download.detailsTitle"));
+    if (!download) {
+      return;
     }
+
+    if (doubleClickAction === "openFile" && isCompleted(download.status)) {
+      const client = getClientOrNull();
+      if (client) {
+        void openDownloadFile(client, download).catch((error: unknown) => {
+          const detail = error instanceof Error ? error.message : String(error);
+          appLogger.gui.warn("Failed to open download file", detail);
+        });
+      }
+      return;
+    }
+
+    void openDownloadPopup(download, t("download.detailsTitle"));
   }
 
   function handleContextMenu(downloadId: string, event: React.MouseEvent) {

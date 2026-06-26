@@ -78,13 +78,30 @@ function rememberClassifiedItems(items) {
   if (!Array.isArray(items) || typeof AvarMedia === "undefined") {
     return;
   }
+  let changed = false;
   for (const item of items) {
     if (!item?.url) {
       continue;
     }
     const existing = hookedMediaItems.get(item.url);
     hookedMediaItems.set(item.url, existing ? AvarMedia.mergeMediaItems([existing, item])[0] : item);
+    changed = true;
   }
+  if (changed) {
+    scheduleMediaBadgeRefresh();
+  }
+}
+
+let mediaBadgeTimer = null;
+
+function scheduleMediaBadgeRefresh() {
+  if (mediaBadgeTimer) {
+    return;
+  }
+  mediaBadgeTimer = setTimeout(() => {
+    mediaBadgeTimer = null;
+    void sendRuntimeMessage({ type: "avar-media-changed" });
+  }, 300);
 }
 
 function rememberHookedText(text) {
@@ -989,6 +1006,7 @@ document.addEventListener(
 );
 
 installPageHooks();
+scheduleMediaBadgeRefresh();
 void (async () => {
   if (!ensureExtensionContext()) {
     return;

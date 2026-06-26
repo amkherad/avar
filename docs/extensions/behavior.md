@@ -84,6 +84,8 @@ When HLS master playlists are found and the bridge is connected, the popup asks 
 
 Open the extension from the browser toolbar. On open, the popup scans the active tab and lists detected media.
 
+When the popup is closed, the toolbar icon shows a **badge** with the number of capturable media URLs on the active tab (DOM scan plus network capture). The badge clears when you switch to a tab with no detected media.
+
 ### Main view
 
 - **Connection status** — green dot = bridge reachable; red = Avar Desktop not running or bridge disabled.

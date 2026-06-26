@@ -924,6 +924,33 @@ static cJSON *handle_download_checksum(cJSON *params) {
     return result;
 }
 
+static cJSON *handle_download_resolve_path(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    if (!cJSON_IsString(id) || id->valuestring == NULL || id->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    char *path = NULL;
+    if (download_resolve_dest_path(id->valuestring, &path) != EXIT_SUCCESS || path == NULL) {
+        cJSON *result = cJSON_CreateObject();
+        if (result != NULL) {
+            cJSON_AddNumberToObject(result, "exitCode", EXIT_FAILURE);
+        }
+        return result;
+    }
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        free(path);
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
+    cJSON_AddStringToObject(result, AVAR_FIELD_DEST_PATH, path);
+    free(path);
+    return result;
+}
+
 static cJSON *handle_queue_start(cJSON *params) {
     const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
     const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
@@ -1362,6 +1389,9 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     }
     if (strcmp(method, "download.checksum") == 0) {
         return handle_download_checksum(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "download.resolvePath") == 0) {
+        return handle_download_resolve_path(params != NULL ? params : cJSON_CreateObject());
     }
     if (strcmp(method, "fs.browse") == 0) {
         if (!daemon_server_fs_browse_enabled()) {

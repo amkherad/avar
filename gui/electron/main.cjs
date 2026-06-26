@@ -455,6 +455,13 @@ ipcMain.handle("dialog:selectDirectory", async (_event, options) => {
   return result.filePaths[0];
 });
 
+ipcMain.handle("shell:openPath", async (_event, filePath) => {
+  if (typeof filePath !== "string" || filePath.trim() === "") {
+    return "Invalid file path";
+  }
+  return shell.openPath(filePath);
+});
+
 setBatchPopupOpener((batchId, title) => {
   createPopupWindow({
     hash: `#/popup/batch-add/${encodeURIComponent(batchId)}`,

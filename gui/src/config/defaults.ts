@@ -11,6 +11,8 @@ export type SyncChannelId = "poll" | "sse" | "websocket";
 
 export type DetailPanelMode = "pinned" | "inline";
 
+export type DownloadDoubleClickAction = "openFile" | "openDetails";
+
 export type FooterMonitorDisplay = "text" | "histogram";
 
 export interface FooterMonitorSettings {
@@ -51,11 +53,13 @@ export interface GuiConfig {
   notificationsEnabled: boolean;
   /** Local folder for copying files from a remote daemon (GUI-only). */
   localDownloadPath: string;
+  /** Double-click behavior on download rows (local sessions; open file requires Electron). */
+  downloadDoubleClickAction: DownloadDoubleClickAction;
 }
 
 export const GUI_CONFIG_KEY = "avar.gui.config";
 export const GUI_SECRETS_KEY = "avar.gui.secrets";
-export const GUI_CONFIG_VERSION = 9;
+export const GUI_CONFIG_VERSION = 10;
 
 export const defaultFooterMonitors = (): FooterMonitorSettings => ({
   disk: true,
@@ -100,4 +104,5 @@ export const defaultGuiConfig = (): GuiConfig => ({
   browserExtensionEnabled: true,
   notificationsEnabled: true,
   localDownloadPath: "",
+  downloadDoubleClickAction: "openFile",
 });
