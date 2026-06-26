@@ -34,7 +34,7 @@ Install the Avar browser extension to queue media from web pages through the Ava
 
 The extension popup shows a green/red dot for bridge connectivity. Use **Download selected**, **Download all**, or the per-item download button to open the **Add downloads** batch dialog in Avar (a separate window in Electron). Review each file, choose a target queue, then **Queue download** or **Queue and start**.
 
-In the extension **Settings** view, enable **Grab all browser downloads** to send every native browser download to Avar. Pair it with **Prevent the browser from saving files** to cancel the browser download and queue the file in Avar instead.
+In the extension **Settings** view, enable **Grab all browser downloads** to send every native browser download to Avar and open the **Add download** dialog. Pair it with **Prevent the browser from saving files** to cancel the browser download and show the Avar dialog instead of the browser save prompt.
 
 ### 🖥️ Desktop tray (Electron)
 

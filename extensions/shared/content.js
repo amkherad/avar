@@ -12,10 +12,13 @@ const hookedMediaItems = new Map();
 
 let showSelectionWidget = true;
 let selectionWidgetOpacity = 100;
+let selectionWidgetTheme = "dark";
 const MIN_SELECTION_WIDGET_OPACITY = 40;
 const MAX_SELECTION_WIDGET_OPACITY = 100;
 /** @type {HTMLElement | null} */
 let selectionWidgetHost = null;
+/** @type {ShadowRoot | null} */
+let selectionWidgetShadow = null;
 let selectionChangeTimer = null;
 let widgetDismissed = false;
 let lastWidgetLinkCount = 0;
@@ -224,6 +227,7 @@ function removeSelectionWidget() {
     selectionWidgetHost.remove();
     selectionWidgetHost = null;
   }
+  selectionWidgetShadow = null;
   widgetDragState = null;
 }
 
@@ -248,8 +252,12 @@ function clampWidgetOpacity(value) {
   );
 }
 
+function normalizeSelectionWidgetTheme(value) {
+  return value === "light" ? "light" : "dark";
+}
+
 function getWidgetDimensions(host) {
-  const widget = host.shadowRoot?.querySelector(".widget");
+  const widget = selectionWidgetShadow?.querySelector(".widget");
   if (!widget) {
     return { width: 0, height: 0 };
   }
@@ -257,10 +265,20 @@ function getWidgetDimensions(host) {
 }
 
 function applyWidgetOpacity(shadow) {
-  const widget = shadow?.querySelector(".widget");
-  if (widget) {
-    widget.style.opacity = String(clampWidgetOpacity(selectionWidgetOpacity) / 100);
+  const opacity = String(clampWidgetOpacity(selectionWidgetOpacity) / 100);
+  if (shadow?.host) {
+    shadow.host.style.opacity = opacity;
   }
+}
+
+function applyWidgetTheme(shadow) {
+  const widget = shadow?.querySelector(".widget");
+  if (!widget) {
+    return;
+  }
+  const theme = normalizeSelectionWidgetTheme(selectionWidgetTheme);
+  widget.classList.remove("theme-dark", "theme-light");
+  widget.classList.add(theme === "light" ? "theme-light" : "theme-dark");
 }
 
 function applyWidgetPosition(host, left, top) {
@@ -543,9 +561,8 @@ function handleWidgetDragEnd() {
     return;
   }
   widgetDragState = null;
-  const shadow = selectionWidgetHost?.shadowRoot;
-  const widget = shadow?.querySelector(".widget");
-  const dragHandle = shadow?.querySelector(".drag-handle");
+  const widget = selectionWidgetShadow?.querySelector(".widget");
+  const dragHandle = selectionWidgetShadow?.querySelector(".drag-handle");
   if (dragHandle) {
     dragHandle.style.cursor = "grab";
   }
@@ -577,12 +594,36 @@ function ensureSelectionWidget() {
         gap: 8px;
         padding: 8px 8px 8px 4px;
         border-radius: 8px;
-        background: #0f172a;
-        color: #e2e8f0;
-        border: 1px solid #334155;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
         font-size: 13px;
         line-height: 1.2;
+        background: var(--widget-bg);
+        color: var(--widget-fg);
+        border: 1px solid var(--widget-border);
+        box-shadow: var(--widget-shadow);
+      }
+      .theme-dark {
+        --widget-bg: #0f172a;
+        --widget-fg: #e2e8f0;
+        --widget-border: #334155;
+        --widget-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+        --widget-muted: #94a3b8;
+        --widget-handle: #64748b;
+        --widget-handle-hover-fg: #94a3b8;
+        --widget-handle-hover-bg: #1e293b;
+        --widget-close-hover-bg: #1e293b;
+        --widget-close-hover-fg: #e2e8f0;
+      }
+      .theme-light {
+        --widget-bg: #f8fafc;
+        --widget-fg: #0f172a;
+        --widget-border: #cbd5e1;
+        --widget-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+        --widget-muted: #64748b;
+        --widget-handle: #64748b;
+        --widget-handle-hover-fg: #334155;
+        --widget-handle-hover-bg: #e2e8f0;
+        --widget-close-hover-bg: #e2e8f0;
+        --widget-close-hover-fg: #0f172a;
       }
       .drag-handle {
         margin: 0;
@@ -590,7 +631,7 @@ function ensureSelectionWidget() {
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: #64748b;
+        color: var(--widget-handle);
         font: inherit;
         line-height: 1;
         cursor: grab;
@@ -599,11 +640,11 @@ function ensureSelectionWidget() {
         letter-spacing: -0.15em;
       }
       .drag-handle:hover {
-        color: #94a3b8;
-        background: #1e293b;
+        color: var(--widget-handle-hover-fg);
+        background: var(--widget-handle-hover-bg);
       }
       .count {
-        color: #94a3b8;
+        color: var(--widget-muted);
         white-space: nowrap;
       }
       .download-btn {
@@ -635,18 +676,18 @@ function ensureSelectionWidget() {
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: #94a3b8;
+        color: var(--widget-muted);
         font: inherit;
         font-size: 16px;
         line-height: 1;
         cursor: pointer;
       }
       .close-btn:hover {
-        background: #1e293b;
-        color: #e2e8f0;
+        background: var(--widget-close-hover-bg);
+        color: var(--widget-close-hover-fg);
       }
     </style>
-    <div class="widget" role="region" aria-label="Avar download selection">
+    <div class="widget theme-dark" role="region" aria-label="Avar download selection">
       <button type="button" class="drag-handle" id="dragHandle" aria-label="Move" title="Drag to move">⋮⋮</button>
       <span class="count" id="count"></span>
       <span class="download-btn-wrap" id="downloadBtnWrap">
@@ -669,6 +710,7 @@ function ensureSelectionWidget() {
 
   document.documentElement.appendChild(host);
   selectionWidgetHost = host;
+  selectionWidgetShadow = shadow;
   return host;
 }
 
@@ -692,6 +734,11 @@ async function refreshBridgeStatus() {
   const response = await sendRuntimeMessage({ type: "avar-ping-bridge" });
   bridgeConnected = Boolean(response?.ok);
   return bridgeConnected;
+}
+
+function formatBulkDownloadLabel(count) {
+  const noun = count === 1 ? "file" : "files";
+  return `Download all ${count} ${noun}`;
 }
 
 function applyWidgetDownloadState(shadow) {
@@ -725,7 +772,7 @@ async function downloadSelectedLinks(shadow) {
 
   const button = shadow.getElementById("downloadBtn");
   button.disabled = true;
-  const previousLabel = button.textContent;
+  const restoreLabel = formatBulkDownloadLabel(items.length);
   button.textContent = "Opening…";
 
   try {
@@ -743,7 +790,7 @@ async function downloadSelectedLinks(shadow) {
 
   setTimeout(() => {
     button.disabled = false;
-    button.textContent = previousLabel;
+    button.textContent = restoreLabel;
   }, 2000);
 }
 
@@ -773,7 +820,7 @@ function updateSelectionWidget() {
   }
 
   const host = ensureSelectionWidget();
-  const shadow = host.shadowRoot;
+  const shadow = selectionWidgetShadow;
   if (!shadow) {
     return;
   }
@@ -783,6 +830,12 @@ function updateSelectionWidget() {
     countEl.textContent = `${items.length} link(s) selected`;
   }
 
+  const downloadBtn = shadow.getElementById("downloadBtn");
+  if (downloadBtn) {
+    downloadBtn.textContent = formatBulkDownloadLabel(items.length);
+  }
+
+  applyWidgetTheme(shadow);
   applyWidgetOpacity(shadow);
   applyWidgetDownloadState(shadow);
   positionSelectionWidget(host);
@@ -792,11 +845,24 @@ async function loadWidgetSetting() {
   if (!ensureExtensionContext()) {
     return;
   }
-  const stored = await api.storage.local.get(["showSelectionWidget", "selectionWidgetOpacity"]);
+  const stored = await api.storage.local.get([
+    "showSelectionWidget",
+    "selectionWidgetOpacity",
+    "selectionWidgetTheme",
+  ]);
   showSelectionWidget = stored.showSelectionWidget !== false;
   selectionWidgetOpacity = clampWidgetOpacity(stored.selectionWidgetOpacity);
-  await refreshBridgeStatus();
+  selectionWidgetTheme = normalizeSelectionWidgetTheme(stored.selectionWidgetTheme);
   updateSelectionWidget();
+  void refreshBridgeStatus().then(() => {
+    if (!ensureExtensionContext()) {
+      return;
+    }
+    if (selectionWidgetShadow) {
+      applyWidgetOpacity(selectionWidgetShadow);
+      applyWidgetDownloadState(selectionWidgetShadow);
+    }
+  });
 }
 
 function scheduleSelectionWidgetUpdate() {
@@ -900,6 +966,10 @@ api.storage.onChanged.addListener((changes, area) => {
     selectionWidgetOpacity = clampWidgetOpacity(changes.selectionWidgetOpacity.newValue);
     shouldUpdate = true;
   }
+  if (changes.selectionWidgetTheme) {
+    selectionWidgetTheme = normalizeSelectionWidgetTheme(changes.selectionWidgetTheme.newValue);
+    shouldUpdate = true;
+  }
   if (shouldUpdate) {
     updateSelectionWidget();
   }
@@ -933,8 +1003,9 @@ setInterval(() => {
     if (!ensureExtensionContext()) {
       return;
     }
-    if (selectionWidgetHost?.shadowRoot) {
-      applyWidgetDownloadState(selectionWidgetHost.shadowRoot);
+    if (selectionWidgetShadow) {
+      applyWidgetOpacity(selectionWidgetShadow);
+      applyWidgetDownloadState(selectionWidgetShadow);
     }
   });
 }, BRIDGE_STATUS_REFRESH_MS);

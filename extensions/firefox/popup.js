@@ -22,6 +22,10 @@ function clampSelectionWidgetOpacity(value) {
   );
 }
 
+function getSelectionWidgetTheme() {
+  return selectionWidgetThemeSelect?.value === "light" ? "light" : "dark";
+}
+
 function updateSelectionWidgetOpacityLabel() {
   if (!selectionWidgetOpacityInput || !selectionWidgetOpacityValue) {
     return;
@@ -48,17 +52,18 @@ const settingsView = document.getElementById("settingsView");
 const settingsBtn = document.getElementById("settingsBtn");
 const settingsBackBtn = document.getElementById("settingsBackBtn");
 const refreshBtn = document.getElementById("refreshBtn");
+const saveBridgeBtn = document.getElementById("saveBridge");
 const defaultQueueSelect = document.getElementById("defaultQueue");
 const defaultMediaFilterSelect = document.getElementById("defaultMediaFilter");
 const showSelectionWidgetInput = document.getElementById("showSelectionWidget");
 const selectionWidgetOpacityInput = document.getElementById("selectionWidgetOpacity");
 const selectionWidgetOpacityValue = document.getElementById("selectionWidgetOpacityValue");
+const selectionWidgetThemeSelect = document.getElementById("selectionWidgetTheme");
 const selectedLinksInSeparateTabInput = document.getElementById("selectedLinksInSeparateTab");
 const grabAllDownloadsInput = document.getElementById("grabAllDownloads");
 const blockBrowserDownloadsInput = document.getElementById("blockBrowserDownloads");
 const mediaTypeFilterSelect = document.getElementById("mediaTypeFilter");
 const mediaSortSelect = document.getElementById("mediaSort");
-const queueManagementEl = document.getElementById("queueManagement");
 const viewTabs = document.getElementById("viewTabs");
 const mediaScroll = document.getElementById("mediaScroll");
 const viewTabSelected = document.getElementById("viewTabSelected");
@@ -66,7 +71,7 @@ const viewTabMedia = document.getElementById("viewTabMedia");
 const viewTabSelectedCount = document.getElementById("viewTabSelectedCount");
 const viewTabMediaCount = document.getElementById("viewTabMediaCount");
 
-let selectedLinksInSeparateTab = false;
+let selectedLinksInSeparateTab = true;
 let activeListTab = "media";
 
 let lastMediaItems = [];
@@ -105,8 +110,22 @@ function getDownloadActionTitle() {
   return bridgeConnected ? "Review in Avar" : AVAR_NOT_FOUND_TITLE;
 }
 
+function formatBulkDownloadLabel(count) {
+  const noun = count === 1 ? "file" : "files";
+  return `Download all ${count} ${noun}`;
+}
+
+function updateDownloadSelectedLabel() {
+  if (!downloadSelectedBtn) {
+    return;
+  }
+  const count = lastSelectedItems.length;
+  downloadSelectedBtn.textContent = count > 0 ? formatBulkDownloadLabel(count) : "Download all selected";
+}
+
 function updateBulkDownloadButtons() {
   const disabledTitle = bridgeConnected ? "" : AVAR_NOT_FOUND_TITLE;
+  updateDownloadSelectedLabel();
   for (const btn of [downloadSelectedBtn, downloadAllBtn]) {
     if (!btn) {
       continue;
@@ -268,14 +287,6 @@ function updateScanStatus(totalCount) {
   setStatus(status.trim());
 }
 
-function queueNameForId(queueId) {
-  if (!queueId) {
-    return null;
-  }
-  const queue = knownQueues.find((item) => item.id === queueId);
-  return queue?.name || null;
-}
-
 function applyPopupSize(width, height) {
   const nextWidth = Math.max(
     POPUP_WIDTH_MIN,
@@ -433,6 +444,11 @@ function isSettingsOpen() {
   return !settingsView.hidden;
 }
 
+function getDefaultQueueId() {
+  const queueId = defaultQueueSelect?.value;
+  return queueId ? queueId : null;
+}
+
 function populateDefaultQueueOptions(selectedId) {
   const previous = selectedId ?? defaultQueueSelect.value;
   defaultQueueSelect.innerHTML = '<option value="">Default queue</option>';
@@ -447,59 +463,10 @@ function populateDefaultQueueOptions(selectedId) {
   }
 }
 
-function renderQueueManagement(queues) {
-  queueManagementEl.innerHTML = "";
-  if (!queues.length) {
-    const empty = document.createElement("p");
-    empty.className = "queue-management__empty";
-    empty.textContent = "No queues found.";
-    queueManagementEl.appendChild(empty);
-    return;
-  }
-
-  for (const queue of queues) {
-    const row = document.createElement("div");
-    row.className = "queue-row";
-
-    const name = document.createElement("span");
-    name.className = "queue-row__name";
-    name.textContent = queue.name;
-    name.title = queue.description || queue.name;
-
-    const status = document.createElement("span");
-    status.className = queue.running
-      ? "queue-row__status queue-row__status--running"
-      : "queue-row__status";
-    status.textContent = queue.running ? "Running" : "Stopped";
-
-    const action = document.createElement("button");
-    action.type = "button";
-    action.className = "queue-row__btn";
-    action.textContent = queue.running ? "Stop" : "Start";
-    action.addEventListener("click", async () => {
-      const wasRunning = queue.running;
-      const type = wasRunning ? "avar-queue-stop" : "avar-queue-start";
-      const response = await api.runtime.sendMessage({ type, queueId: queue.id });
-      if (response?.ok) {
-        await loadQueues();
-        setStatus(wasRunning ? `Stopped queue: ${queue.name}` : `Started queue: ${queue.name}`);
-      } else {
-        setStatus(response?.error || "Queue action failed.");
-      }
-    });
-
-    row.appendChild(name);
-    row.appendChild(status);
-    row.appendChild(action);
-    queueManagementEl.appendChild(row);
-  }
-}
-
 async function loadQueues() {
   const response = await api.runtime.sendMessage({ type: "avar-list-queues" });
   if (!response?.ok) {
     knownQueues = [];
-    renderQueueManagement([]);
     populateDefaultQueueOptions();
     return;
   }
@@ -510,8 +477,58 @@ async function loadQueues() {
     description: queue.description ? String(queue.description) : "",
     running: Boolean(queue.started ?? queue.running),
   }));
-  renderQueueManagement(knownQueues);
   populateDefaultQueueOptions(defaultQueueSelect.value);
+}
+
+async function persistExtensionSettings() {
+  const defaultMediaFilter = defaultMediaFilterSelect.value || DEFAULT_MEDIA_FILTER;
+  const nextSelectedLinksInSeparateTab = selectedLinksInSeparateTabInput.checked;
+  updateGrabDownloadsUi();
+
+  await api.runtime.sendMessage({
+    type: "avar-set-config",
+    defaultMediaFilter,
+    defaultQueueId: defaultQueueSelect.value,
+    showSelectionWidget: showSelectionWidgetInput.checked,
+    selectionWidgetOpacity: clampSelectionWidgetOpacity(selectionWidgetOpacityInput.value),
+    selectionWidgetTheme: getSelectionWidgetTheme(),
+    selectedLinksInSeparateTab: nextSelectedLinksInSeparateTab,
+    grabAllDownloads: grabAllDownloadsInput.checked,
+    blockBrowserDownloads: blockBrowserDownloadsInput.checked,
+  });
+
+  selectedLinksInSeparateTab = nextSelectedLinksInSeparateTab;
+  mediaTypeFilterSelect.value = defaultMediaFilter;
+  applyListViewLayout({ preferSelectedTabOnOpen: false });
+  renderSelectedLinksList(lastSelectedItems);
+  renderMediaList(lastMediaItems);
+}
+
+async function saveBridgeUrl() {
+  const bridgeUrl = AvarExtensionProtocol.normalizeBridgeUrl(
+    bridgeUrlInput.value.trim() || DEFAULT_BRIDGE,
+  );
+  bridgeUrlInput.value = bridgeUrl;
+  await api.runtime.sendMessage({ type: "avar-set-config", bridgeUrl });
+  await refreshBridgeStatus();
+  if (bridgeConnected) {
+    await loadQueues();
+  }
+}
+
+function installSettingsAutoSave() {
+  defaultQueueSelect.addEventListener("change", () => void persistExtensionSettings());
+  defaultMediaFilterSelect.addEventListener("change", () => void persistExtensionSettings());
+  showSelectionWidgetInput.addEventListener("change", () => void persistExtensionSettings());
+  selectionWidgetThemeSelect.addEventListener("change", () => void persistExtensionSettings());
+  selectedLinksInSeparateTabInput.addEventListener("change", () => void persistExtensionSettings());
+  blockBrowserDownloadsInput.addEventListener("change", () => void persistExtensionSettings());
+  grabAllDownloadsInput.addEventListener("change", () => void persistExtensionSettings());
+  selectionWidgetOpacityInput.addEventListener("change", () => {
+    updateSelectionWidgetOpacityLabel();
+    void persistExtensionSettings();
+  });
+  saveBridgeBtn.addEventListener("click", () => void saveBridgeUrl());
 }
 
 function getItemSize(item) {
@@ -685,7 +702,7 @@ async function openBatchAddDialog(items) {
     items: items.map(buildBatchItem),
     pageUrl: pageReferer,
     pageTitle,
-    defaultQueueId: defaultQueueSelect.value || null,
+    defaultQueueId: getDefaultQueueId(),
   });
   if (response?.ok) {
     setStatus(`Review ${items.length} download(s) in Avar.`);
@@ -705,7 +722,7 @@ async function openSingleAddDialog(item) {
     item: buildBatchItem(item),
     pageUrl: pageReferer,
     pageTitle,
-    defaultQueueId: defaultQueueSelect.value || null,
+    defaultQueueId: getDefaultQueueId(),
   });
   if (response?.ok) {
     setStatus("Review download in Avar.");
@@ -910,6 +927,9 @@ async function refreshBridgeStatus() {
     } else {
       updateAllDownloadButtons();
     }
+    if (bridgeConnected && isSettingsOpen()) {
+      void loadQueues();
+    }
   }
   return response;
 }
@@ -926,6 +946,7 @@ async function loadConfig() {
     "popupHeight",
     "showSelectionWidget",
     "selectionWidgetOpacity",
+    "selectionWidgetTheme",
     "selectedLinksInSeparateTab",
     "grabAllDownloads",
     "blockBrowserDownloads",
@@ -938,6 +959,9 @@ async function loadConfig() {
 
   const defaultFilter = stored.defaultMediaFilter || DEFAULT_MEDIA_FILTER;
   defaultMediaFilterSelect.value = defaultFilter;
+  if (stored.defaultQueueId) {
+    defaultQueueSelect.value = stored.defaultQueueId;
+  }
   mediaTypeFilterSelect.value = defaultFilter;
   mediaSortSelect.value = stored.mediaSort || DEFAULT_MEDIA_SORT;
   showSelectionWidgetInput.checked = stored.showSelectionWidget !== false;
@@ -945,10 +969,11 @@ async function loadConfig() {
     clampSelectionWidgetOpacity(stored.selectionWidgetOpacity ?? MAX_SELECTION_WIDGET_OPACITY),
   );
   updateSelectionWidgetOpacityLabel();
-  selectedLinksInSeparateTab = stored.selectedLinksInSeparateTab === true;
+  selectionWidgetThemeSelect.value = stored.selectionWidgetTheme === "light" ? "light" : "dark";
+  selectedLinksInSeparateTab = stored.selectedLinksInSeparateTab !== false;
   selectedLinksInSeparateTabInput.checked = selectedLinksInSeparateTab;
-  grabAllDownloadsInput.checked = stored.grabAllDownloads === true;
-  blockBrowserDownloadsInput.checked = stored.blockBrowserDownloads === true;
+  grabAllDownloadsInput.checked = stored.grabAllDownloads !== false;
+  blockBrowserDownloadsInput.checked = stored.blockBrowserDownloads !== false;
   updateGrabDownloadsUi();
   activeListTab = stored.activeListTab === "selected" ? "selected" : "media";
 
@@ -956,9 +981,7 @@ async function loadConfig() {
   installPopupResizePersistence();
   initVerticalResizeProbe(stored.popupHeight);
 
-  if (stored.defaultQueueId) {
-    defaultQueueSelect.value = stored.defaultQueueId;
-  }
+  installSettingsAutoSave();
 }
 
 async function expandHlsInBackground(items) {
@@ -1101,38 +1124,6 @@ function updateGrabDownloadsUi() {
   }
 }
 
-grabAllDownloadsInput.addEventListener("change", updateGrabDownloadsUi);
-
-selectionWidgetOpacityInput.addEventListener("input", updateSelectionWidgetOpacityLabel);
-
-document.getElementById("save").addEventListener("click", async () => {
-  const bridgeUrl = AvarExtensionProtocol.normalizeBridgeUrl(
-    bridgeUrlInput.value.trim() || DEFAULT_BRIDGE,
-  );
-  bridgeUrlInput.value = bridgeUrl;
-  const defaultMediaFilter = defaultMediaFilterSelect.value || DEFAULT_MEDIA_FILTER;
-  const nextSelectedLinksInSeparateTab = selectedLinksInSeparateTabInput.checked;
-  await api.runtime.sendMessage({
-    type: "avar-set-config",
-    bridgeUrl,
-    defaultQueueId: defaultQueueSelect.value,
-    defaultMediaFilter,
-    showSelectionWidget: showSelectionWidgetInput.checked,
-    selectionWidgetOpacity: clampSelectionWidgetOpacity(selectionWidgetOpacityInput.value),
-    selectedLinksInSeparateTab: nextSelectedLinksInSeparateTab,
-    grabAllDownloads: grabAllDownloadsInput.checked,
-    blockBrowserDownloads: blockBrowserDownloadsInput.checked,
-  });
-  selectedLinksInSeparateTab = nextSelectedLinksInSeparateTab;
-  mediaTypeFilterSelect.value = defaultMediaFilter;
-  applyListViewLayout({ preferSelectedTabOnOpen: false });
-  renderSelectedLinksList(lastSelectedItems);
-  renderMediaList(lastMediaItems);
-  setStatus("Settings saved.");
-  await refreshBridgeStatus();
-  await loadQueues();
-});
-
 downloadAllBtn.addEventListener("click", async () => {
   const selectedUrls = new Set(lastSelectedItems.map((item) => item.url));
   const items = getVisibleMediaItems(lastMediaItems).filter((item) => !selectedUrls.has(item.url));
@@ -1148,9 +1139,11 @@ void (async () => {
   installPopupResizeHandles();
   startSelectionRefresh();
   window.addEventListener("unload", stopSelectionRefresh);
-  void refreshBridgeStatus();
-  void loadQueues();
   await scanPage();
+  const bridgeResponse = await refreshBridgeStatus();
+  if (bridgeResponse?.ok) {
+    await loadQueues();
+  }
 })();
 
 setInterval(() => void refreshBridgeStatus(), 5000);

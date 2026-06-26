@@ -1,60 +1,64 @@
 # Avar Browser Extensions
 
-Browser extensions that send media links from web pages to the Avar download manager.
+Browser extensions that detect media on web pages and open Avar download dialogs via a local HTTP bridge.
+
+## Documentation
+
+| Audience | Location |
+|----------|----------|
+| Users | `docs/extensions/` — start at [behavior.md](../docs/extensions/behavior.md) |
+| Agents | `.agents/skills/extension-development/BEHAVIOR.md` — behavior contract |
+| Developers | [architecture.md](../docs/extensions/architecture.md), [protocol.md](../docs/extensions/protocol.md) |
 
 ## Layout
 
 | Path | Browsers |
 |------|----------|
+| `shared/` | **Source of truth** — edit here first |
 | `chromium/` | Chrome, Edge, Opera (Manifest V3) |
 | `firefox/` | Firefox (Manifest V2) |
-| `shared/` | Shared protocol and media discovery helpers |
+| `packages/` | Built ZIPs (`avar-chromium.zip`, `avar-firefox.zip`) |
+
+Synced from `shared/` (see `gui/vite-extensions.ts`): `media.js`, `protocol.js`, `capture.js`, `hls.js`, `context-menu.js`, `download-intercept.js`, `popup.js`, `popup.html`, `page-response-hook.js`, `media-hook.js`, `content.js`.
+
+Browser-specific: `background.js`, `manifest.json`, icons.
 
 ## Install (development)
 
-1. Start the Avar daemon with HTTP enabled (default `http://127.0.0.1:8000`).
-2. Open the Avar GUI or Electron app.
-3. Open **Settings** → **Browser integration** and install the extension for your browser.
-4. Load the unpacked extension folder (`chromium/` or `firefox/`) from this directory.
+1. Start the daemon: `avar daemon start --http --port=8000`
+2. Open **Avar Desktop** (Electron) — required for the extension bridge
+3. Enable **Listen for browser extension connections** in GUI settings
+4. Load unpacked: `chromium/` or `firefox/`
+5. After editing `shared/`, run `npm run dev` or build in `gui/` to sync copies
 
-## Configuration
+## Bridge
 
-The extension stores the Avar **bridge URL** in browser storage. When Avar Desktop (Electron) is running, the extension auto-detects the dedicated bridge at `http://127.0.0.1:18766`. For web-only development, it falls back to the Vite dev server at `http://127.0.0.1:56821`.
+- URL: `http://127.0.0.1:18766` (Electron only)
+- Client: `shared/protocol.js`
+- Server: `gui/electron/extension-bridge.cjs`
+- Protocol: v1 envelope on `POST /v1`, health on `GET /v1/ping`
+
+The extension opens **Add download** / **Add downloads** review dialogs — it does not queue silently (except optional browser-download intercept).
+
+## Core modules
+
+| File | Role |
+|------|------|
+| `media.js` | URL classification, DOM scan, merge/sort/filter |
+| `content.js` | Page hooks, selection widget, media merge |
+| `capture.js` | `webRequest` network capture |
+| `page-response-hook.js` | fetch/XHR response body scan (page world) |
+| `media-hook.js` | Dynamic `video`/`audio` src hooks (page world) |
+| `popup.js` | Toolbar popup UI |
+| `hls.js` | HLS master playlist expansion |
+| `download-intercept.js` | Native browser download grab |
+| `context-menu.js` | Right-click menus |
+| `background.js` | Bridge client, orchestration (per browser) |
+
+## Site-agnostic rule
+
+Never add hostname checks or per-site extractors. Improve generic heuristics in `media.js`. See `.agents/skills/extension-development/SKILL.md`.
 
 ## Messaging protocol (v1)
 
-Transport: HTTP JSON on the bridge port.
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/v1/ping` | GET | Health check |
-| `/v1` | POST | Envelope messages (`ping`, `status`, `download.add`) |
-| `/extension/ping` | GET | Legacy health check |
-| `/extension/download` | POST | Legacy download queue |
-
-Envelope format:
-
-```json
-{
-  "protocol": "avar.extension",
-  "version": 1,
-  "type": "download.add",
-  "id": "1234567890",
-  "payload": { "url": "https://example.com/file.mp4" }
-}
-```
-
-Response:
-
-```json
-{
-  "protocol": "avar.extension",
-  "version": 1,
-  "type": "download.add",
-  "id": "1234567890",
-  "ok": true,
-  "payload": {}
-}
-```
-
-Downloads are forwarded to the active daemon session via JSON-RPC `download.add`.
+See [docs/extensions/protocol.md](../docs/extensions/protocol.md) for full message types (`download.add.open`, `download.batch.open`, `url.probe`, `hls.list`, `queue.list`, …).

@@ -16,6 +16,7 @@
   const AVAR_FOCUS_URL = "avar://focus";
   const LOCAL_BRIDGE_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
   const BRIDGE_UNREACHABLE = "Cannot reach Avar bridge";
+  const BRIDGE_FETCH_TIMEOUT_MS = 2000;
 
   /**
    * @param {string} type
@@ -36,11 +37,15 @@
    * @param {string} type
    * @param {Record<string, unknown>} [payload]
    */
-  async function fetchBridge(url, init) {
+  async function fetchBridge(url, init, timeoutMs = BRIDGE_FETCH_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(url, init);
+      return await fetch(url, { ...init, signal: controller.signal });
     } catch {
       throw new Error(BRIDGE_UNREACHABLE);
+    } finally {
+      clearTimeout(timer);
     }
   }
 

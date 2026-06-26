@@ -20,7 +20,7 @@ Source code: [{{ site.repo_url }}/tree/main/gui]({{ site.repo_url }}/tree/main/g
 ```bash
 cd gui
 npm install
-npm run dev          # http://localhost:56821 — proxies /api to daemon
+npm run dev          # http://localhost:56000 — proxies /api to daemon
 npm run dev:desktop  # Electron + Vite dev server
 npm run dev:tiny     # Tiny webview experiment + Vite (see gui/tiny/README.md)
 ```

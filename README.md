@@ -61,7 +61,7 @@ avar daemon start --http --port=8000
 
 cd gui
 npm install
-npm run dev          # http://localhost:56821
+npm run dev          # http://localhost:56000
 npm run dev:desktop  # Electron + Vite
 ```
 

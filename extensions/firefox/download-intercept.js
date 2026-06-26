@@ -3,7 +3,7 @@
  */
 
 function createDownloadIntercept(api, handlers) {
-  const { addDownload, openSingleAdd, requireReachableBridge } = handlers;
+  const { openSingleAdd, requireReachableBridge } = handlers;
 
   /** @type {Map<string, number>} */
   const recentUrls = new Map();
@@ -52,7 +52,9 @@ function createDownloadIntercept(api, handlers) {
       "blockBrowserDownloads",
       "defaultQueueId",
     ]);
-    if (!stored.grabAllDownloads) {
+    const grabAllDownloads = stored.grabAllDownloads !== false;
+    const blockBrowserDownloads = stored.blockBrowserDownloads !== false;
+    if (!grabAllDownloads) {
       return;
     }
 
@@ -63,7 +65,7 @@ function createDownloadIntercept(api, handlers) {
 
     const duplicate = isDuplicate(url);
     if (duplicate) {
-      if (stored.blockBrowserDownloads) {
+      if (blockBrowserDownloads) {
         try {
           await api.downloads.cancel(downloadItem.id);
         } catch {
@@ -73,7 +75,7 @@ function createDownloadIntercept(api, handlers) {
       return;
     }
 
-    if (stored.blockBrowserDownloads) {
+    if (blockBrowserDownloads) {
       try {
         await api.downloads.cancel(downloadItem.id);
       } catch (error) {
@@ -93,25 +95,15 @@ function createDownloadIntercept(api, handlers) {
     const defaultQueueId = stored.defaultQueueId || null;
 
     try {
-      if (stored.blockBrowserDownloads) {
-        await addDownload({
-          url,
-          streamKind,
-          referer,
-          queue: defaultQueueId || undefined,
-          autoStart: true,
-        });
-      } else {
-        await openSingleAdd({
-          url,
-          streamKind,
-          filename,
-          referer,
-          pageUrl: referer,
-          pageTitle: downloadItem.title || "",
-          defaultQueueId,
-        });
-      }
+      await openSingleAdd({
+        url,
+        streamKind,
+        filename,
+        referer,
+        pageUrl: referer,
+        pageTitle: downloadItem.title || "",
+        defaultQueueId,
+      });
     } catch (error) {
       console.error("Avar extension: failed to forward download", error);
     }

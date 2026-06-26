@@ -79,7 +79,7 @@ gui/
 ```bash
 cd gui
 npm install
-npm run dev              # Web dev server (port 56821)
+npm run dev              # Web dev server (port 56000)
 npm run dev:desktop      # Vite + Electron
 npm run build            # Static SPA → dist/
 npm run build:desktop    # Electron packages (mac, win, linux)

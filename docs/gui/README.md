@@ -33,7 +33,7 @@ avar daemon start --http --port=8000
 
 | Mode | Command | URL |
 |------|---------|-----|
-| **Web dev** | `cd gui && npm run dev` | `http://localhost:56821` |
+| **Web dev** | `cd gui && npm run dev` | `http://localhost:56000` |
 | **Web production** | `npm run build` → serve `gui/dist/` | Your host + daemon URL in session settings |
 | **Electron dev** | `npm run dev:desktop` | Desktop window |
 | **Electron production** | `npm run build:desktop` | Installers in `gui/release/` |

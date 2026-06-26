@@ -6,58 +6,69 @@ parent: Browser Extensions
 
 # Using the Extension
 
-## Capturing media from a page
+Quick start for the **Avar Download Helper**. For complete behavior details, see [Extension Behavior]({{ site.baseurl }}/extensions/behavior.html).
 
-The extension scans the current page for downloadable media automatically. When media is found, you can queue it for download through several methods.
+## Prerequisites
 
-### Extension popup
+1. **Avar Desktop** (Electron) running
+2. **Settings → Browser integration → Listen for browser extension connections** enabled
+3. Extension installed and showing a **green** connection dot
 
-1. Click the **Avar Download Helper** icon in the browser toolbar.
-2. The popup lists detected media URLs on the current page.
-3. Click a URL or use the download button to send it to Avar.
-4. The download appears in the active queue in the GUI.
+The bridge URL is `http://127.0.0.1:18766` (auto-detected).
 
-### Context menu
+## Capturing media
 
-Right-click on a link, image, video, or audio element and choose **Download with Avar**. The extension sends the URL to the bridge immediately.
+Open any web page, then click the extension icon. The popup scans the active tab and lists detected URLs.
 
-### Automatic detection
+Detection is automatic and **site-agnostic** — the extension uses MIME types, file extensions, streaming patterns, network headers, and dynamic player hooks. No per-website rules.
 
-Content scripts monitor the page for:
+After opening a media-heavy page, start playback if URLs do not appear immediately.
 
-- `<video>` and `<audio>` elements with `src` attributes
-- Links to common media extensions (`.mp4`, `.webm`, `.mkv`, `.mp3`, `.flac`, `.zip`, etc.)
-- HLS (`.m3u8`) and DASH (`.mpd`) manifest URLs
-- Network requests matching media MIME types
+## Downloading
 
-Detection is **site-agnostic** — it does not use per-website rules or hostname checks.
+| Method | How |
+|--------|-----|
+| **Popup — per item** | Click the download icon on a row → **Add download** dialog in Avar |
+| **Popup — bulk** | **Download all selected** or **Download all on page** → **Add downloads** batch dialog |
+| **Selection widget** | Select text containing links → floating **Download all** button on the page |
+| **Context menu** | Right-click link → **Download with Avar**; or page → **Avar integration** submenu |
+| **Browser downloads** | Enable **Grab all browser downloads** in extension Settings |
+
+Downloads are always reviewed in Avar before queuing — the extension opens a dialog, not a silent queue (except when intercepting native browser downloads).
+
+## Popup features
+
+- **Filter** by type: All, Video, Audio, Image, Binary
+- **Sort** by type, size ascending, or size descending
+- **Selected links** tab — URLs from your text selection
+- **Copy link** button on each row
+- **Refresh** to re-scan the page
+- **Settings** (gear icon) — bridge URL, default queue, widget options, download interception
 
 ## Connection status
 
 | Indicator | Meaning |
 |-----------|---------|
-| Green dot | Bridge reachable; downloads will be forwarded |
-| Red dot | Bridge unreachable; check daemon and GUI are running |
+| Green dot | Bridge reachable; download buttons enabled |
+| Red dot | Avar Desktop not running, bridge disabled, or wrong URL |
 
-Troubleshooting a red indicator:
+Troubleshooting:
 
-1. Confirm the daemon is running: `avar daemon ping`
-2. Confirm the GUI or Electron app is open (the bridge runs inside it)
-3. Check **Settings → Browser integration** — **Listen for browser extension connections** must be enabled
-4. Manually set the bridge URL in the extension popup
+1. Start or focus Avar Desktop
+2. Enable **Listen for browser extension connections** in GUI settings
+3. Confirm bridge URL is `http://127.0.0.1:18766` in extension Settings
+4. Check the puzzle-piece icon in the Avar header for integration status
 
 ## Where downloads go
 
-Downloads are forwarded to the **active daemon session** configured in the GUI. They appear in the currently selected queue. Change the active queue in the GUI sidebar before sending URLs if you want them in a specific queue.
-
-## Electron vs web
-
-| Mode | Bridge | Notes |
-|------|--------|-------|
-| **Electron desktop** | `http://127.0.0.1:18766` | Auto-detected; most reliable |
-| **Web GUI (dev)** | `http://127.0.0.1:56821` | Requires `npm run dev` |
-| **Web GUI (production)** | Configured bridge URL | Set manually in extension popup |
+The **Add download(s)** dialog lets you pick the target queue and filename. Set a **Default download queue** in extension Settings to pre-select a queue.
 
 ## Privacy
 
-The extension only communicates with localhost bridge URLs. It does not send data to external servers. Media URLs are forwarded to your local Avar daemon only.
+The extension only talks to `127.0.0.1:18766`. Media URLs are forwarded to your local Avar instance only.
+
+## See also
+
+- [Extension Behavior]({{ site.baseurl }}/extensions/behavior.html) — full feature reference
+- [Architecture]({{ site.baseurl }}/extensions/architecture.html) — technical overview
+- [Protocol]({{ site.baseurl }}/extensions/protocol.html) — bridge message format

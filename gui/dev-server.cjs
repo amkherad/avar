@@ -1,7 +1,10 @@
 "use strict";
 
-/** Vite / Electron development server port (web + desktop). */
-const DEV_SERVER_PORT = 56821;
+/**
+ * Vite / Electron development server port (web + desktop).
+ * Keep outside Windows Hyper-V excluded ranges (often ~56417–57216 on Win10/11).
+ */
+const DEV_SERVER_PORT = 56000;
 
 module.exports = {
   DEV_SERVER_PORT,

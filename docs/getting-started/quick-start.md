@@ -99,7 +99,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:56821` in your browser. The dev server proxies API requests to the daemon.
+Open `http://localhost:56000` in your browser. The dev server proxies API requests to the daemon.
 
 For the desktop app:
 

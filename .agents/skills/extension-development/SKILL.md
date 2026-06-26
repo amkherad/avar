@@ -7,6 +7,12 @@ description: Browser extension media capture for Avar in extensions/. Apply when
 
 Apply to all files under `extensions/`. For GUI bridge code, use **react-development** and **gui-code-style** instead.
 
+## Behavior contract (read first)
+
+Before changing detection, popup UI, settings, bridge calls, or download flow, read **[BEHAVIOR.md](BEHAVIOR.md)** — the agent-maintained contract for preserving existing behavior.
+
+User docs: `docs/extensions/behavior.md`. Technical architecture: `docs/extensions/architecture.md`. Protocol: `docs/extensions/protocol.md`.
+
 ## Core rule: no site-specific code
 
 **Never** add logic keyed to a particular host, brand, or page layout.
@@ -101,3 +107,7 @@ Before implementing, confirm:
 ## Testing
 
 Manual: load unpacked extension, open a media-heavy page, confirm popup lists URLs after playback. Verify signed CDN URLs (no file extension) appear via generic `sig`/`expires` detection.
+
+Full checklist: `docs/extensions/architecture.md` § Testing checklist.
+
+After behavior changes, update **BEHAVIOR.md** and **docs/extensions/behavior.md** so users and future agents stay aligned.

@@ -6,6 +6,9 @@
     <style>
       :root {
         color-scheme: dark;
+        --avar-scrollbar-track: #1e293b;
+        --avar-scrollbar-thumb: #334155;
+        --avar-scrollbar-thumb-hover: #94a3b8;
       }
 
       html {
@@ -35,6 +38,36 @@
         padding: 12px;
         box-sizing: border-box;
         overflow: hidden;
+        scrollbar-width: thin;
+        scrollbar-color: var(--avar-scrollbar-thumb) var(--avar-scrollbar-track);
+      }
+
+      .popup-root * {
+        scrollbar-width: thin;
+        scrollbar-color: var(--avar-scrollbar-thumb) var(--avar-scrollbar-track);
+      }
+
+      .popup-root *::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+      }
+
+      .popup-root *::-webkit-scrollbar-track {
+        background: var(--avar-scrollbar-track);
+      }
+
+      .popup-root *::-webkit-scrollbar-thumb {
+        background: var(--avar-scrollbar-thumb);
+        border: 2px solid var(--avar-scrollbar-track);
+        border-radius: 999px;
+      }
+
+      .popup-root *::-webkit-scrollbar-thumb:hover {
+        background: var(--avar-scrollbar-thumb-hover);
+      }
+
+      .popup-root *::-webkit-scrollbar-corner {
+        background: var(--avar-scrollbar-track);
       }
 
       .header {
@@ -181,12 +214,34 @@
         padding-right: 2px;
       }
 
-      .settings-view__footer {
+      .bridge-url-row {
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+        align-items: stretch;
+      }
+
+      .bridge-url-row__save {
         flex-shrink: 0;
-        padding-top: 10px;
-        margin-top: 8px;
-        border-top: 1px solid #334155;
-        background: #0f172a;
+        margin: 0;
+        padding: 6px 10px;
+        border: none;
+        border-radius: 6px;
+        background: #38bdf8;
+        color: #0f172a;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .bridge-url-row__save:hover {
+        background: #7dd3fc;
+      }
+
+      .bridge-url-row input {
+        flex: 1;
+        min-width: 0;
+        margin-top: 0;
       }
 
       .settings-section-title {
@@ -213,73 +268,6 @@
         border: 1px solid #334155;
         background: #1e293b;
         color: inherit;
-      }
-
-      .queue-management {
-        margin-top: 4px;
-        max-height: 140px;
-        overflow-y: auto;
-        border: 1px solid #334155;
-        border-radius: 6px;
-        background: #1e293b;
-      }
-
-      .queue-management__empty {
-        margin: 0;
-        padding: 8px;
-        font-size: 0.72rem;
-        color: #64748b;
-      }
-
-      .queue-row {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 8px;
-        border-bottom: 1px solid #334155;
-        font-size: 0.75rem;
-      }
-
-      .queue-row:last-child {
-        border-bottom: none;
-      }
-
-      .queue-row__name {
-        flex: 1;
-        min-width: 0;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .queue-row__status {
-        font-size: 0.65rem;
-        padding: 1px 5px;
-        border-radius: 4px;
-        background: #334155;
-        color: #94a3b8;
-        flex-shrink: 0;
-      }
-
-      .queue-row__status--running {
-        background: #14532d;
-        color: #86efac;
-      }
-
-      .queue-row__btn {
-        margin: 0;
-        padding: 2px 6px;
-        border: none;
-        border-radius: 4px;
-        background: #334155;
-        color: #e2e8f0;
-        font-size: 0.65rem;
-        cursor: pointer;
-        flex-shrink: 0;
-      }
-
-      .queue-row__btn:hover {
-        background: #475569;
       }
 
       button.primary {
@@ -816,7 +804,10 @@
         <div class="settings-view__body">
           <label>
             Avar bridge URL
-            <input id="bridgeUrl" type="url" placeholder="http://127.0.0.1:18766" />
+            <div class="bridge-url-row">
+              <button id="saveBridge" class="bridge-url-row__save" type="button">Save</button>
+              <input id="bridgeUrl" type="url" placeholder="http://127.0.0.1:18766" />
+            </div>
           </label>
 
           <label>
@@ -857,31 +848,30 @@
             </div>
           </label>
 
+          <label>
+            Selection widget theme
+            <select id="selectionWidgetTheme">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+            </select>
+          </label>
+
           <label class="settings-checkbox">
-            <input id="selectedLinksInSeparateTab" type="checkbox" />
+            <input id="selectedLinksInSeparateTab" type="checkbox" checked />
             Put selected links in a separate tab
           </label>
 
           <p class="settings-section-title">Browser downloads</p>
 
           <label class="settings-checkbox">
-            <input id="grabAllDownloads" type="checkbox" />
+            <input id="grabAllDownloads" type="checkbox" checked />
             Grab all browser downloads and send them to Avar
           </label>
 
           <label class="settings-checkbox">
-            <input id="blockBrowserDownloads" type="checkbox" />
-            Prevent the browser from saving files (queue in Avar instead)
+            <input id="blockBrowserDownloads" type="checkbox" checked />
+            Prevent the browser from saving files (open in Avar instead)
           </label>
-
-          <p class="settings-section-title">Queue management</p>
-          <div id="queueManagement" class="queue-management">
-            <p class="queue-management__empty">Connect to Avar to load queues.</p>
-          </div>
-        </div>
-
-        <div class="settings-view__footer">
-          <button id="save" class="primary" type="button">Save settings</button>
         </div>
       </div>
 

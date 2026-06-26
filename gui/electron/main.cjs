@@ -406,8 +406,9 @@ function createPopupWindow(options) {
     minHeight,
     title: options.title ?? "Avar",
     icon: loadAppIcon(),
-    parent: BrowserWindow.getFocusedWindow() ?? undefined,
+    parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
     modal: false,
+    show: false,
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
@@ -421,6 +422,11 @@ function createPopupWindow(options) {
 
   popup.on("closed", () => {
     popupWindows.delete(popupId);
+  });
+
+  popup.once("ready-to-show", () => {
+    popup.show();
+    popup.focus();
   });
 
   const hash = options.hash ?? extractHashFromUrl(options.url);

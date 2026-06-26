@@ -32,12 +32,13 @@ async function resolveBridgeUrl() {
 }
 
 async function pingBridgeEndpoint() {
-  const bridgeUrl = await resolveBridgeUrl();
+  const { bridgeUrl } = await getConfig();
+  const normalized = normalizeBridgeUrl(bridgeUrl);
   try {
-    await pingBridge(bridgeUrl);
-    return { ok: true, bridgeUrl };
+    await pingBridge(normalized);
+    return { ok: true, bridgeUrl: normalized };
   } catch (error) {
-    return { ok: false, bridgeUrl, error: String(error) };
+    return { ok: false, bridgeUrl: normalized, error: String(error) };
   }
 }
 
@@ -198,6 +199,11 @@ async function refreshContextMenus(hasSelectedLinks) {
 function isBridgeUnreachableError(error) {
   const message = String(error?.message || error);
   return message.includes(BRIDGE_UNREACHABLE) || message.includes("Failed to fetch");
+}
+
+async function isBridgeReachable() {
+  const result = await pingBridgeEndpoint();
+  return Boolean(result?.ok);
 }
 
 async function requireReachableBridge() {
@@ -441,15 +447,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "avar-set-config") {
-    const bridgeUrl = normalizeBridgeUrl(
-      message.bridgeUrl || message.guiUrl || message.daemonUrl || DEFAULT_ELECTRON_BRIDGE,
-    );
-    const storageUpdate = {
-      bridgeUrl,
-      guiUrl: bridgeUrl,
-      daemonUrl: bridgeUrl,
-      authToken: message.authToken || "",
-    };
+    const storageUpdate = {};
+    if (
+      typeof message.bridgeUrl === "string" ||
+      typeof message.guiUrl === "string" ||
+      typeof message.daemonUrl === "string"
+    ) {
+      const bridgeUrl = normalizeBridgeUrl(
+        message.bridgeUrl || message.guiUrl || message.daemonUrl || DEFAULT_ELECTRON_BRIDGE,
+      );
+      storageUpdate.bridgeUrl = bridgeUrl;
+      storageUpdate.guiUrl = bridgeUrl;
+      storageUpdate.daemonUrl = bridgeUrl;
+    }
+    if (typeof message.authToken === "string") {
+      storageUpdate.authToken = message.authToken;
+    }
     if (typeof message.defaultQueueId === "string") {
       storageUpdate.defaultQueueId = message.defaultQueueId;
     }
@@ -465,6 +478,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         Math.min(100, Math.round(message.selectionWidgetOpacity)),
       );
     }
+    if (message.selectionWidgetTheme === "light" || message.selectionWidgetTheme === "dark") {
+      storageUpdate.selectionWidgetTheme = message.selectionWidgetTheme;
+    }
     if (typeof message.selectedLinksInSeparateTab === "boolean") {
       storageUpdate.selectedLinksInSeparateTab = message.selectedLinksInSeparateTab;
     }
@@ -473,6 +489,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (typeof message.blockBrowserDownloads === "boolean") {
       storageUpdate.blockBrowserDownloads = message.blockBrowserDownloads;
+    }
+    if (Object.keys(storageUpdate).length === 0) {
+      sendResponse({ ok: true });
+      return true;
     }
     chrome.storage.local
       .set(storageUpdate)
@@ -495,7 +515,6 @@ void resolveBridgeUrl().then(async (bridgeUrl) => {
 void globalThis.AvarContextMenu.ensureMenus(chrome.contextMenus);
 
 globalThis.AvarDownloadIntercept.createDownloadIntercept(chrome, {
-  addDownload,
   openSingleAdd,
-  requireReachableBridge,
+  requireReachableBridge: isBridgeReachable,
 }).installListeners();

@@ -1,5 +1,5 @@
 /** Must match `gui/dev-server.cjs`. */
-export const DEV_SERVER_PORT = 56821;
+export const DEV_SERVER_PORT = 56000;
 
 export const DEFAULT_EXTENSION_GUI_URL = `http://127.0.0.1:${DEV_SERVER_PORT}`;
 
