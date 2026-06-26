@@ -7,7 +7,8 @@ The Avar GUI uses a flexible layout you can resize and toggle.
 | Panel | Handle |
 |-------|--------|
 | Sidebar | Right edge of the sidebar |
-| Detail panel | Between downloads and the right panel |
+| Detail panel (pinned) | Between downloads and the right panel |
+| Detail panel (inline) | Top edge of the panel below the list |
 | Console | Top edge of the console drawer |
 
 ## 📌 Detail panel
@@ -18,6 +19,8 @@ Modes (thumbtack icon in the panel header):
 
 - **Pinned** — fixed column on the right
 - **Inline** — appears below the download list
+
+Drag the resize handle to change the panel size (width when pinned, height when inline).
 
 ## 📊 Footer
 

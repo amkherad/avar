@@ -88,7 +88,7 @@ When there are more rows than the page size (default **100**), paging controls a
 
 ## 📌 Detail panel
 
-Toggle the right panel from the footer. Use the thumbtack control in the panel header to switch between **pinned** (side column) and **inline** (below the list) layouts.
+Toggle the right panel from the footer. Use the thumbtack control in the panel header to switch between **pinned** (side column) and **inline** (below the list) layouts. Drag the resize handle to adjust the panel size.
 
 Use **Copy curl** in the detail panel to generate an equivalent `curl` command and copy it to the clipboard.
 

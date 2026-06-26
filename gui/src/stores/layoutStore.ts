@@ -24,6 +24,7 @@ interface LayoutState {
   sidebarWidth: number;
   consoleHeight: number;
   detailPanelWidth: number;
+  detailPanelHeight: number;
   detailPanelOpen: boolean;
   downloadViewMode: DownloadViewMode;
   downloadTableColumns: DownloadTableColumns;
@@ -34,6 +35,8 @@ interface LayoutState {
   adjustConsoleHeight: (delta: number) => void;
   setDetailPanelWidth: (width: number) => void;
   adjustDetailPanelWidth: (delta: number) => void;
+  setDetailPanelHeight: (height: number) => void;
+  adjustDetailPanelHeight: (delta: number) => void;
   setDetailPanelOpen: (open: boolean) => void;
   toggleDetailPanel: () => void;
   setDownloadViewMode: (mode: DownloadViewMode) => void;
@@ -47,6 +50,8 @@ const CONSOLE_MIN = 120;
 const CONSOLE_MAX = 600;
 const DETAIL_MIN = 220;
 const DETAIL_MAX = 560;
+const DETAIL_HEIGHT_MIN = 120;
+const DETAIL_HEIGHT_MAX = 600;
 const TABLE_COL_MIN = 60;
 
 const defaultTableColumns: DownloadTableColumns = {
@@ -70,6 +75,7 @@ export const useLayoutStore = create<LayoutState>()(
       sidebarWidth: 260,
       consoleHeight: 220,
       detailPanelWidth: 300,
+      detailPanelHeight: 280,
       detailPanelOpen: false,
       downloadViewMode: "grid",
       downloadTableColumns: defaultTableColumns,
@@ -97,6 +103,14 @@ export const useLayoutStore = create<LayoutState>()(
       adjustDetailPanelWidth: (delta) => {
         const next = get().detailPanelWidth - delta;
         set({ detailPanelWidth: clampSize(next, DETAIL_MIN, DETAIL_MAX) });
+      },
+
+      setDetailPanelHeight: (height) =>
+        set({ detailPanelHeight: clampSize(height, DETAIL_HEIGHT_MIN, DETAIL_HEIGHT_MAX) }),
+
+      adjustDetailPanelHeight: (delta) => {
+        const next = get().detailPanelHeight - delta;
+        set({ detailPanelHeight: clampSize(next, DETAIL_HEIGHT_MIN, DETAIL_HEIGHT_MAX) });
       },
 
       setDetailPanelOpen: (open) => set({ detailPanelOpen: open }),
@@ -127,6 +141,7 @@ export const useLayoutStore = create<LayoutState>()(
         sidebarWidth: state.sidebarWidth,
         consoleHeight: state.consoleHeight,
         detailPanelWidth: state.detailPanelWidth,
+        detailPanelHeight: state.detailPanelHeight,
         detailPanelOpen: state.detailPanelOpen,
         downloadViewMode: state.downloadViewMode,
         downloadTableColumns: state.downloadTableColumns,

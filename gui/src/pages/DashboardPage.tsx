@@ -73,7 +73,9 @@ function DownloadPanel({
   const detailPanelOpen = useLayoutStore((s) => s.detailPanelOpen);
   const setDetailPanelOpen = useLayoutStore((s) => s.setDetailPanelOpen);
   const detailPanelWidth = useLayoutStore((s) => s.detailPanelWidth);
+  const detailPanelHeight = useLayoutStore((s) => s.detailPanelHeight);
   const adjustDetailPanelWidth = useLayoutStore((s) => s.adjustDetailPanelWidth);
+  const adjustDetailPanelHeight = useLayoutStore((s) => s.adjustDetailPanelHeight);
   const downloadViewMode = useLayoutStore((s) => s.downloadViewMode);
   const setDownloadViewMode = useLayoutStore((s) => s.setDownloadViewMode);
   const [batchAddOpen, setBatchAddOpen] = useState(false);
@@ -264,11 +266,25 @@ function DownloadPanel({
     detailPanelMode === "pinned" && detailPanelOpen && selectedDownloadId !== null;
   const inlinePanel =
     detailPanelMode === "inline" && detailPanelOpen && selectedDownloadId ? (
-      <DownloadDetailPanel
-        download={detailPanelDownload}
-        loading={detailPanelLoading}
-        pinned={false}
-      />
+      <>
+        <ResizeHandle
+          axis="vertical"
+          min={120}
+          max={600}
+          label={t("layout.resizeDetailPanel")}
+          onResize={adjustDetailPanelHeight}
+        />
+        <div
+          className="avar-download-panel-wrap avar-download-panel-wrap--inline"
+          style={{ height: detailPanelHeight }}
+        >
+          <DownloadDetailPanel
+            download={detailPanelDownload}
+            loading={detailPanelLoading}
+            pinned={false}
+          />
+        </div>
+      </>
     ) : null;
 
   return (

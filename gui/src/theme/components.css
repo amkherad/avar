@@ -1068,6 +1068,14 @@
   min-height: 0;
 }
 
+.avar-download-panel-wrap--inline {
+  width: 100%;
+}
+
+.avar-download-panel-wrap--inline .avar-download-panel {
+  border-inline-start: none;
+}
+
 .avar-download-add__action {
   align-self: flex-end;
 }
@@ -2044,7 +2052,9 @@
 }
 
 .avar-popup-page {
-  min-height: 100vh;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
   padding: 1.25rem;
   background: var(--avar-bg);
   display: flex;
