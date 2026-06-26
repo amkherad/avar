@@ -77,6 +77,7 @@ export interface AvarElectronApi {
   setTrayLabels: (labels: AvarTrayLabels) => Promise<void>;
   setTrayActiveDownloads: (payload: AvarTrayActiveDownloads) => Promise<void>;
   openPath: (filePath: string) => Promise<string>;
+  showItemInFolder: (filePath: string) => Promise<string>;
 }
 
 declare global {

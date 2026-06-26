@@ -44,7 +44,7 @@ When one or more downloads are selected, batch action buttons appear on the left
 
 **Double-click** a download to open the completed file with your default app (local Electron session, when configured under **Settings → General**) or open the detail popup window. A single click only selects the row.
 
-Active downloads show **transfer rate** in the detail panel, table **Transfer rate** column, and card view.
+Active downloads show **transfer rate** in the detail panel, table **Transfer rate** column, and card view. Change size and transfer rate labels under **Settings → General** (**Size units** and **Transfer rate units**).
 
 ## 🗑️ Deleting downloads
 
@@ -59,7 +59,7 @@ The same actions are available from:
 - The download detail popup window
 - The row **context menu**
 
-For **completed** downloads on a **local Electron** session, use **Open file** from the detail panel, context menu, or double-click (configurable under **Settings → General**) to launch the file with your OS default app.
+For **completed** downloads on a **local Electron** session, use **Open file** from the detail panel, context menu, or double-click (configurable under **Settings → General**) to launch the file with your OS default app. **Open containing folder** reveals the downloaded file in your file manager (detail panel and context menu).
 
 For **completed** downloads you can **Redownload** — the existing file is removed and the download is queued again with the same URL.
 

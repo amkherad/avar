@@ -13,6 +13,10 @@ export type DetailPanelMode = "pinned" | "inline";
 
 export type DownloadDoubleClickAction = "openFile" | "openDetails";
 
+export type ByteDisplayUnit = "binary" | "decimal";
+
+export type TransferRateDisplayUnit = "binary-bytes" | "binary-bits";
+
 export type FooterMonitorDisplay = "text" | "histogram";
 
 export interface FooterMonitorSettings {
@@ -55,11 +59,15 @@ export interface GuiConfig {
   localDownloadPath: string;
   /** Double-click behavior on download rows (local sessions; open file requires Electron). */
   downloadDoubleClickAction: DownloadDoubleClickAction;
+  /** Size labels in download progress and system monitors (binary KiB vs decimal KB). */
+  byteDisplayUnit: ByteDisplayUnit;
+  /** Transfer rate labels (binary KiB/s vs binary Kib/s). */
+  transferRateDisplayUnit: TransferRateDisplayUnit;
 }
 
 export const GUI_CONFIG_KEY = "avar.gui.config";
 export const GUI_SECRETS_KEY = "avar.gui.secrets";
-export const GUI_CONFIG_VERSION = 10;
+export const GUI_CONFIG_VERSION = 11;
 
 export const defaultFooterMonitors = (): FooterMonitorSettings => ({
   disk: true,
@@ -105,4 +113,6 @@ export const defaultGuiConfig = (): GuiConfig => ({
   notificationsEnabled: true,
   localDownloadPath: "",
   downloadDoubleClickAction: "openFile",
+  byteDisplayUnit: "binary",
+  transferRateDisplayUnit: "binary-bytes",
 });

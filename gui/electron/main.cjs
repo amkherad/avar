@@ -54,6 +54,14 @@ function registerIpcHandlers() {
     }
     return shell.openPath(filePath);
   });
+
+  ipcMain.handle("download:showItemInFolder", async (_event, filePath) => {
+    if (typeof filePath !== "string" || filePath.trim() === "") {
+      return "Invalid file path";
+    }
+    shell.showItemInFolder(filePath);
+    return "";
+  });
 }
 
 registerIpcHandlers();

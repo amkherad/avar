@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld("avar", {
   setTrayLabels: (labels) => ipcRenderer.invoke("tray:setLabels", labels),
   setTrayActiveDownloads: (payload) => ipcRenderer.invoke("tray:setActiveDownloads", payload),
   openPath: (filePath) => ipcRenderer.invoke("download:openLocalFile", filePath),
+  showItemInFolder: (filePath) => ipcRenderer.invoke("download:showItemInFolder", filePath),
 });

@@ -8,7 +8,7 @@ import {
   loadBatchAddPayload,
   type BatchAddDownloadsPayload,
 } from "@/lib/batchAddDownloads";
-import { formatBytes } from "@/lib/formatBytes";
+import { useUnitFormat } from "@/hooks/useUnitFormat";
 import { appLogger } from "@/lib/appLogger";
 import { applyTableSelection } from "@/lib/tableSelection";
 import { useConnectionStore } from "@/stores/connectionStore";
@@ -58,6 +58,7 @@ function filterBatchItems(items: BatchAddDownloadItem[], query: string): BatchAd
 
 export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPageProps) {
   const { t } = useTranslation();
+  const { formatBytes } = useUnitFormat();
   const client = useConnectionStore((s) => s.client);
   const connection = useConnectionStore((s) => s.connection);
   const queues = useDataStore((s) => s.queues);
@@ -194,7 +195,7 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
             : "—",
       },
     ],
-    [t],
+    [formatBytes, t],
   );
 
   function applySelection(id: string, event?: MouseEvent) {

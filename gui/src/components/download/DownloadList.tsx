@@ -1,8 +1,9 @@
-import { formatBytePair, formatTransferRate, progressPercent } from "./format";
+import { progressPercent } from "./format";
 import { Badge } from "@/components/ui/Badge";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import type { DownloadInfo } from "@/api/types";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import { useUnitFormat } from "@/hooks/useUnitFormat";
 import { useTranslation } from "react-i18next";
 
 export interface DownloadProgressProps {
@@ -34,6 +35,7 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
 
 export function DownloadProgress({ download }: DownloadProgressProps) {
   const { t } = useTranslation();
+  const { formatBytePair, formatTransferRate } = useUnitFormat();
   const percent = progressPercent(download.bytesDownloaded, download.totalBytes);
   const progressText = `${formatBytePair(download.bytesDownloaded, download.totalBytes)} (${percent}%)`;
   const speedText =

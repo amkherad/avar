@@ -9,7 +9,8 @@ import { useLayoutStore } from "@/stores/layoutStore";
 import { useConfigStore } from "@/stores/configStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useStatsHistory } from "@/hooks/useStatsHistory";
-import { formatBytes, formatPercent } from "@/lib/formatBytes";
+import { useUnitFormat } from "@/hooks/useUnitFormat";
+import { formatPercent } from "@/lib/formatBytes";
 import { appLogger } from "@/lib/appLogger";
 import { toggleDetailPanelWithSelection } from "@/lib/detailPanel";
 
@@ -64,6 +65,7 @@ function MonitorStat({
 
 export function Footer() {
   const { t } = useTranslation();
+  const { formatBytes, formatTransferRate } = useUnitFormat();
   const health = useDataStore((s) => s.health);
   const stats = useDataStore((s) => s.stats);
   const visibleDownloadOrder = useDataStore((s) => s.visibleDownloadOrder);
@@ -133,7 +135,7 @@ export function Footer() {
             {footerMonitors.network && monitorsAvailable && stats ? (
               <MonitorStat
                 label={t("health.network")}
-                textValue={`${formatBytes(stats.networkRxBytesPerSec)}/s`}
+                textValue={formatTransferRate(stats.networkRxBytesPerSec)}
                 histogramValues={history.network}
                 showHistogram={showHistogram}
               />

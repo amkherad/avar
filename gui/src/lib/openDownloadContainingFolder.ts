@@ -3,27 +3,27 @@ import type { DownloadInfo } from "@/api/types";
 import { isCompleted } from "@/lib/downloadStatus";
 import { resolveDownloadDestPath } from "@/lib/resolveDownloadDestPath";
 
-export async function openDownloadFile(
+export async function openDownloadContainingFolder(
   client: DaemonClient,
   download: DownloadInfo,
 ): Promise<void> {
   if (!isCompleted(download.status)) {
     throw new Error("Download is not completed");
   }
-  if (!window.avar?.openPath) {
-    throw new Error("Opening files is not supported in this environment");
+  if (!window.avar?.showItemInFolder) {
+    throw new Error("Opening folders is not supported in this environment");
   }
 
   const path = await resolveDownloadDestPath(client, download);
 
   let openError: string;
   try {
-    openError = await window.avar.openPath(path);
+    openError = await window.avar.showItemInFolder(path);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("No handler registered")) {
       throw new Error(
-        "Open file is not available in this desktop shell. Restart the Electron app (npm run dev:desktop) or rebuild the desktop package.",
+        "Open containing folder is not available in this desktop shell. Restart the Electron app (npm run dev:desktop) or rebuild the desktop package.",
       );
     }
     throw error;

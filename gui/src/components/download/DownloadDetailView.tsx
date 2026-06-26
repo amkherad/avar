@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faCopy, faDownload, faFolderOpen, faRotateRight } from "@fortawesome/free-solid-svg-icons";
+import { faCopy, faDownload, faFolder, faFolderOpen, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -11,7 +11,8 @@ import { canRedownload, isCompleted } from "@/lib/downloadStatus";
 import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useDownloadProgressWatch } from "@/hooks/useDownloadProgressWatch";
-import { formatBytePair, formatTransferRate, progressPercent } from "./format";
+import { useUnitFormat } from "@/hooks/useUnitFormat";
+import { progressPercent } from "./format";
 import { DownloadProgressBar } from "./DownloadProgressBar";
 import { DownloadChecksumTools } from "./DownloadChecksumTools";
 
@@ -39,8 +40,9 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
 export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadDetailViewProps) {
   const { t } = useTranslation();
   useDownloadProgressWatch(download.id);
-  const { busy, redownload, copyToLocal, copyToLocalAvailable, copyToLocalVisible, localCopyReady, openFile, openFileVisible } =
+  const { busy, redownload, copyToLocal, copyToLocalAvailable, copyToLocalVisible, localCopyReady, openFile, openContainingFolder, openFileVisible } =
     useDownloadActions();
+  const { formatBytePair, formatTransferRate } = useUnitFormat();
   const percent = progressPercent(download.bytesDownloaded, download.totalBytes);
   const [copied, setCopied] = useState(false);
 
@@ -176,6 +178,17 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
           >
             <FontAwesomeIcon icon={faFolderOpen} />
             {t("download.openFile")}
+          </Button>
+        ) : null}
+        {openFileVisible && isCompleted(download.status) ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={busy}
+            onClick={() => void openContainingFolder([download])}
+          >
+            <FontAwesomeIcon icon={faFolder} />
+            {t("download.openContainingFolder")}
           </Button>
         ) : null}
         {download.url ? (

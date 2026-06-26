@@ -17,6 +17,8 @@ Use the inner sidebar to switch between setting groups.
 - **Refresh interval** — Poll frequency when using periodic sync (seconds).
 - **Connection check interval** — How often the GUI pings the daemon (seconds).
 - **Double-click download** — When connected to a local daemon, choose what happens when you double-click a download row: open the completed file with your OS default app (Electron desktop only) or open the details popup window. Defaults to **Open completed file** when available.
+- **Size units** — Show download sizes and footer disk/memory values in binary (KiB, MiB, …) or decimal (KB, MB, …). Default is binary.
+- **Transfer rate units** — Show download speeds and footer network throughput in binary bytes per second (KiB/s, …) or binary bits per second (Kib/s, …). Default is KiB/s.
 - **Remote downloads** — **Local download folder** used when you copy completed files from a remote daemon to your computer (see **Copy to local folder** in the downloads panel). Ignored for local sessions.
 - **Footer monitors** — Toggle disk, memory, CPU, and network stats in the footer (collected from the daemon when connected). Choose **Text values** or **Histogram + values** to show sparkline-style history for memory, CPU, and network. Histogram mode keeps labels inline with semi-transparent values overlaid on the chart.
 - **Notifications** — Toggle desktop notifications for download status changes, queue start/stop, and connection alerts. In the browser, you may still need to grant notification permission separately.

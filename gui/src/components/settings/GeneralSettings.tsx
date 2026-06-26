@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/Input";
 import { DirectoryPathInput } from "@/components/ui/DirectoryPathInput";
 import { Button } from "@/components/ui/Button";
 import { useConfigStore } from "@/stores/configStore";
-import type { DownloadDoubleClickAction, FooterMonitorSettings, LocaleId, SyncChannelId, ThemeId } from "@/config/defaults";
+import type { DownloadDoubleClickAction, FooterMonitorSettings, LocaleId, SyncChannelId, ThemeId, ByteDisplayUnit, TransferRateDisplayUnit } from "@/config/defaults";
 import { useLocalDirectoryPathMode } from "@/hooks/useDirectoryPathMode";
 import { useCanConfigureDownloadDoubleClick, useCanOpenDownloadFile } from "@/hooks/useDownloadDoubleClickAction";
 import i18n, { isRtlLocale } from "@/i18n";
@@ -120,6 +120,26 @@ export function GeneralSettings() {
           <option value="openDetails">{t("settings.downloadDoubleClickOpenDetails")}</option>
         </Select>
       ) : null}
+
+      <Select
+        label={t("settings.byteDisplayUnit")}
+        value={config.byteDisplayUnit}
+        onChange={(e) => updateConfig({ byteDisplayUnit: e.target.value as ByteDisplayUnit })}
+      >
+        <option value="binary">{t("settings.byteDisplayUnitBinary")}</option>
+        <option value="decimal">{t("settings.byteDisplayUnitDecimal")}</option>
+      </Select>
+
+      <Select
+        label={t("settings.transferRateDisplayUnit")}
+        value={config.transferRateDisplayUnit}
+        onChange={(e) =>
+          updateConfig({ transferRateDisplayUnit: e.target.value as TransferRateDisplayUnit })
+        }
+      >
+        <option value="binary-bytes">{t("settings.transferRateDisplayUnitBinaryBytes")}</option>
+        <option value="binary-bits">{t("settings.transferRateDisplayUnitBinaryBits")}</option>
+      </Select>
 
       <section className="avar-settings-group">
         <h3 className="avar-settings-group__heading">{t("settings.remoteCopy.title")}</h3>

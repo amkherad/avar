@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   faCircleInfo,
   faDownload,
+  faFolder,
   faFolderOpen,
   faPause,
   faPlay,
@@ -107,6 +108,13 @@ export function DownloadContextMenu({ download, position, onClose }: DownloadCon
         icon: faFolderOpen,
         disabled: actions.busy,
         onClick: () => void actions.openFile([download]),
+      });
+      menuItems.push({
+        id: "openContainingFolder",
+        label: t("download.openContainingFolder"),
+        icon: faFolder,
+        disabled: actions.busy,
+        onClick: () => void actions.openContainingFolder([download]),
       });
     }
 

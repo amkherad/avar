@@ -7,8 +7,9 @@ import { Select } from "@/components/ui/Select";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import type { DownloadInfo } from "@/api/types";
 import { useLayoutStore, type DownloadViewMode } from "@/stores/layoutStore";
-import { formatBytePair, formatTransferRate, progressPercent } from "./format";
+import { progressPercent } from "./format";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
+import { useUnitFormat } from "@/hooks/useUnitFormat";
 import type { DownloadSort, DownloadStatusFilter } from "@/lib/downloadFilterSort";
 
 export const DOWNLOAD_PAGE_SIZES = [20, 50, 100, 500, 1000] as const;
@@ -81,6 +82,7 @@ export function DownloadTable({
   onToggleCheckboxes,
 }: DownloadTableProps) {
   const { t } = useTranslation();
+  const { formatBytePair, formatTransferRate } = useUnitFormat();
   const columnWidths = useLayoutStore((s) => s.downloadTableColumns);
   const setColumn = useLayoutStore((s) => s.setDownloadTableColumn);
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -173,6 +175,8 @@ export function DownloadTable({
   }, [
     availableStatuses,
     columnWidths,
+    formatBytePair,
+    formatTransferRate,
     onStatusFilterChange,
     setColumn,
     statusFilter,

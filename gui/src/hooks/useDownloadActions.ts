@@ -21,6 +21,7 @@ import {
   isCompleted,
 } from "@/lib/downloadStatus";
 import { copyDownloadToLocal } from "@/lib/copyDownloadToLocal";
+import { openDownloadContainingFolder } from "@/lib/openDownloadContainingFolder";
 import { openDownloadFile } from "@/lib/openDownloadFile";
 import { appLogger } from "@/lib/appLogger";
 import { isRemoteSession } from "@/lib/sessionRemote";
@@ -226,6 +227,27 @@ export function useDownloadActions() {
     [client, openFileVisible, withBusy],
   );
 
+  const openContainingFolder = useCallback(
+    (items: DownloadInfo[]) =>
+      withBusy(async () => {
+        if (!client || !openFileVisible) {
+          return;
+        }
+        for (const item of items) {
+          if (!isCompleted(item.status)) {
+            continue;
+          }
+          try {
+            await openDownloadContainingFolder(client, item);
+          } catch (error: unknown) {
+            const detail = error instanceof Error ? error.message : String(error);
+            appLogger.gui.warn("Failed to open download containing folder", detail);
+          }
+        }
+      }),
+    [client, openFileVisible, withBusy],
+  );
+
   return {
     busy,
     pause,
@@ -237,6 +259,7 @@ export function useDownloadActions() {
     redownload,
     copyToLocal,
     openFile,
+    openContainingFolder,
     remoteSessionActive,
     fileDownloadEnabled,
     localCopyReady,
