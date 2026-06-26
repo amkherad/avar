@@ -30,8 +30,6 @@ import {
 } from "@/lib/downloadFilterSort";
 import { openDownloadPopup } from "@/lib/popup";
 import { openAddDownloadDialog } from "@/lib/openAddDownloadDialog";
-import { openDownloadFile } from "@/lib/openDownloadFile";
-import { getClientOrNull } from "@/lib/downloadActions";
 import { appLogger } from "@/lib/appLogger";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useDownloadDoubleClickAction } from "@/hooks/useDownloadDoubleClickAction";
@@ -246,13 +244,7 @@ function DownloadPanel({
     }
 
     if (doubleClickAction === "openFile" && isCompleted(download.status)) {
-      const client = getClientOrNull();
-      if (client) {
-        void openDownloadFile(client, download).catch((error: unknown) => {
-          const detail = error instanceof Error ? error.message : String(error);
-          appLogger.gui.warn("Failed to open download file", detail);
-        });
-      }
+      void downloadActions.openFile([download]);
       return;
     }
 

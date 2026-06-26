@@ -41,6 +41,7 @@ function parseDownloadItem(item: unknown): DownloadInfo {
     description: record.description ? String(record.description) : undefined,
     bytesPerSecond:
       record.bytesPerSecond !== undefined ? toNumber(record.bytesPerSecond) : undefined,
+    destPath: record.destPath ? String(record.destPath) : undefined,
   };
 }
 

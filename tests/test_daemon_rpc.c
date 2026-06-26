@@ -130,6 +130,17 @@ AVAR_TEST(daemon_rpc_fs_browse) {
     free(response);
 }
 
+AVAR_TEST(daemon_rpc_download_resolve_path) {
+    setup_rpc_config();
+
+    char *response = NULL;
+    AVAR_ASSERT(rpc_call("download.resolvePath", "{\"id\":\"missing-download\"}", &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "Method not found") == NULL);
+    AVAR_ASSERT(strstr(response, "exitCode") != NULL);
+    free(response);
+}
+
 AVAR_TEST(daemon_rpc_invalid_request) {
     setup_rpc_config();
 

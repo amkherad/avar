@@ -111,6 +111,7 @@
     "selectHint": "Select a download to view details",
     "detailsLoading": "Loading details…",
     "openWindow": "Open in window",
+    "openFile": "Open file",
     "togglePanelMode": "Toggle detail panel layout",
     "notFound": "Download not found",
     "added": "Download added: {{url}}",

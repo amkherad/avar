@@ -18,9 +18,13 @@ import {
   canStop,
   canRedownload,
   isPaused,
+  isCompleted,
 } from "@/lib/downloadStatus";
 import { copyDownloadToLocal } from "@/lib/copyDownloadToLocal";
+import { openDownloadFile } from "@/lib/openDownloadFile";
+import { appLogger } from "@/lib/appLogger";
 import { isRemoteSession } from "@/lib/sessionRemote";
+import { useCanOpenDownloadFile } from "@/hooks/useDownloadDoubleClickAction";
 import { showConfirmDialog } from "@/lib/popup";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useConfigStore } from "@/stores/configStore";
@@ -42,6 +46,7 @@ export function useDownloadActions() {
     remoteSessionActive && fileDownloadEnabled && localCopyReady;
   const copyToLocalVisible =
     remoteSessionActive && fileDownloadEnabled;
+  const openFileVisible = useCanOpenDownloadFile();
 
   const withBusy = useCallback(
     async (action: () => Promise<void>) => {
@@ -200,6 +205,27 @@ export function useDownloadActions() {
     [activeSession, copyToLocalAvailable, localDownloadPath, withBusy],
   );
 
+  const openFile = useCallback(
+    (items: DownloadInfo[]) =>
+      withBusy(async () => {
+        if (!client || !openFileVisible) {
+          return;
+        }
+        for (const item of items) {
+          if (!isCompleted(item.status)) {
+            continue;
+          }
+          try {
+            await openDownloadFile(client, item);
+          } catch (error: unknown) {
+            const detail = error instanceof Error ? error.message : String(error);
+            appLogger.gui.warn("Failed to open download file", detail);
+          }
+        }
+      }),
+    [client, openFileVisible, withBusy],
+  );
+
   return {
     busy,
     pause,
@@ -210,11 +236,13 @@ export function useDownloadActions() {
     removeWithConfirm,
     redownload,
     copyToLocal,
+    openFile,
     remoteSessionActive,
     fileDownloadEnabled,
     localCopyReady,
     copyToLocalAvailable,
     copyToLocalVisible,
+    openFileVisible,
     togglePause,
     toggleStart,
     canPause,

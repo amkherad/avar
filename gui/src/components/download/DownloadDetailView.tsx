@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faCopy, faDownload, faRotateRight } from "@fortawesome/free-solid-svg-icons";
+import { faCopy, faDownload, faFolderOpen, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -39,7 +39,7 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
 export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadDetailViewProps) {
   const { t } = useTranslation();
   useDownloadProgressWatch(download.id);
-  const { busy, redownload, copyToLocal, copyToLocalAvailable, copyToLocalVisible, localCopyReady } =
+  const { busy, redownload, copyToLocal, copyToLocalAvailable, copyToLocalVisible, localCopyReady, openFile, openFileVisible } =
     useDownloadActions();
   const percent = progressPercent(download.bytesDownloaded, download.totalBytes);
   const [copied, setCopied] = useState(false);
@@ -165,6 +165,17 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
           >
             <FontAwesomeIcon icon={faDownload} />
             {t("download.copyToLocal")}
+          </Button>
+        ) : null}
+        {openFileVisible && isCompleted(download.status) ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={busy}
+            onClick={() => void openFile([download])}
+          >
+            <FontAwesomeIcon icon={faFolderOpen} />
+            {t("download.openFile")}
           </Button>
         ) : null}
         {download.url ? (
