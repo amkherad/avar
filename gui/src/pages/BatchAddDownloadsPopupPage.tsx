@@ -274,7 +274,7 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
             startNow: usePerItemStart,
             queue: queueName,
             name: item.filename || item.linkName,
-            referer: item.referer || item.originalUrl,
+            referer: payload.pageUrl || item.referer || item.originalUrl,
             streamKind: item.streamKind || item.fileType,
           });
           succeeded += 1;

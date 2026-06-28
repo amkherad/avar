@@ -60,7 +60,14 @@ export function normalizeBatchAddPayload(
 
   return {
     ...payload,
-    items,
+    items: items.map((item) => {
+      const pageUrl = payload.pageUrl?.trim();
+      return {
+        ...item,
+        originalUrl: pageUrl || item.originalUrl,
+        referer: pageUrl || item.referer,
+      };
+    }),
     defaultQueueId: payload.defaultQueueId ?? null,
   };
 }

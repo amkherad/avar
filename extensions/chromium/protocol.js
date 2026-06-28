@@ -191,6 +191,40 @@
     return pingFn();
   }
 
+  /**
+   * @param {string} [value]
+   */
+  function isHttpPageUrl(value) {
+    if (typeof value !== "string") {
+      return false;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return false;
+    }
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Prefer the full page URL over HTTP Referer values (often origin-only).
+   * @param {string} [pageUrl]
+   * @param {string} [referer]
+   */
+  function resolvePageReferer(pageUrl, referer) {
+    if (isHttpPageUrl(pageUrl)) {
+      return pageUrl.trim();
+    }
+    if (isHttpPageUrl(referer)) {
+      return referer.trim();
+    }
+    return undefined;
+  }
+
   if (typeof globalThis !== "undefined") {
     globalThis.AvarExtensionProtocol = {
       PROTOCOL,
@@ -206,6 +240,7 @@
       discoverBridgeUrl,
       wakeAvarApp,
       ensureBridgeReachable,
+      resolvePageReferer,
     };
   }
 })();

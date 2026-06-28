@@ -46,6 +46,23 @@ function createDownloadIntercept(api, handlers) {
     return false;
   }
 
+  async function resolveInterceptPageUrl(downloadItem) {
+    const tabId = downloadItem.tabId;
+    if (typeof tabId === "number" && tabId >= 0) {
+      try {
+        const tab = await api.tabs.get(tabId);
+        if (tab?.url && /^https?:\/\//i.test(tab.url)) {
+          return tab.url;
+        }
+      } catch {
+        // Tab may already be closed.
+      }
+    }
+
+    const fallback = downloadItem.referringPage || downloadItem.referrer || "";
+    return fallback.trim() || undefined;
+  }
+
   async function handleDownloadCreated(downloadItem) {
     const stored = await api.storage.local.get([
       "grabAllDownloads",
@@ -87,7 +104,7 @@ function createDownloadIntercept(api, handlers) {
       return;
     }
 
-    const referer = downloadItem.referrer || downloadItem.referringPage || "";
+    const pageUrl = await resolveInterceptPageUrl(downloadItem);
     const filename = downloadItem.filename || downloadItem.suggestedFilename || "";
     const classified =
       typeof AvarMedia !== "undefined" ? AvarMedia.classifyMediaUrl(url) : null;
@@ -99,8 +116,8 @@ function createDownloadIntercept(api, handlers) {
         url,
         streamKind,
         filename,
-        referer,
-        pageUrl: referer,
+        referer: pageUrl,
+        pageUrl,
         pageTitle: downloadItem.title || "",
         defaultQueueId,
       });

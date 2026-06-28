@@ -135,12 +135,12 @@ function normalizeAddDownloadPayload(payload, pageUrl) {
   }
 
   const referer =
-    typeof payload.referer === "string" && payload.referer.trim()
-      ? payload.referer.trim()
-      : typeof payload.pageUrl === "string" && payload.pageUrl.trim()
-        ? payload.pageUrl.trim()
-        : typeof pageUrl === "string" && pageUrl.trim()
-          ? pageUrl.trim()
+    typeof payload.pageUrl === "string" && payload.pageUrl.trim()
+      ? payload.pageUrl.trim()
+      : typeof pageUrl === "string" && pageUrl.trim()
+        ? pageUrl.trim()
+        : typeof payload.referer === "string" && payload.referer.trim()
+          ? payload.referer.trim()
           : undefined;
 
   return {
@@ -171,6 +171,8 @@ function normalizeBatchItems(items, pageUrl) {
   const seen = new Set();
   const normalized = [];
 
+  const pageRef = typeof pageUrl === "string" && pageUrl.trim() ? pageUrl.trim() : undefined;
+
   for (const [index, raw] of items.entries()) {
     if (!raw || typeof raw !== "object") {
       continue;
@@ -196,21 +198,19 @@ function normalizeBatchItems(items, pageUrl) {
             ? raw.streamKind.trim()
             : undefined,
       originalUrl:
-        typeof raw.originalUrl === "string"
+        pageRef ||
+        (typeof raw.originalUrl === "string"
           ? raw.originalUrl.trim()
           : typeof raw.referer === "string"
             ? raw.referer.trim()
-            : typeof pageUrl === "string"
-              ? pageUrl.trim()
-              : undefined,
+            : undefined),
       referer:
-        typeof raw.referer === "string"
+        pageRef ||
+        (typeof raw.referer === "string"
           ? raw.referer.trim()
           : typeof raw.originalUrl === "string"
             ? raw.originalUrl.trim()
-            : typeof pageUrl === "string"
-              ? pageUrl.trim()
-              : undefined,
+            : undefined),
       fileSize,
       streamKind:
         typeof raw.streamKind === "string"
@@ -314,10 +314,10 @@ async function handleDownloadAdd(payload) {
   if (typeof payload.streamKind === "string" && payload.streamKind) {
     params.streamKind = payload.streamKind;
   }
-  if (typeof payload.referer === "string" && payload.referer) {
+  if (typeof payload.pageUrl === "string" && payload.pageUrl.trim()) {
+    params.referer = payload.pageUrl.trim();
+  } else if (typeof payload.referer === "string" && payload.referer) {
     params.referer = payload.referer;
-  } else if (typeof payload.pageUrl === "string" && payload.pageUrl) {
-    params.referer = payload.pageUrl;
   }
   if (typeof payload.queue === "string" && payload.queue) {
     params.queue = payload.queue;

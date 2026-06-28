@@ -2,7 +2,7 @@ importScripts("media.js", "capture.js", "protocol.js", "hls.js", "context-menu.j
 
 const EXTENSION_VERSION = "0.1.0";
 const { IDS: MENU_IDS } = globalThis.AvarContextMenu;
-const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE, ensureBridgeReachable } =
+const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE, ensureBridgeReachable, resolvePageReferer } =
   globalThis.AvarExtensionProtocol;
 
 async function collectFromTab(tabId, { forContextMenu = false } = {}) {
@@ -84,7 +84,7 @@ async function addDownload(payload) {
       : {
           url: payload.url,
           streamKind: payload.streamKind,
-          referer: payload.referer || payload.pageUrl,
+          referer: resolvePageReferer(payload.pageUrl, payload.referer),
           queue: payload.queue,
           startNow: payload.autoStart !== false,
         };
@@ -106,12 +106,13 @@ async function openBatchAdd(payload) {
 async function openSingleAdd(payload) {
   await ensureBridgeReachable(chrome, pingBridgeEndpoint);
   const bridgeUrl = await resolveBridgeUrl();
+  const pageUrl = resolvePageReferer(payload.pageUrl, payload.referer);
   return sendMessage(bridgeUrl, "download.add.open", {
     url: payload.url,
     streamKind: payload.streamKind,
     filename: payload.filename,
-    referer: payload.referer,
-    pageUrl: payload.pageUrl,
+    referer: pageUrl,
+    pageUrl,
     pageTitle: payload.pageTitle,
     defaultQueueId: payload.defaultQueueId,
     title: payload.title || "Add download",
@@ -125,12 +126,13 @@ async function openDownloads(payload) {
   }
   if (items.length === 1) {
     const item = items[0];
+    const pageUrl = resolvePageReferer(payload.pageUrl, item.referer || item.originalUrl);
     return openSingleAdd({
       url: item.url,
       streamKind: item.streamKind,
       filename: item.filename,
-      referer: item.referer || item.originalUrl || payload.pageUrl,
-      pageUrl: payload.pageUrl,
+      referer: pageUrl,
+      pageUrl,
       pageTitle: payload.pageTitle,
       defaultQueueId: payload.defaultQueueId,
     });
@@ -341,12 +343,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "avar-open-add-download" && message.item?.url) {
+    const pageUrl = resolvePageReferer(
+      message.pageUrl,
+      message.item.referer || message.item.originalUrl,
+    );
     openSingleAdd({
       url: message.item.url,
       streamKind: message.item.streamKind,
       filename: message.item.filename,
-      referer: message.item.referer || message.item.originalUrl || message.pageUrl,
-      pageUrl: message.pageUrl,
+      referer: pageUrl,
+      pageUrl,
       pageTitle: message.pageTitle,
       defaultQueueId: message.defaultQueueId,
     })
@@ -380,13 +386,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "avar-add-download" && message.url) {
-    const referer = message.referer || sender.tab?.url || null;
+    const pageUrl = resolvePageReferer(message.pageUrl, message.referer || sender.tab?.url || null);
     openSingleAdd({
       url: message.url,
       streamKind: message.streamKind,
       filename: message.filename,
-      referer,
-      pageUrl: referer,
+      referer: pageUrl,
+      pageUrl,
       pageTitle: message.pageTitle || "",
       defaultQueueId: message.defaultQueueId,
     })
