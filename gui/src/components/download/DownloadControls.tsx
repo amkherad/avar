@@ -46,9 +46,7 @@ export function DownloadControls({ downloads, className = "" }: DownloadControls
   const anyResumable = downloads.some((item) => canResume(item.status));
   const anyStartable = downloads.some((item) => canStart(item.status));
   const anyStoppable = downloads.some((item) => canStop(item.status));
-  const anyRedownloadable = downloads.some(
-    (item) => canRedownload(item.status) && Boolean(item.url),
-  );
+  const anyRedownloadable = downloads.some((item) => canRedownload(item.status));
   const anyCopyToLocal =
     copyToLocalVisible && downloads.some((item) => isCompleted(item.status));
 

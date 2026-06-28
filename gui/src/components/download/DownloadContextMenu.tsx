@@ -81,7 +81,7 @@ export function DownloadContextMenu({ download, position, onClose }: DownloadCon
       });
     }
 
-    if (canRedownload(download.status) && download.url) {
+    if (canRedownload(download.status)) {
       menuItems.push({
         id: "redownload",
         label: t("download.redownload"),

@@ -2,6 +2,7 @@
 #define AVAR_DOWNLOAD_H
 
 #include <avar.h>
+#include <download_state.h>
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -40,6 +41,24 @@ int download_restart(const char *id);
 
 /** Clears the resume-unsupported prompt without changing download progress. */
 int download_dismiss_resume_prompt(const char *id);
+
+/**
+ * Loads the download URL from state.json (falls back to legacy config entries).
+ * Caller must free the returned string.
+ */
+char *download_lookup_url(const char *id);
+
+/** Updates the download URL in state.json and any active transfer. */
+int download_set_url(const char *id, const char *url);
+
+/** True when a download worker is actively transferring item_id. */
+bool download_item_is_active(const char *id);
+
+/**
+ * Loads state.json for item id. Caller must free with download_state_free().
+ * Returns NULL when missing or invalid.
+ */
+DownloadState *download_item_state_load(const char *id);
 
 size_t download_active_count(void);
 

@@ -127,7 +127,6 @@ export function notifyDownloadStatusChange(
   lastNotifiedDownloadStatus.set(download.id, download.status);
 
   const statusLabel = formatDownloadStatus(download.status, i18n.t.bind(i18n));
-  const body = download.status === "completed" ? undefined : download.url;
   void showNotification({
     category: "download",
     tag: `avar-download-${download.id}`,
@@ -135,7 +134,6 @@ export function notifyDownloadStatusChange(
       name: download.filename,
       status: statusLabel,
     }),
-    body,
   });
 }
 

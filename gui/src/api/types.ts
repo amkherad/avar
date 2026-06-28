@@ -55,10 +55,6 @@ export interface DownloadInfo {
 
   filenameInferred?: boolean;
 
-  url?: string;
-
-  referer?: string;
-
   status: DownloadStatus;
 
   queueId?: string;
@@ -83,7 +79,17 @@ export interface DownloadInfo {
 
 }
 
-
+export interface DownloadDetails {
+  url?: string;
+  referer?: string;
+  originalPage?: string;
+  description?: string;
+  proxy?: string;
+  streamKind?: string;
+  queuedAt?: string;
+  lastTryAt?: string;
+  addedThrough?: string;
+}
 
 export interface DirectoryBrowseResult {
   path: string;

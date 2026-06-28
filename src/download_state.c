@@ -1,5 +1,6 @@
 #include <cJSON.h>
 #include <download_state.h>
+#include <download_io.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -469,6 +470,10 @@ DownloadState *download_state_load(const char *path) {
 
 int download_state_save(const DownloadState *state, const char *path) {
     if (state == NULL || path == NULL) {
+        return -1;
+    }
+
+    if (!download_io_state_write_allowed(path)) {
         return -1;
     }
 

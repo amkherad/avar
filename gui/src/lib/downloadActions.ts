@@ -147,19 +147,39 @@ export async function deleteDownloads(
   return result;
 }
 
+export async function updateDownloadUrl(
+  client: DaemonClient,
+  id: string,
+  url: string,
+): Promise<void> {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    throw new Error("URL is required");
+  }
+  await client.setDownloadUrl(id, trimmed);
+  await useDataStore.getState().refresh();
+  appLogger.gui.info("Download URL updated", id);
+}
+
 export async function redownloadDownloads(
   client: DaemonClient,
   items: DownloadInfo[],
+  resolveUrl: (item: DownloadInfo) => Promise<string | undefined>,
 ): Promise<DownloadActionResult> {
-  const eligible = items.filter((item) => item.url && canRedownload(item.status));
+  const eligible = items.filter((item) => canRedownload(item.status));
   const succeeded: string[] = [];
   const failed: string[] = [];
 
   for (const item of eligible) {
     try {
+      const url = await resolveUrl(item);
+      if (!url) {
+        failed.push(item.id);
+        continue;
+      }
       await client.removeDownload(item.id, true);
       await client.addDownload({
-        url: item.url!,
+        url,
         queue: item.queueId,
         name: item.filename,
         startNow: true,

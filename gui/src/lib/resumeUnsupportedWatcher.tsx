@@ -43,12 +43,13 @@ async function runPromptAction(
       await client.restartDownload(download.id);
       handledIds.add(download.id);
     } else if (choice === "new") {
-      if (!download.url) {
+      const details = await client.getDownloadDetails(download.id);
+      if (!details.url) {
         return;
       }
       await client.dismissResumePrompt(download.id);
       await client.addDownload({
-        url: download.url,
+        url: details.url,
         queue: download.queueId,
         name: download.filename,
         startNow: true,

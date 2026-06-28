@@ -1,6 +1,7 @@
 ﻿#include <cJSON.h>
 
 #include <config.h>
+#include <download_io.h>
 #include <file-system.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -173,6 +174,11 @@ static void ensure_initialized(void) {
 
 static int persist_config(const char *path) {
     if (_config.root == NULL || path == NULL) {
+        return -1;
+    }
+
+    if (!download_io_config_write_allowed()) {
+        LOG_WARNING("Config write blocked while downloads are active");
         return -1;
     }
 

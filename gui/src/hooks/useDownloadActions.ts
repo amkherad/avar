@@ -184,7 +184,10 @@ export function useDownloadActions() {
         if (!result.confirmed) {
           return;
         }
-        await redownloadDownloads(client, items);
+        await redownloadDownloads(client, items, async (item) => {
+          const details = await client.getDownloadDetails(item.id);
+          return details.url;
+        });
       }),
     [client, t, withBusy],
   );

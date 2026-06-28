@@ -1,12 +1,17 @@
-import type { DownloadInfo } from "@/api/types";
-
-export function buildDownloadCurl(download: DownloadInfo): string {
-  if (!download.url) {
+export function buildDownloadCurl(
+  filename: string,
+  url: string,
+  referer?: string,
+): string {
+  if (!url) {
     return "";
   }
 
-  const parts = ["curl", "-L", "-o", JSON.stringify(download.filename || "download")];
-  parts.push(JSON.stringify(download.url));
+  const parts = ["curl", "-L", "-o", JSON.stringify(filename || "download")];
+  if (referer) {
+    parts.push("-e", JSON.stringify(referer));
+  }
+  parts.push(JSON.stringify(url));
   return parts.join(" ");
 }
 

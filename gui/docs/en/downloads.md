@@ -55,13 +55,15 @@ When you delete, a confirmation dialog asks whether to remove the item from the 
 The same actions are available from:
 
 - The toolbar (for the current selection)
-- The right **detail panel** (including **Open file** on local Electron sessions and **Copy curl**)
+- The right **detail panel** (including **Open file** on local Electron sessions, **Edit URL**, and **Copy curl**)
 - The download detail popup window
 - The row **context menu**
 
 For **completed** downloads on a **local Electron** session, use **Open file** from the detail panel, context menu, or double-click (configurable under **Settings → General**) to launch the file with your OS default app. **Open containing folder** reveals the downloaded file in your file manager (detail panel and context menu).
 
 For **completed** downloads you can **Redownload** — the existing file is removed and the download is queued again with the same URL.
+
+Use **Edit URL** in the detail panel to change the source URL for a download entry. The URL is loaded from the download’s on-disk state and is not shown in the list or card views.
 
 If a server does not support resuming a partial download, Avar stops the item and asks whether to **Restart download** (clear progress and reuse the same entry) or **New download** (keep the partial entry and queue a separate fresh download).
 

@@ -4,6 +4,7 @@ import type { DownloadChecksumResult } from "./checksumTypes";
 import type {
   CliExecResult,
   DirectoryBrowseResult,
+  DownloadDetails,
   DownloadInfo,
   HealthInfo,
   JsonRpcResponse,
@@ -318,6 +319,44 @@ export class DaemonClient {
     if (result.exitCode !== 0) {
       throw new DaemonApiError("Failed to dismiss resume prompt", result.exitCode);
     }
+  }
+
+  async setDownloadUrl(id: string, url: string): Promise<void> {
+    const result = await this.rpc<{ exitCode: number }>("download.setUrl", { id, url });
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to update download URL", result.exitCode);
+    }
+  }
+
+  async getDownloadDetails(id: string, signal?: AbortSignal): Promise<DownloadDetails> {
+    const result = await this.rpc<{
+      exitCode: number;
+      url?: string | null;
+      referer?: string | null;
+      originalPage?: string | null;
+      description?: string | null;
+      proxy?: string | null;
+      streamKind?: string | null;
+      queuedAt?: string | null;
+      lastTryAt?: string | null;
+      addedThrough?: string | null;
+    }>("download.getDetails", { id }, signal);
+
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to load download details", result.exitCode);
+    }
+
+    return {
+      url: result.url ?? undefined,
+      referer: result.referer ?? undefined,
+      originalPage: result.originalPage ?? undefined,
+      description: result.description ?? undefined,
+      proxy: result.proxy ?? undefined,
+      streamKind: result.streamKind ?? undefined,
+      queuedAt: result.queuedAt ?? undefined,
+      lastTryAt: result.lastTryAt ?? undefined,
+      addedThrough: result.addedThrough ?? undefined,
+    };
   }
 
   async computeDownloadChecksum(

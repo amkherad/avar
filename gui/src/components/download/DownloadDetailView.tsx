@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faCopy, faDownload, faFolder, faFolderOpen, faRotateRight } from "@fortawesome/free-solid-svg-icons";
+import { faCopy, faDownload, faFolder, faFolderOpen, faPen, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -10,6 +10,10 @@ import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import { canRedownload, isCompleted } from "@/lib/downloadStatus";
 import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
+import { useConnectionStore } from "@/stores/connectionStore";
+import { updateDownloadUrl } from "@/lib/downloadActions";
+import { Input } from "@/components/ui/Input";
+import { useDownloadDetails } from "@/hooks/useDownloadDetails";
 import { useDownloadProgressWatch } from "@/hooks/useDownloadProgressWatch";
 import { useUnitFormat } from "@/hooks/useUnitFormat";
 import { progressPercent } from "./format";
@@ -40,19 +44,72 @@ function statusTone(status: string): "default" | "success" | "warning" | "danger
 export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadDetailViewProps) {
   const { t } = useTranslation();
   useDownloadProgressWatch(download.id);
+  const { details, loading: detailsLoading, error: detailsError, refresh: refreshDetails } =
+    useDownloadDetails(download.id);
   const { busy, redownload, copyToLocal, copyToLocalAvailable, copyToLocalVisible, localCopyReady, openFile, openContainingFolder, openFileVisible } =
     useDownloadActions();
+  const client = useConnectionStore((s) => s.client);
   const { formatBytePair, formatTransferRate } = useUnitFormat();
   const percent = progressPercent(download.bytesDownloaded, download.totalBytes);
   const [copied, setCopied] = useState(false);
+  const [editingUrl, setEditingUrl] = useState(false);
+  const [urlDraft, setUrlDraft] = useState("");
+  const [urlSaving, setUrlSaving] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+
+  const url = details?.url;
+  const referer = details?.referer ?? details?.originalPage;
+  const errorMessage = details?.description ?? download.description;
+
+  useEffect(() => {
+    if (!editingUrl) {
+      setUrlDraft(url ?? "");
+    }
+  }, [editingUrl, url]);
 
   async function handleCopyCurl() {
-    const command = buildDownloadCurl(download);
+    if (!url) {
+      return;
+    }
+    const command = buildDownloadCurl(download.filename, url, referer);
     const ok = await copyTextToClipboard(command);
     if (ok) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     }
+  }
+
+  function beginEditUrl() {
+    setUrlDraft(url ?? "");
+    setUrlError(null);
+    setEditingUrl(true);
+  }
+
+  function cancelEditUrl() {
+    setUrlDraft(url ?? "");
+    setUrlError(null);
+    setEditingUrl(false);
+  }
+
+  async function saveUrl() {
+    if (!client) {
+      return;
+    }
+    setUrlSaving(true);
+    setUrlError(null);
+    try {
+      await updateDownloadUrl(client, download.id, urlDraft);
+      setEditingUrl(false);
+      await refreshDetails();
+    } catch (err) {
+      setUrlError(err instanceof Error ? err.message : t("download.updateUrlFailed"));
+    } finally {
+      setUrlSaving(false);
+    }
+  }
+
+  async function handleRedownload() {
+    await redownload([download]);
   }
 
   return (
@@ -87,22 +144,64 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
           </div>
         ) : null}
 
-        {download.url ? (
+        {detailsLoading ? (
+          <div className="avar-download-detail__field">
+            <dt>{t("download.url")}</dt>
+            <dd className="avar-list__meta">{t("common.loading")}</dd>
+          </div>
+        ) : detailsError ? (
+          <div className="avar-download-detail__field">
+            <dt>{t("download.url")}</dt>
+            <dd className="avar-download-detail__error">{detailsError}</dd>
+          </div>
+        ) : url || editingUrl ? (
           <div className="avar-download-detail__field">
             <dt>{t("download.url")}</dt>
             <dd className="avar-download-detail__value-row">
-              <span className="avar-download-detail__url">{download.url}</span>
-              <CopyButton text={download.url} label={t("download.copyUrl")} />
+              {editingUrl ? (
+                <div className="avar-download-detail__url-edit">
+                  <Input
+                    value={urlDraft}
+                    onChange={(event) => setUrlDraft(event.target.value)}
+                    disabled={urlSaving}
+                    aria-label={t("download.url")}
+                  />
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={urlSaving}
+                    disabled={!urlDraft.trim()}
+                    onClick={() => void saveUrl()}
+                  >
+                    {t("download.saveUrl")}
+                  </Button>
+                  <Button size="sm" variant="secondary" disabled={urlSaving} onClick={cancelEditUrl}>
+                    {t("common.cancel")}
+                  </Button>
+                  {urlError ? (
+                    <span className="avar-download-detail__error">{urlError}</span>
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  <span className="avar-download-detail__url">{url}</span>
+                  <CopyButton text={url!} label={t("download.copyUrl")} />
+                  <Button size="sm" variant="secondary" onClick={beginEditUrl}>
+                    <FontAwesomeIcon icon={faPen} />
+                    {t("download.editUrl")}
+                  </Button>
+                </>
+              )}
             </dd>
           </div>
         ) : null}
 
-        {download.referer ? (
+        {referer ? (
           <div className="avar-download-detail__field">
             <dt>{t("download.referer")}</dt>
             <dd className="avar-download-detail__value-row">
-              <span className="avar-download-detail__url">{download.referer}</span>
-              <CopyButton text={download.referer} label={t("download.copyReferer")} />
+              <span className="avar-download-detail__url">{referer}</span>
+              <CopyButton text={referer} label={t("download.copyReferer")} />
             </dd>
           </div>
         ) : null}
@@ -135,10 +234,10 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
           </div>
         ) : null}
 
-        {download.status === "error" && download.description ? (
+        {download.status === "error" && errorMessage ? (
           <div className="avar-download-detail__field">
             <dt>{t("download.errorMessage")}</dt>
-            <dd className="avar-download-detail__error">{download.description}</dd>
+            <dd className="avar-download-detail__error">{errorMessage}</dd>
           </div>
         ) : null}
 
@@ -155,12 +254,12 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
       </dl>
 
       <div className="avar-download-detail__actions">
-        {canRedownload(download.status) && download.url ? (
+        {canRedownload(download.status) && url ? (
           <Button
             size="sm"
             variant="secondary"
             loading={busy}
-            onClick={() => void redownload([download])}
+            onClick={() => void handleRedownload()}
           >
             <FontAwesomeIcon icon={faRotateRight} />
             {t("download.redownload")}
@@ -201,7 +300,7 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
             {t("download.openContainingFolder")}
           </Button>
         ) : null}
-        {download.url ? (
+        {url ? (
           <Button size="sm" variant="secondary" onClick={() => void handleCopyCurl()}>
             <FontAwesomeIcon icon={faCopy} />
             {copied ? t("download.curlCopied") : t("download.copyCurl")}

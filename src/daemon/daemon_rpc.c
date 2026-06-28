@@ -665,6 +665,79 @@ static void enrich_download_entry_dest_path(cJSON *entry) {
     free(path);
 }
 
+static void json_replace_or_add_number(cJSON *obj, const char *field, const double value) {
+    if (obj == NULL || field == NULL) {
+        return;
+    }
+
+    if (cJSON_GetObjectItemCaseSensitive(obj, field) != NULL) {
+        cJSON_ReplaceItemInObjectCaseSensitive(obj, field, cJSON_CreateNumber(value));
+    } else {
+        cJSON_AddNumberToObject(obj, field, value);
+    }
+}
+
+static void json_replace_or_add_string(cJSON *obj, const char *field, const char *value) {
+    if (obj == NULL || field == NULL) {
+        return;
+    }
+
+    if (value == NULL || value[0] == '\0') {
+        return;
+    }
+
+    if (cJSON_GetObjectItemCaseSensitive(obj, field) != NULL) {
+        cJSON_ReplaceItemInObjectCaseSensitive(obj, field, cJSON_CreateString(value));
+    } else {
+        cJSON_AddStringToObject(obj, field, value);
+    }
+}
+
+static void strip_download_list_only_fields(cJSON *entry) {
+    if (entry == NULL) {
+        return;
+    }
+
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_URL);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_PROXY);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_QUEUED_AT);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_LAST_TRY_AT);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_DESCRIPTION);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_ORIGINAL_PAGE);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_REFERER);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_STREAM_KIND);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_ADDED_THROUGH);
+}
+
+static void enrich_download_entry_from_disk(cJSON *entry) {
+    if (entry == NULL) {
+        return;
+    }
+
+    strip_download_list_only_fields(entry);
+
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(entry, AVAR_FIELD_ID);
+    if (!cJSON_IsString(id) || id->valuestring == NULL || id->valuestring[0] == '\0') {
+        return;
+    }
+
+    if (download_item_is_active(id->valuestring)) {
+        return;
+    }
+
+    DownloadState *state = download_item_state_load(id->valuestring);
+    if (state == NULL) {
+        return;
+    }
+
+    json_replace_or_add_number(entry, AVAR_FIELD_BYTES_DOWNLOADED, (double)state->bytes_downloaded);
+    json_replace_or_add_number(entry, AVAR_FIELD_TOTAL_BYTES, (double)state->total_size);
+    json_replace_or_add_string(entry, AVAR_FIELD_QUEUE_ID, state->queue_id);
+    json_replace_or_add_string(entry, AVAR_FIELD_FILENAME, state->filename);
+    json_replace_or_add_string(entry, AVAR_FIELD_DESCRIPTION, state->description);
+    download_state_free(state);
+}
+
 static cJSON *handle_downloads_list(void) {
     cJSON *result = cJSON_CreateObject();
     cJSON *downloads = cJSON_CreateArray();
@@ -684,6 +757,7 @@ static cJSON *handle_downloads_list(void) {
         free(json);
         if (entry != NULL) {
             enrich_download_entry_dest_path(entry);
+            enrich_download_entry_from_disk(entry);
             cJSON_AddItemToArray(downloads, entry);
         }
     }
@@ -984,6 +1058,67 @@ static cJSON *handle_download_resolve_path(cJSON *params) {
     return result;
 }
 
+static cJSON *handle_download_set_url(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    const cJSON *url = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_URL);
+    if (!cJSON_IsString(id) || id->valuestring == NULL || id->valuestring[0] == '\0'
+        || !cJSON_IsString(url) || url->valuestring == NULL || url->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode",
+                            download_set_url(id->valuestring, url->valuestring));
+    return result;
+}
+
+static void json_add_optional_string(cJSON *obj, const char *field, const char *value) {
+    if (obj == NULL || field == NULL) {
+        return;
+    }
+
+    if (value != NULL && value[0] != '\0') {
+        cJSON_AddStringToObject(obj, field, value);
+    } else {
+        cJSON_AddNullToObject(obj, field);
+    }
+}
+
+static cJSON *handle_download_get_details(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    if (!cJSON_IsString(id) || id->valuestring == NULL || id->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        return NULL;
+    }
+
+    DownloadState *state = download_item_state_load(id->valuestring);
+    if (state == NULL) {
+        cJSON_AddNumberToObject(result, "exitCode", EXIT_FAILURE);
+        return result;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
+    json_add_optional_string(result, AVAR_FIELD_URL, state->url);
+    json_add_optional_string(result, AVAR_FIELD_REFERER, state->referer);
+    json_add_optional_string(result, AVAR_FIELD_ORIGINAL_PAGE, state->original_page);
+    json_add_optional_string(result, AVAR_FIELD_DESCRIPTION, state->description);
+    json_add_optional_string(result, AVAR_FIELD_PROXY, state->proxy);
+    json_add_optional_string(result, AVAR_FIELD_STREAM_KIND, state->stream_kind);
+    json_add_optional_string(result, AVAR_FIELD_QUEUED_AT, state->queued_at);
+    json_add_optional_string(result, AVAR_FIELD_LAST_TRY_AT, state->last_try_at);
+    json_add_optional_string(result, AVAR_FIELD_ADDED_THROUGH, state->added_through);
+    download_state_free(state);
+    return result;
+}
+
 static cJSON *handle_queue_start(cJSON *params) {
     const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
     const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
@@ -1256,6 +1391,7 @@ bool daemon_rpc_build_snapshot(char **json_out) {
         free(item_json);
         if (entry != NULL) {
             enrich_download_entry_dest_path(entry);
+            enrich_download_entry_from_disk(entry);
             cJSON_AddItemToArray(downloads, entry);
         }
     }
@@ -1426,6 +1562,12 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     }
     if (strcmp(method, "download.resolvePath") == 0) {
         return handle_download_resolve_path(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "download.setUrl") == 0) {
+        return handle_download_set_url(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "download.getDetails") == 0) {
+        return handle_download_get_details(params != NULL ? params : cJSON_CreateObject());
     }
     if (strcmp(method, "fs.browse") == 0) {
         if (!daemon_server_fs_browse_enabled()) {

@@ -87,9 +87,6 @@ export function DownloadRow({
     >
       <div>
         <TruncateWithTooltip text={download.filename} className="avar-list__title" />
-        {download.url ? (
-          <TruncateWithTooltip text={download.url} className="avar-list__meta" />
-        ) : null}
         <DownloadProgress download={download} />
       </div>
       <Badge tone={statusTone(download.status)}>

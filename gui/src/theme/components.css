@@ -1261,6 +1261,19 @@
   min-width: 0;
 }
 
+.avar-download-detail__url-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+}
+
+.avar-download-detail__url-edit .avar-input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
 .avar-download-detail__fields {
   margin: 0;
   display: flex;

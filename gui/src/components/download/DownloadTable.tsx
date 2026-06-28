@@ -160,17 +160,6 @@ export function DownloadTable({
           />
         ),
       },
-      {
-        id: "url",
-        header: t("download.url"),
-        width: columnWidths.url,
-        minWidth: 60,
-        maxWidth: 800,
-        onResize: (width) => setColumn("url", width),
-        render: (item) => (
-          <TruncateWithTooltip text={item.url ?? "—"} className="avar-list__meta" />
-        ),
-      },
     ];
   }, [
     availableStatuses,
