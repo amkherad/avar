@@ -163,6 +163,15 @@ function cancelLinkRefreshSession(sessionId) {
   }
 }
 
+function hasActiveLinkRefreshSession() {
+  pruneLinkRefreshSession();
+  return activeLinkRefreshSession !== null;
+}
+
+function canAcceptLinkRefreshCapture() {
+  return hasActiveLinkRefreshSession() && activeLinkRefreshSession.captured === null;
+}
+
 function captureLinkRefreshPayload(payload, pageUrl) {
   pruneLinkRefreshSession();
   if (activeLinkRefreshSession === null || activeLinkRefreshSession.captured !== null) {
@@ -176,6 +185,17 @@ function captureLinkRefreshPayload(payload, pageUrl) {
 
   activeLinkRefreshSession.captured = normalized;
   focusAvarApp();
+  return true;
+}
+
+function tryRoutePayloadToLinkRefresh(payload, pageUrl) {
+  if (!hasActiveLinkRefreshSession()) {
+    return false;
+  }
+  focusAvarApp();
+  if (canAcceptLinkRefreshCapture()) {
+    captureLinkRefreshPayload(payload, pageUrl);
+  }
   return true;
 }
 
@@ -709,6 +729,16 @@ async function handleProtocolMessage(message, origin, res) {
         return;
       }
 
+      if (tryRoutePayloadToLinkRefresh(payload, pageUrl)) {
+        sendJson(
+          res,
+          200,
+          createResponse("download.add.open", id, { linkRefresh: true }),
+          origin,
+        );
+        return;
+      }
+
       const addId = stashAddDownloadPayload(addPayload);
       const title =
         typeof payload.title === "string" && payload.title.trim()
@@ -747,6 +777,16 @@ async function handleProtocolMessage(message, origin, res) {
       const items = normalizeBatchItems(payload.items, pageUrl);
       if (items.length === 0) {
         sendJson(res, 400, createErrorResponse("download.batch.open", id, "No items"), origin);
+        return;
+      }
+
+      if (tryRoutePayloadToLinkRefresh(items[0], pageUrl)) {
+        sendJson(
+          res,
+          200,
+          createResponse("download.batch.open", id, { linkRefresh: true }),
+          origin,
+        );
         return;
       }
 
@@ -1006,7 +1046,7 @@ async function handleExtensionBridgeRequest(req, res) {
       200,
       {
         ok: true,
-        active: activeLinkRefreshSession !== null && activeLinkRefreshSession.captured === null,
+        active: hasActiveLinkRefreshSession(),
         sessionId: activeLinkRefreshSession?.sessionId ?? null,
         downloadId: activeLinkRefreshSession?.downloadId ?? null,
       },

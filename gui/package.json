@@ -14,6 +14,7 @@
     "dev": "vite",
     "dev:desktop": "concurrently -k \"vite\" \"node scripts/wait-dev-server.cjs electron .\"",
     "dev:tiny": "concurrently -k \"vite\" \"node scripts/wait-dev-server.cjs node tiny/main.cjs\"",
+    "dev:electrobun": "concurrently -k \"vite\" \"node scripts/wait-dev-server-electrobun.cjs\"",
     "prebuild": "python ../scripts/generate_version.py --root .. --out-env .avar-build.env",
     "build": "vite build",
     "test": "vitest run",
@@ -24,6 +25,7 @@
     "build:desktop:current": "npm run build && electron-builder --dir",
     "start:tiny": "npm run build && concurrently -k \"vite preview --port 4173 --strictPort\" \"wait-on http://localhost:4173 && cross-env AVAR_GUI_URL=http://localhost:4173 node tiny/main.cjs\"",
     "build:tiny": "npm run build && node scripts/install-tinytron.cjs && node tiny/verify-build.cjs",
+    "build:electrobun": "npm run build && node electrobun/verify-build.cjs && node electrobun/run-build.cjs",
     "build:all": "python ../scripts/build_all.py",
     "icons": "node scripts/generate-icons.cjs"
   },
@@ -49,6 +51,7 @@
     "@vitejs/plugin-react": "^4.4.1",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
+    "electrobun": "^1.18.1",
     "electron": "^35.1.5",
     "electron-builder": "^26.0.12",
     "jsdom": "^26.1.0",

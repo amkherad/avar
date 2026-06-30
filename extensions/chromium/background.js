@@ -106,13 +106,19 @@ async function openBatchAdd(payload) {
 async function openSingleAdd(payload) {
   await ensureBridgeReachable(chrome, pingBridgeEndpoint);
   const bridgeUrl = await resolveBridgeUrl();
+  let linkRefreshActive = false;
   try {
-    if (await isLinkRefreshActive(bridgeUrl)) {
-      await captureLinkRefreshLink(bridgeUrl, payload);
-      return;
-    }
+    linkRefreshActive = await isLinkRefreshActive(bridgeUrl);
   } catch {
-    // Fall through to the normal add-download flow.
+    linkRefreshActive = false;
+  }
+  if (linkRefreshActive) {
+    try {
+      await captureLinkRefreshLink(bridgeUrl, payload);
+    } catch {
+      // Link refresh mode is on; never open the add-download dialog.
+    }
+    return;
   }
   const pageUrl = resolvePageReferer(payload.pageUrl, payload.referer);
   return sendMessage(bridgeUrl, "download.add.open", {

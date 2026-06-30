@@ -113,14 +113,6 @@ export function RefreshLinkModal({ download, details, onClose }: RefreshLinkModa
   }, [sessionId]);
 
   useEffect(() => {
-    if (!refererUrl || refererOpenedRef.current) {
-      return;
-    }
-    refererOpenedRef.current = true;
-    void openExternalUrl(refererUrl);
-  }, [refererUrl]);
-
-  useEffect(() => {
     cancelledRef.current = false;
     let activeSessionId: string | null = null;
 
@@ -134,6 +126,10 @@ export function RefreshLinkModal({ download, details, onClose }: RefreshLinkModa
           return;
         }
         setSessionId(activeSessionId);
+        if (refererUrl && !refererOpenedRef.current) {
+          refererOpenedRef.current = true;
+          void openExternalUrl(refererUrl);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : t("download.refreshLinkStartFailed"));
         setWaiting(false);
@@ -148,7 +144,7 @@ export function RefreshLinkModal({ download, details, onClose }: RefreshLinkModa
         void cancelLinkRefreshSession(activeSessionId);
       }
     };
-  }, [download.id, t]);
+  }, [download.id, refererUrl, t]);
 
   useEffect(() => {
     if (!sessionId || !waiting || !client) {
