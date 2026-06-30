@@ -18,7 +18,9 @@ export function useDownloadProgressWatch(downloadId: string | null | undefined):
       return;
     }
 
-    void client.watchDownloadProgress(downloadId).catch(() => {
+    void client.watchDownloadProgress(downloadId).then(() => {
+      void useDataStore.getState().refresh();
+    }).catch(() => {
       // Non-fatal: bytesDownloaded still syncs; segment detail appears on next upsert.
     });
 

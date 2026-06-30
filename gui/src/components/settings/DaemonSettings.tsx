@@ -32,6 +32,7 @@ export function DaemonSettings() {
   const directoryPathMode = useDaemonDirectoryPathMode();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const load = useCallback(async () => {
     if (!client) {
@@ -80,10 +81,13 @@ export function DaemonSettings() {
 
   async function save() {
     if (!client) {
+      setError(t("settings.backendDisconnected"));
+      setSaved(false);
       return;
     }
     setSaving(true);
     setError(null);
+    setSaved(false);
     try {
       await client.setConfig("daemon.server.autoShutdown", autoShutdown);
       await client.setConfig(
@@ -101,7 +105,9 @@ export function DaemonSettings() {
         fsBrowseEnabled ? "true" : "false",
       );
       appLogger.gui.info("Daemon settings saved");
+      await load();
       await useDataStore.getState().refresh();
+      setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
     } finally {
@@ -177,6 +183,7 @@ export function DaemonSettings() {
       </section>
 
       {error ? <p className="avar-field__error">{error}</p> : null}
+      {saved ? <p className="avar-settings-status">{t("settings.saved")}</p> : null}
       <Button loading={saving} onClick={() => void save()}>
         {t("common.save")}
       </Button>

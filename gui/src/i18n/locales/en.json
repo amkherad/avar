@@ -29,6 +29,7 @@
     "disconnected": "Disconnected",
     "connecting": "Connecting…",
     "test": "Test connection",
+    "refresh": "Refresh session",
     "forceRemote": "Treat as remote session",
     "forceRemoteHint": "Override local-address detection when this session reaches a remote daemon through localhost (for example an SSH tunnel)."
   },
@@ -285,6 +286,8 @@
   },
   "settings": {
     "title": "Settings",
+    "saved": "Settings saved.",
+    "backendDisconnected": "Connect to a session to change daemon settings.",
     "theme": "Theme",
     "themeLight": "Light",
     "themeLightBright": "Light (bright)",

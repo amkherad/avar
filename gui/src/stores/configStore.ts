@@ -38,6 +38,30 @@ function stripSecrets(config: GuiConfig): GuiConfig {
   };
 }
 
+let configHydrated = false;
+const configHydrationWaiters: Array<() => void> = [];
+
+function markConfigHydrated(): void {
+  if (configHydrated) {
+    return;
+  }
+  configHydrated = true;
+  for (const resolve of configHydrationWaiters) {
+    resolve();
+  }
+  configHydrationWaiters.length = 0;
+}
+
+/** Wait until GUI config has been restored from localStorage. */
+export function waitForConfigHydration(): Promise<void> {
+  if (configHydrated) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    configHydrationWaiters.push(resolve);
+  });
+}
+
 export const useConfigStore = create<ConfigState>()(
   persist(
     (set, get) => ({
@@ -49,12 +73,14 @@ export const useConfigStore = create<ConfigState>()(
         if (keys.length > 0) {
           appLogger.gui.debug("Config updated", keys.join(", "));
         }
-        set((state) => ({ config: { ...state.config, ...patch } }));
+        set((state) => ({
+          config: mergeConfig({ ...state.config, ...patch }),
+        }));
       },
 
       setConfig: (config) => {
         appLogger.gui.debug("Config replaced", config.activeSessionId);
-        set({ config });
+        set({ config: mergeConfig(config) });
       },
 
       setSessionAuthToken: (sessionId, token) => {
@@ -91,14 +117,22 @@ export const useConfigStore = create<ConfigState>()(
           config: Partial<GuiConfig>;
           sessionSecrets: Record<string, string>;
         }> | undefined;
-        if (!stored?.config) {
-          return current;
+        const next =
+          !stored?.config
+            ? current
+            : {
+                ...current,
+                config: mergeConfig(stored.config),
+                sessionSecrets: stored.sessionSecrets ?? {},
+              };
+        markConfigHydrated();
+        return next;
+      },
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) {
+          appLogger.gui.error("Config rehydration failed", String(error));
         }
-        return {
-          ...current,
-          config: mergeConfig(stored.config),
-          sessionSecrets: stored.sessionSecrets ?? {},
-        };
+        markConfigHydrated();
       },
       storage: createJSONStorage(() => ({
         getItem: (name) => {

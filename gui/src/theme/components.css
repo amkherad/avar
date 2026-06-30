@@ -268,6 +268,15 @@
   color: var(--avar-success);
 }
 
+.avar-copy-btn--confirm:hover:not(:disabled) {
+  color: var(--avar-success);
+}
+
+.avar-copy-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .avar-input--error {
   border-color: var(--avar-danger);
 }
@@ -585,22 +594,92 @@ html.avar-electron .avar-header--desktop .avar-extension-panel {
   display: flex;
   align-items: stretch;
   flex-shrink: 0;
-  margin-inline: -0.35rem;
+  height: 100%;
 }
 
 .avar-window-controls__btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.35rem;
+  width: 2.875rem;
   min-height: 2.75rem;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--avar-text-muted);
   cursor: pointer;
-  font-size: 0.72rem;
   transition: background 0.12s ease, color 0.12s ease;
+}
+
+.avar-window-controls__glyph {
+  display: block;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.avar-window-controls__glyph--minimize {
+  width: 0.625rem;
+  height: 1px;
+  background: currentColor;
+}
+
+.avar-window-controls__glyph--maximize {
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+}
+
+.avar-window-controls__glyph--restore {
+  position: relative;
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+.avar-window-controls__glyph--restore::before,
+.avar-window-controls__glyph--restore::after {
+  content: "";
+  position: absolute;
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+  background: var(--avar-bg-elevated);
+}
+
+.avar-window-controls__glyph--restore::before {
+  top: 0;
+  inset-inline-end: 0;
+}
+
+.avar-window-controls__glyph--restore::after {
+  bottom: 0;
+  inset-inline-start: 0;
+}
+
+.avar-window-controls__glyph--close {
+  position: relative;
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+.avar-window-controls__glyph--close::before,
+.avar-window-controls__glyph--close::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.75rem;
+  height: 1px;
+  background: currentColor;
+}
+
+.avar-window-controls__glyph--close::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.avar-window-controls__glyph--close::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
 }
 
 .avar-window-controls__btn:hover {
@@ -619,15 +698,15 @@ html.avar-electron-darwin .avar-header--desktop {
 
 html.avar-electron-darwin .avar-header--desktop .avar-window-controls {
   order: -1;
-  margin-inline: 0 0.25rem;
+  margin-inline-end: 0.5rem;
 }
 
 html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop {
-  padding-inline-end: 0;
+  padding-inline-end: 0.75rem;
 }
 
 html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window-controls {
-  margin-inline-start: 0.15rem;
+  margin-inline-start: 0.5rem;
 }
 
 .avar-header__brand h1,
@@ -939,6 +1018,39 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
   border-color: var(--avar-primary);
 }
 
+.avar-session-selector__status-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+
+.avar-session-selector__refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: none;
+  border-radius: calc(var(--avar-radius) - 4px);
+  background: transparent;
+  color: var(--avar-text-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+}
+
+.avar-session-selector__refresh:hover:not(:disabled) {
+  color: var(--avar-primary);
+  background: color-mix(in srgb, var(--avar-primary) 10%, transparent);
+}
+
+.avar-session-selector__refresh:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .avar-session-selector__info {
   flex: 1;
   min-width: 0;
@@ -1052,7 +1164,7 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: 1.25rem;
+  padding: 0;
   display: flex;
   flex-direction: column;
 }
@@ -1062,6 +1174,9 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
   min-height: 0;
   display: flex;
   flex-direction: column;
+  border-radius: 0;
+  border-inline: none;
+  box-shadow: none;
 }
 
 .avar-dashboard__main .avar-card__body {
@@ -1355,17 +1470,39 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
   min-width: 0;
 }
 
+.avar-download-detail__url-edit-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
 .avar-download-detail__url-edit {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 0.35rem;
   width: 100%;
 }
 
-.avar-download-detail__url-edit .avar-input {
-  flex: 1 1 12rem;
+.avar-download-detail__url-textarea {
+  flex: 1;
   min-width: 0;
+  min-height: 4.5rem;
+  resize: vertical;
+  font-family: var(--avar-font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.avar-download-detail__url-edit-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex-shrink: 0;
 }
 
 .avar-download-detail__fields {

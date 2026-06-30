@@ -3,6 +3,7 @@
 
 #include "avar.h"
 
+#include <cJSON.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -68,5 +69,8 @@ bool download_state_is_range_done(const DownloadState *state, uint64_t start, ui
 size_t download_state_segment_count(const DownloadState *state);
 
 bool download_state_is_segment_done(const DownloadState *state, size_t segment_index);
+
+/* Adds chunkSize and doneRanges JSON fields when total_size and chunk_size are set. */
+void download_state_add_json_progress(cJSON *obj, const DownloadState *state);
 
 #endif

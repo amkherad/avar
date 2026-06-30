@@ -756,6 +756,10 @@ static cJSON *handle_downloads_list(void) {
         if (entry != NULL) {
             enrich_download_entry_dest_path(entry);
             enrich_download_entry_from_disk(entry);
+            const cJSON *entry_id = cJSON_GetObjectItemCaseSensitive(entry, AVAR_FIELD_ID);
+            if (cJSON_IsString(entry_id) && entry_id->valuestring != NULL) {
+                download_entry_add_progress_json(entry_id->valuestring, entry);
+            }
             cJSON_AddItemToArray(downloads, entry);
         }
     }
@@ -1477,6 +1481,10 @@ bool daemon_rpc_build_snapshot(char **json_out) {
         if (entry != NULL) {
             enrich_download_entry_dest_path(entry);
             enrich_download_entry_from_disk(entry);
+            const cJSON *entry_id = cJSON_GetObjectItemCaseSensitive(entry, AVAR_FIELD_ID);
+            if (cJSON_IsString(entry_id) && entry_id->valuestring != NULL) {
+                download_entry_add_progress_json(entry_id->valuestring, entry);
+            }
             cJSON_AddItemToArray(downloads, entry);
         }
     }

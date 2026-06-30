@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faMoon, faSun } from "@fortawesome/free-solid-svg-icons";
+import { faLightbulb, faMoon } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/Button";
 import { useConfigStore } from "@/stores/configStore";
 import { useTheme } from "@/theme/ThemeContext";
@@ -25,7 +25,7 @@ export function ThemeToggle() {
       aria-label={isDark ? t("nav.themeLight") : t("nav.themeDark")}
       onClick={toggle}
     >
-      <FontAwesomeIcon icon={isDark ? faSun : faMoon} />
+      <FontAwesomeIcon icon={isDark ? faLightbulb : faMoon} />
     </Button>
   );
 }

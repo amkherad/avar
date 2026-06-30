@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faChevronDown, faPen, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faArrowsRotate, faChevronDown, faPen, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { createDaemonClient } from "@/api/daemon";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { useConfigStore } from "@/stores/configStore";
-import { useConnectionStore } from "@/stores/connectionStore";
+import { useConnectionStore, refreshActiveSession } from "@/stores/connectionStore";
 import { appLogger } from "@/lib/appLogger";
 import { showConfirmDialog } from "@/lib/popup";
 
@@ -41,6 +41,7 @@ export function SessionSelector() {
   const [useRelativeApi, setUseRelativeApi] = useState(false);
   const [forceRemote, setForceRemote] = useState(false);
   const [testResult, setTestResult] = useState<"idle" | "ok" | "fail">("idle");
+  const [refreshing, setRefreshing] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -121,13 +122,14 @@ export function SessionSelector() {
       forceRemote,
     };
 
+    const { config: currentConfig } = useConfigStore.getState();
     const sessions = editingId
-      ? config.sessions.map((s) => (s.id === editingId ? { ...s, ...payload } : s))
-      : [...config.sessions, payload];
+      ? currentConfig.sessions.map((s) => (s.id === editingId ? { ...s, ...payload } : s))
+      : [...currentConfig.sessions, payload];
 
     setSessionAuthToken(sessionId, authToken);
     setConfig({
-      ...config,
+      ...currentConfig,
       sessions,
       activeSessionId: editingId ?? sessionId,
     });
@@ -152,17 +154,18 @@ export function SessionSelector() {
       return;
     }
 
-    const sessions = config.sessions.filter((s) => s.id !== id);
-    if (!canRemoveSession(config.sessions, id)) {
+    const { config: currentConfig } = useConfigStore.getState();
+    const sessions = currentConfig.sessions.filter((s) => s.id !== id);
+    if (!canRemoveSession(currentConfig.sessions, id)) {
       return;
     }
 
     setSessionAuthToken(id, undefined);
     setConfig({
-      ...config,
+      ...currentConfig,
       sessions,
       activeSessionId:
-        config.activeSessionId === id ? sessions[0].id : config.activeSessionId,
+        currentConfig.activeSessionId === id ? sessions[0].id : currentConfig.activeSessionId,
     });
     appLogger.gui.info("Session removed", session.label);
     setMenuOpen(false);
@@ -187,6 +190,19 @@ export function SessionSelector() {
     appLogger.gui.debug("Session connection test", ok ? "ok" : "fail");
   }
 
+  async function handleRefreshSession(event: MouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    if (refreshing) {
+      return;
+    }
+    setRefreshing(true);
+    try {
+      await refreshActiveSession();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   if (!activeSession) {
     return null;
   }
@@ -200,9 +216,21 @@ export function SessionSelector() {
         aria-haspopup="listbox"
         onClick={() => setMenuOpen((open) => !open)}
       >
-        <span
-          className={`avar-connection__dot ${connection === "connected" ? "avar-connection__dot--ok" : ""}`}
-        />
+        <div className="avar-session-selector__status-column">
+          <span
+            className={`avar-connection__dot ${connection === "connected" ? "avar-connection__dot--ok" : ""}`}
+          />
+          <button
+            type="button"
+            className="avar-session-selector__refresh"
+            aria-label={t("session.refresh")}
+            title={t("session.refresh")}
+            disabled={refreshing}
+            onClick={(event) => void handleRefreshSession(event)}
+          >
+            <FontAwesomeIcon icon={faArrowsRotate} spin={refreshing} />
+          </button>
+        </div>
         <span className="avar-session-selector__info">
           <span className="avar-session-selector__label">{activeSession.label}</span>
           <span className="avar-session-selector__status">{connectionLabel}</span>

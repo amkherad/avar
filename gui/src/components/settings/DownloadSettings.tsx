@@ -74,6 +74,7 @@ export function DownloadSettings() {
   const [proxy, setProxy] = useState<ProxySettings>(defaultProxySettings());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   const load = useCallback(async () => {
     if (!client) {
@@ -129,10 +130,13 @@ export function DownloadSettings() {
 
   async function save() {
     if (!client) {
+      setError(t("settings.backendDisconnected"));
+      setSaved(false);
       return;
     }
     setSaving(true);
     setError(null);
+    setSaved(false);
     try {
       for (const key of SEGMENT_KEYS) {
         if (values[key] !== undefined) {
@@ -147,6 +151,8 @@ export function DownloadSettings() {
       await client.setConfig("dm.proxy.password", proxy.password);
       await client.setConfig("dm.proxy.noProxy", proxy.noProxy ?? "");
       appLogger.gui.info("Download settings saved");
+      await load();
+      setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
     } finally {
@@ -155,6 +161,7 @@ export function DownloadSettings() {
   }
 
   function setField(key: string, value: string) {
+    setSaved(false);
     setValues((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -250,9 +257,17 @@ export function DownloadSettings() {
         </Select>
       </section>
 
-      <ProxySettingsFields value={proxy} onChange={setProxy} showNoProxy />
+      <ProxySettingsFields
+        value={proxy}
+        onChange={(next) => {
+          setSaved(false);
+          setProxy(next);
+        }}
+        showNoProxy
+      />
 
       {error ? <p className="avar-field__error">{error}</p> : null}
+      {saved ? <p className="avar-settings-status">{t("settings.saved")}</p> : null}
       <Button loading={saving} onClick={() => void save()}>
         {t("common.save")}
       </Button>

@@ -602,3 +602,30 @@ bool download_state_all_chunks_done(const DownloadState *state) {
 
     return download_state_is_range_done(state, 0U, state->total_size - 1U);
 }
+
+void download_state_add_json_progress(cJSON *obj, const DownloadState *state) {
+    if (obj == NULL || state == NULL || state->total_size == 0U || state->chunk_size == 0U) {
+        return;
+    }
+
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_CHUNK_SIZE);
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, "doneRanges");
+
+    cJSON_AddNumberToObject(obj, AVAR_FIELD_CHUNK_SIZE, (double)state->chunk_size);
+
+    cJSON *ranges = cJSON_AddArrayToObject(obj, "doneRanges");
+    if (ranges == NULL) {
+        return;
+    }
+
+    for (size_t i = 0U; i < state->done_range_count; i++) {
+        cJSON *pair = cJSON_CreateArray();
+        if (pair == NULL) {
+            continue;
+        }
+
+        cJSON_AddItemToArray(pair, cJSON_CreateNumber((double)state->done_ranges[i].start));
+        cJSON_AddItemToArray(pair, cJSON_CreateNumber((double)state->done_ranges[i].end));
+        cJSON_AddItemToArray(ranges, pair);
+    }
+}

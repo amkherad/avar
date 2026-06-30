@@ -8,7 +8,7 @@ import {
 } from "@/config/defaults";
 import { footerMonitorsEnabled } from "@/lib/footerMonitors";
 import { isPushSyncChannel, resolveSyncChannel } from "@/lib/syncChannel";
-import { useConfigStore } from "@/stores/configStore";
+import { useConfigStore, waitForConfigHydration } from "@/stores/configStore";
 import { useDataStore } from "@/stores/dataStore";
 import { appLogger } from "@/lib/appLogger";
 
@@ -95,34 +95,42 @@ export async function ensureElectronSession(): Promise<void> {
     return;
   }
 
+  await waitForConfigHydration();
+
   const proxyUrl = await resolveElectronProxyUrl();
   if (!proxyUrl) {
     return;
   }
 
-  const { config, setConfig } = useConfigStore.getState();
-  const existing = config.sessions.find((s) => s.id === ELECTRON_SESSION_ID);
-  const electronSession = createElectronSession(proxyUrl);
+  useConfigStore.setState((state) => {
+    const existing = state.config.sessions.find((s) => s.id === ELECTRON_SESSION_ID);
+    const electronSession = createElectronSession(proxyUrl);
 
-  if (!existing) {
-    setConfig({
-      ...config,
-      sessions: [electronSession, ...config.sessions],
-      activeSessionId: ELECTRON_SESSION_ID,
-    });
-    return;
-  }
+    if (!existing) {
+      return {
+        config: {
+          ...state.config,
+          sessions: [electronSession, ...state.config.sessions],
+          activeSessionId: ELECTRON_SESSION_ID,
+        },
+      };
+    }
 
-  if (existing.baseUrl !== proxyUrl) {
-    setConfig({
-      ...config,
-      sessions: config.sessions.map((session) =>
-        session.id === ELECTRON_SESSION_ID
-          ? { ...session, baseUrl: proxyUrl }
-          : session,
-      ),
-    });
-  }
+    if (existing.baseUrl === proxyUrl) {
+      return state;
+    }
+
+    return {
+      config: {
+        ...state.config,
+        sessions: state.config.sessions.map((session) =>
+          session.id === ELECTRON_SESSION_ID
+            ? { ...session, baseUrl: proxyUrl }
+            : session,
+        ),
+      },
+    };
+  });
 }
 
 export const useConnectionStore = create<ConnectionStoreState>()((set, get) => ({
@@ -230,6 +238,15 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
     }
   },
 }));
+
+export async function refreshActiveSession(): Promise<void> {
+  appLogger.gui.debug("Refreshing active session");
+  useDataStore.getState().clear();
+  useConnectionStore.getState().reconnectClient();
+  useConnectionStore.getState().startPingMonitor();
+  await useConnectionStore.getState().checkConnection();
+  await useDataStore.getState().refresh();
+}
 
 useConfigStore.subscribe((state, prev) => {
   const sessionChanged =

@@ -163,6 +163,7 @@ void download_progress_watch(const char *id) {
     if (index >= 0) {
         g_progress_watchers.items[(size_t)index].refcount++;
         avar_mutex_unlock(g_progress_watchers.mutex);
+        download_progress_notify_watch(id);
         return;
     }
 
@@ -177,6 +178,7 @@ void download_progress_watch(const char *id) {
     entry->refcount = 1U;
 
     avar_mutex_unlock(g_progress_watchers.mutex);
+    download_progress_notify_watch(id);
 }
 
 void download_progress_unwatch(const char *id) {
@@ -1034,21 +1036,6 @@ static void json_append_byte_range(cJSON *ranges, const uint64_t start, const ui
     cJSON_AddItemToArray(ranges, pair);
 }
 
-static void json_add_done_ranges(cJSON *obj, const DownloadState *state) {
-    if (obj == NULL || state == NULL) {
-        return;
-    }
-
-    cJSON *ranges = cJSON_AddArrayToObject(obj, "doneRanges");
-    if (ranges == NULL) {
-        return;
-    }
-
-    for (size_t i = 0U; i < state->done_range_count; i++) {
-        json_append_byte_range(ranges, state->done_ranges[i].start, state->done_ranges[i].end);
-    }
-}
-
 static void json_add_active_ranges(cJSON *obj, const DownloadJob *job) {
     if (obj == NULL || job == NULL) {
         return;
@@ -1080,6 +1067,52 @@ static void json_add_active_ranges(cJSON *obj, const DownloadJob *job) {
     } else if (job->step == DL_STEP_STREAM && job->stream_received > job->stream_persisted) {
         json_append_byte_range(ranges, job->stream_persisted, job->stream_received - 1U);
     }
+}
+
+static void download_job_add_json_progress(cJSON *obj, const DownloadJob *job) {
+    if (obj == NULL || job == NULL || job->state == NULL) {
+        return;
+    }
+
+    download_state_add_json_progress(obj, job->state);
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, "activeRanges");
+    json_add_active_ranges(obj, job);
+}
+
+void download_progress_notify_watch(const char *id) {
+    if (id == NULL || id[0] == '\0') {
+        return;
+    }
+
+    DownloadJob *job = active_jobs_find(id);
+    if (job == NULL) {
+        return;
+    }
+
+    const char *status = job->state != NULL && job->state->status != NULL ? job->state->status
+                                                                          : AVAR_DL_STATUS_DOWNLOADING;
+    (void)dm_item_upsert(job, status);
+}
+
+void download_entry_add_progress_json(const char *id, cJSON *entry) {
+    if (id == NULL || id[0] == '\0' || entry == NULL) {
+        return;
+    }
+
+    DownloadJob *job = active_jobs_find(id);
+    if (job != NULL) {
+        download_job_add_json_progress(entry, job);
+        return;
+    }
+
+    DownloadState *state = download_item_state_load(id);
+    if (state == NULL) {
+        return;
+    }
+
+    download_state_add_json_progress(entry, state);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, "activeRanges");
+    download_state_free(state);
 }
 
 static char *build_item_json(const DownloadJob *job, const char *status) {
@@ -1133,11 +1166,8 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         }
     }
 
-    if (job->state != NULL && job->state->total_size > 0U && job->state->chunk_size > 0U
-        && download_progress_is_watched(job->item_id)) {
-        cJSON_AddNumberToObject(obj, AVAR_FIELD_CHUNK_SIZE, (double)job->state->chunk_size);
-        json_add_done_ranges(obj, job->state);
-        json_add_active_ranges(obj, job);
+    if (job->state != NULL && job->state->total_size > 0U && job->state->chunk_size > 0U) {
+        download_job_add_json_progress(obj, job);
     }
 
     char *json = cJSON_PrintUnformatted(obj);

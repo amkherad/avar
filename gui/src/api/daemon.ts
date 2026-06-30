@@ -452,8 +452,10 @@ export class DaemonClient {
     if (result.exitCode !== 0) {
       return defaultValue ?? null;
     }
-    const output = result.output?.trim();
-    return output && output.length > 0 ? output : (defaultValue ?? null);
+    if (result.output === undefined || result.output === null) {
+      return defaultValue ?? null;
+    }
+    return result.output.trimEnd();
   }
 
   async setConfig(key: string, value: string): Promise<void> {

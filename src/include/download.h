@@ -81,6 +81,12 @@ void download_progress_unwatch(const char *id);
 /** Returns true when at least one client is watching segmented progress for id. */
 bool download_progress_is_watched(const char *id);
 
+/** Pushes fresh progress fields to dm.items and refreshes an active transfer snapshot. */
+void download_progress_notify_watch(const char *id);
+
+/** Adds chunkSize, doneRanges, and activeRanges (when job is active) to a JSON object. */
+void download_entry_add_progress_json(const char *id, cJSON *entry);
+
 /** Waits until no active downloads or timeout. Returns true when idle. */
 bool download_wait_idle(unsigned timeout_ms);
 

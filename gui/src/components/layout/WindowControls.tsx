@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FontAwesomeIcon } from "@/icons";
-import { faSquare, faWindowMaximize, faWindowMinimize, faXmark } from "@fortawesome/free-solid-svg-icons";
 
 export function WindowControls() {
   const { t } = useTranslation();
@@ -55,21 +53,24 @@ export function WindowControls() {
     <div className="avar-window-controls" role="group" aria-label={t("window.controls")}>
       <button
         type="button"
-        className="avar-window-controls__btn"
+        className="avar-window-controls__btn avar-window-controls__btn--minimize"
         aria-label={t("window.minimize")}
         title={t("window.minimize")}
         onClick={() => void handleMinimize()}
       >
-        <FontAwesomeIcon icon={faWindowMinimize} />
+        <span className="avar-window-controls__glyph avar-window-controls__glyph--minimize" aria-hidden />
       </button>
       <button
         type="button"
-        className="avar-window-controls__btn"
+        className={`avar-window-controls__btn avar-window-controls__btn--maximize${maximized ? " avar-window-controls__btn--restore" : ""}`}
         aria-label={maximized ? t("window.restore") : t("window.maximize")}
         title={maximized ? t("window.restore") : t("window.maximize")}
         onClick={() => void handleMaximize()}
       >
-        <FontAwesomeIcon icon={maximized ? faSquare : faWindowMaximize} />
+        <span
+          className={`avar-window-controls__glyph ${maximized ? "avar-window-controls__glyph--restore" : "avar-window-controls__glyph--maximize"}`}
+          aria-hidden
+        />
       </button>
       <button
         type="button"
@@ -78,7 +79,7 @@ export function WindowControls() {
         title={t("window.close")}
         onClick={() => void handleClose()}
       >
-        <FontAwesomeIcon icon={faXmark} />
+        <span className="avar-window-controls__glyph avar-window-controls__glyph--close" aria-hidden />
       </button>
     </div>
   );

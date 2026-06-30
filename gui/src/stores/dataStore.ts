@@ -124,14 +124,32 @@ export const useDataStore = create<DataStoreState>()((set, get) => ({
     }),
 
   applySnapshot: (snapshot) => {
-    set((state) => ({
-      queues: snapshot.queues ?? state.queues,
-      health: snapshot.health ?? state.health,
-      downloads: snapshot.downloads ?? state.downloads,
-      stats: snapshot.stats ?? state.stats,
-      status: "idle",
-      error: null,
-    }));
+    set((state) => {
+      const prevById = new Map(state.downloads.map((d) => [d.id, d]));
+      const downloads = snapshot.downloads
+        ? snapshot.downloads.map((item) => {
+            const prev = prevById.get(item.id);
+            if (!prev) {
+              return item;
+            }
+            return {
+              ...item,
+              chunkSize: item.chunkSize ?? prev.chunkSize,
+              doneRanges: item.doneRanges ?? prev.doneRanges,
+              activeRanges: item.activeRanges ?? prev.activeRanges,
+            };
+          })
+        : state.downloads;
+
+      return {
+        queues: snapshot.queues ?? state.queues,
+        health: snapshot.health ?? state.health,
+        downloads,
+        stats: snapshot.stats ?? state.stats,
+        status: "idle",
+        error: null,
+      };
+    });
   },
 
   setStats: (stats) => set({ stats }),

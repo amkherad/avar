@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faCopy, faDownload, faFolder, faFolderOpen, faLink, faPen, faRotateRight } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faCopy, faDownload, faFolder, faFolderOpen, faLink, faPen, faRotateRight, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
@@ -12,7 +12,6 @@ import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { updateDownloadUrl } from "@/lib/downloadActions";
-import { Input } from "@/components/ui/Input";
 import { useDownloadDetails } from "@/hooks/useDownloadDetails";
 import { useDownloadProgressWatch } from "@/hooks/useDownloadProgressWatch";
 import { useUnitFormat } from "@/hooks/useUnitFormat";
@@ -167,25 +166,40 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
             <dt>{t("download.url")}</dt>
             <dd className="avar-download-detail__value-row">
               {editingUrl ? (
-                <div className="avar-download-detail__url-edit">
-                  <Input
-                    value={urlDraft}
-                    onChange={(event) => setUrlDraft(event.target.value)}
-                    disabled={urlSaving}
-                    aria-label={t("download.url")}
-                  />
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    loading={urlSaving}
-                    disabled={!urlDraft.trim()}
-                    onClick={() => void saveUrl()}
-                  >
-                    {t("download.saveUrl")}
-                  </Button>
-                  <Button size="sm" variant="secondary" disabled={urlSaving} onClick={cancelEditUrl}>
-                    {t("common.cancel")}
-                  </Button>
+                <div className="avar-download-detail__url-edit-wrap">
+                  <div className="avar-download-detail__url-edit">
+                    <textarea
+                      className="avar-input avar-download-detail__url-textarea"
+                      value={urlDraft}
+                      onChange={(event) => setUrlDraft(event.target.value)}
+                      disabled={urlSaving}
+                      aria-label={t("download.url")}
+                      rows={3}
+                      spellCheck={false}
+                    />
+                    <div className="avar-download-detail__url-edit-actions">
+                      <button
+                        type="button"
+                        className="avar-copy-btn avar-copy-btn--confirm"
+                        aria-label={t("download.saveUrl")}
+                        title={t("download.saveUrl")}
+                        disabled={urlSaving || !urlDraft.trim()}
+                        onClick={() => void saveUrl()}
+                      >
+                        <FontAwesomeIcon icon={faCheck} />
+                      </button>
+                      <button
+                        type="button"
+                        className="avar-copy-btn"
+                        aria-label={t("common.cancel")}
+                        title={t("common.cancel")}
+                        disabled={urlSaving}
+                        onClick={cancelEditUrl}
+                      >
+                        <FontAwesomeIcon icon={faXmark} />
+                      </button>
+                    </div>
+                  </div>
                   {urlError ? (
                     <span className="avar-download-detail__error">{urlError}</span>
                   ) : null}
