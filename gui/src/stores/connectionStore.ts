@@ -6,6 +6,7 @@ import {
   ELECTRON_SESSION_ID,
   type GuiSession,
 } from "@/config/defaults";
+import { footerMonitorsEnabled } from "@/lib/footerMonitors";
 import { isPushSyncChannel, resolveSyncChannel } from "@/lib/syncChannel";
 import { useConfigStore } from "@/stores/configStore";
 import { useDataStore } from "@/stores/dataStore";
@@ -68,12 +69,20 @@ function activePushChannel(): boolean {
 }
 
 async function pingWithTimeout(client: DaemonClient): Promise<boolean> {
+  const { config } = useConfigStore.getState();
+  const wantsStats = footerMonitorsEnabled(config.footerMonitors);
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    const stats = await client.systemStats(controller.signal);
-    useDataStore.getState().setStats(stats);
-    return stats.status === "ok";
+    if (wantsStats) {
+      const stats = await client.systemStats(controller.signal);
+      useDataStore.getState().setStats(stats);
+      return stats.status === "ok";
+    }
+
+    useDataStore.getState().setStats(null);
+    const health = await client.health(controller.signal);
+    return health.status === "ok";
   } catch {
     return false;
   } finally {

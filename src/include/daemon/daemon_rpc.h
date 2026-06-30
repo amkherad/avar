@@ -68,10 +68,10 @@ void daemon_rpc_stream_send(struct mg_connection *connection, bool websocket);
 void daemon_rpc_streams_tick(struct mg_mgr *mgr);
 
 /** Registers an SSE connection and sends the initial snapshot. */
-void daemon_rpc_stream_attach_sse(struct mg_connection *connection);
+void daemon_rpc_stream_attach_sse(struct mg_connection *connection, bool wants_stats);
 
 /** Registers a WebSocket connection and sends the initial snapshot. */
-void daemon_rpc_stream_attach_ws(struct mg_connection *connection);
+void daemon_rpc_stream_attach_ws(struct mg_connection *connection, bool wants_stats);
 
 /** Removes a streaming connection from the registry. */
 void daemon_rpc_stream_detach(struct mg_connection *connection);

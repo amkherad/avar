@@ -2,6 +2,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("avar", {
   isElectron: true,
+  platform: process.platform,
+  minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
+  maximizeWindow: () => ipcRenderer.invoke("window:maximize"),
+  closeWindow: () => ipcRenderer.invoke("window:close"),
+  isWindowMaximized: () => ipcRenderer.invoke("window:isMaximized"),
   openPopup: (options) => ipcRenderer.invoke("popup:open", options),
   selectDirectory: (options) => ipcRenderer.invoke("dialog:selectDirectory", options),
   showNotification: (options) => ipcRenderer.invoke("notification:show", options),

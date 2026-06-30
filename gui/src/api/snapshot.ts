@@ -41,6 +41,7 @@ function parseDownloadItem(item: unknown): DownloadInfo {
     totalBytes: toNumber(record.totalBytes),
     chunkSize: record.chunkSize !== undefined ? toNumber(record.chunkSize) : undefined,
     doneRanges: parseDoneRanges(record.doneRanges),
+    activeRanges: parseDoneRanges(record.activeRanges),
     errorCount: record.errorCount !== undefined ? toNumber(record.errorCount) : undefined,
     maxRetries,
     description: record.description ? String(record.description) : undefined,

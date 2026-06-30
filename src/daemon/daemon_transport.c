@@ -683,6 +683,17 @@ static bool http_try_serve_download_file(struct mg_connection *c, struct mg_http
     return true;
 }
 
+static bool http_query_wants_stats(struct mg_http_message *hm) {
+    char stats[8];
+    if (hm == NULL) {
+        return false;
+    }
+    if (mg_http_get_var(&hm->query, "stats", stats, sizeof stats) > 0) {
+        return stats[0] == '1' && stats[1] == '\0';
+    }
+    return false;
+}
+
 static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     if (ev == MG_EV_CLOSE) {
         daemon_rpc_stream_detach(c);
@@ -690,7 +701,8 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
     }
 
     if (ev == MG_EV_WS_OPEN) {
-        daemon_rpc_stream_attach_ws(c);
+        struct mg_http_message *hm = (struct mg_http_message *)ev_data;
+        daemon_rpc_stream_attach_ws(c, http_query_wants_stats(hm));
         return;
     }
 
@@ -742,7 +754,7 @@ static void http_ev_handler(struct mg_connection *c, int ev, void *ev_data) {
                                       "Connection: keep-alive\r\n");
         off += http_write_cors_headers(headers + off, sizeof headers - off, cors, hm);
         mg_printf(c, "HTTP/1.1 200 OK\r\n%s\r\n", headers);
-        daemon_rpc_stream_attach_sse(c);
+        daemon_rpc_stream_attach_sse(c, http_query_wants_stats(hm));
         return;
     }
 

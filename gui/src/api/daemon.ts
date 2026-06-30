@@ -96,18 +96,22 @@ export class DaemonClient {
     return headers;
   }
 
-  getEventsUrl(): string {
-    return this.eventsUrl;
+  getEventsUrl(wantsSystemStats = false): string {
+    return wantsSystemStats ? `${this.eventsUrl}?stats=1` : this.eventsUrl;
   }
 
-  getWebSocketUrl(): string {
-    return this.wsUrl;
+  getWebSocketUrl(wantsSystemStats = false): string {
+    return wantsSystemStats ? `${this.wsUrl}?stats=1` : this.wsUrl;
   }
 
-  async ping(signal?: AbortSignal): Promise<boolean> {
+  async ping(wantsSystemStats = false, signal?: AbortSignal): Promise<boolean> {
     try {
-      const stats = await this.systemStats(signal);
-      return stats.status === "ok";
+      if (wantsSystemStats) {
+        const stats = await this.systemStats(signal);
+        return stats.status === "ok";
+      }
+      const health = await this.health(signal);
+      return health.status === "ok";
     } catch {
       return false;
     }

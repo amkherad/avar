@@ -50,6 +50,9 @@ function AppContent() {
   useEffect(() => {
     if (window.avar?.isElectron) {
       document.documentElement.classList.add("avar-electron");
+      if (window.avar.platform === "darwin") {
+        document.documentElement.classList.add("avar-electron-darwin");
+      }
       void ensureElectronSession().then(() => {
         useConnectionStore.getState().reconnectClient();
         useConnectionStore.getState().startPingMonitor();

@@ -4,6 +4,7 @@ import { faArrowLeft, faCircleQuestion, faGear } from "@fortawesome/free-solid-s
 import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "./ThemeToggle";
 import { ExtensionIntegrationButton } from "./ExtensionIntegrationButton";
+import { WindowControls } from "./WindowControls";
 import type { AppPage } from "./Sidebar";
 import type { SettingsCategory } from "@/pages/SettingsPage";
 
@@ -16,10 +17,13 @@ export interface HeaderProps {
 export function Header({ page, onNavigate, onOpenSettings }: HeaderProps) {
   const { t } = useTranslation();
   const isDashboard = page === "dashboard";
+  const isElectron = Boolean(window.avar?.isElectron);
+  const isMacDesktop = isElectron && window.avar?.platform === "darwin";
   const iconSrc = `${import.meta.env.BASE_URL.replace(/\/?$/, "/")}icon.svg`;
 
   return (
-    <header className="avar-header">
+    <header className={`avar-header${isElectron ? " avar-header--desktop" : ""}`}>
+      {isMacDesktop ? <WindowControls /> : null}
       <div className="avar-header__brand">
         {!isDashboard ? (
           <Button
@@ -65,6 +69,7 @@ export function Header({ page, onNavigate, onOpenSettings }: HeaderProps) {
           <FontAwesomeIcon icon={faGear} />
         </Button>
       </div>
+      {isElectron && !isMacDesktop ? <WindowControls /> : null}
     </header>
   );
 }

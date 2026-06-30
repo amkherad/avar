@@ -5,7 +5,10 @@ import { progressPercent } from "./format";
 const MAX_SECTION_DIVIDERS = 48;
 
 export interface DownloadProgressBarProps {
-  download: Pick<DownloadInfo, "bytesDownloaded" | "totalBytes" | "chunkSize" | "doneRanges">;
+  download: Pick<
+    DownloadInfo,
+    "bytesDownloaded" | "totalBytes" | "chunkSize" | "doneRanges" | "activeRanges"
+  >;
   className?: string;
 }
 
@@ -56,7 +59,9 @@ export function DownloadProgressBar({ download, className }: DownloadProgressBar
   const totalBytes = download.totalBytes;
   const chunkSize = download.chunkSize ?? 0;
   const doneRanges = download.doneRanges ?? [];
-  const showRanges = totalBytes > 0 && doneRanges.length > 0;
+  const activeRanges = download.activeRanges ?? [];
+  const showRanges =
+    totalBytes > 0 && (chunkSize > 0 || doneRanges.length > 0 || activeRanges.length > 0);
 
   if (!showRanges) {
     return (
@@ -89,8 +94,22 @@ export function DownloadProgressBar({ download, className }: DownloadProgressBar
 
         return (
           <div
-            key={`range-${start}-${end}-${index}`}
+            key={`done-${start}-${end}-${index}`}
             className="avar-progress__range"
+            style={style}
+          />
+        );
+      })}
+      {activeRanges.map(([start, end], index) => {
+        const style = rangeStyle(start, end, totalBytes);
+        if (!style) {
+          return null;
+        }
+
+        return (
+          <div
+            key={`active-${start}-${end}-${index}`}
+            className="avar-progress__range avar-progress__range--active"
             style={style}
           />
         );

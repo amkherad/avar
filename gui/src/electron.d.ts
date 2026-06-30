@@ -65,6 +65,11 @@ export interface AvarSelectDirectoryOptions {
 
 export interface AvarElectronApi {
   isElectron: true;
+  platform?: NodeJS.Platform;
+  minimizeWindow?: () => Promise<void>;
+  maximizeWindow?: () => Promise<void>;
+  closeWindow?: () => Promise<void>;
+  isWindowMaximized?: () => Promise<boolean>;
   openPopup: (options: AvarPopupOptions) => Promise<number | null>;
   selectDirectory: (options?: AvarSelectDirectoryOptions) => Promise<string | null>;
   showNotification: (options: AvarNotificationOptions) => Promise<boolean>;

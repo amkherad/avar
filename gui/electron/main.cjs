@@ -340,20 +340,43 @@ function buildTrayMenu() {
   return Menu.buildFromTemplate(template);
 }
 
-function updateTrayTooltip() {
-  if (!tray) {
-    return;
-  }
+let lastTrayTooltip = "Avar";
 
+function trayDownloadsEqual(a, b) {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every(
+    (item, index) =>
+      item.id === b[index].id &&
+      item.filename === b[index].filename &&
+      item.percent === b[index].percent,
+  );
+}
+
+function buildTrayTooltipText() {
   if (trayActiveDownloads.items.length === 0) {
-    tray.setToolTip("Avar");
-    return;
+    return "Avar";
   }
 
   const lines = trayActiveDownloads.items.map(
     (item) => `${item.filename} (${item.percent}%)`,
   );
-  tray.setToolTip(["Avar", ...lines].join("\n"));
+  return ["Avar", ...lines].join("\n");
+}
+
+function updateTrayTooltip() {
+  if (!tray) {
+    return;
+  }
+
+  const nextTooltip = buildTrayTooltipText();
+  if (nextTooltip === lastTrayTooltip) {
+    return;
+  }
+
+  lastTrayTooltip = nextTooltip;
+  tray.setToolTip(nextTooltip);
 }
 
 function createTray() {
@@ -390,6 +413,7 @@ function createWindow() {
     minHeight: 640,
     title: "Avar",
     icon: loadAppIcon(),
+    frame: false,
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
@@ -582,38 +606,103 @@ ipcMain.handle("desktop:setKeepInTrayOnClose", (_event, enabled) => {
   keepInTrayOnClose = enabled !== false;
 });
 
+ipcMain.handle("window:minimize", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  win?.minimize();
+});
+
+ipcMain.handle("window:maximize", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) {
+    return;
+  }
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+});
+
+ipcMain.handle("window:close", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  win?.close();
+});
+
+ipcMain.handle("window:isMaximized", (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  return win?.isMaximized() ?? false;
+});
+
 ipcMain.handle("tray:setLabels", (_event, labels) => {
-  if (labels && typeof labels === "object") {
-    Object.assign(trayLabels, labels);
-    if (tray) {
-      tray.setContextMenu(buildTrayMenu());
-    }
+  if (!labels || typeof labels !== "object") {
+    return;
+  }
+
+  const next = {
+    show: typeof labels.show === "string" ? labels.show : trayLabels.show,
+    exit: typeof labels.exit === "string" ? labels.exit : trayLabels.exit,
+    startAll: typeof labels.startAll === "string" ? labels.startAll : trayLabels.startAll,
+    pauseAll: typeof labels.pauseAll === "string" ? labels.pauseAll : trayLabels.pauseAll,
+    resumeAll: typeof labels.resumeAll === "string" ? labels.resumeAll : trayLabels.resumeAll,
+    stopAll: typeof labels.stopAll === "string" ? labels.stopAll : trayLabels.stopAll,
+  };
+
+  const unchanged =
+    next.show === trayLabels.show &&
+    next.exit === trayLabels.exit &&
+    next.startAll === trayLabels.startAll &&
+    next.pauseAll === trayLabels.pauseAll &&
+    next.resumeAll === trayLabels.resumeAll &&
+    next.stopAll === trayLabels.stopAll;
+
+  if (unchanged) {
+    return;
+  }
+
+  Object.assign(trayLabels, next);
+  if (tray) {
+    tray.setContextMenu(buildTrayMenu());
   }
 });
 
 ipcMain.handle("tray:setActiveDownloads", (_event, payload) => {
-  if (payload && typeof payload === "object") {
-    trayActiveDownloads = {
-      sectionLabel:
-        typeof payload.sectionLabel === "string"
-          ? payload.sectionLabel
-          : trayActiveDownloads.sectionLabel,
-      items: Array.isArray(payload.items)
-        ? payload.items
-            .filter(
-              (item) =>
-                item &&
-                typeof item.id === "string" &&
-                typeof item.filename === "string" &&
-                typeof item.percent === "number",
-            )
-            .slice(0, 3)
-        : [],
-    };
-    if (tray) {
-      tray.setContextMenu(buildTrayMenu());
-      updateTrayTooltip();
-    }
+  if (!payload || typeof payload !== "object") {
+    return;
+  }
+
+  const nextItems = Array.isArray(payload.items)
+    ? payload.items
+        .filter(
+          (item) =>
+            item &&
+            typeof item.id === "string" &&
+            typeof item.filename === "string" &&
+            typeof item.percent === "number",
+        )
+        .slice(0, 3)
+    : [];
+
+  const nextSectionLabel =
+    typeof payload.sectionLabel === "string"
+      ? payload.sectionLabel
+      : trayActiveDownloads.sectionLabel;
+
+  const downloadsUnchanged =
+    nextSectionLabel === trayActiveDownloads.sectionLabel &&
+    trayDownloadsEqual(nextItems, trayActiveDownloads.items);
+
+  if (downloadsUnchanged) {
+    return;
+  }
+
+  trayActiveDownloads = {
+    sectionLabel: nextSectionLabel,
+    items: nextItems,
+  };
+
+  if (tray) {
+    tray.setContextMenu(buildTrayMenu());
+    updateTrayTooltip();
   }
 });
 

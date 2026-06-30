@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { useConnectionStore } from "@/stores/connectionStore";
 
 /**
- * Tells the daemon to include segmented progress detail (chunkSize, doneRanges)
- * for this download while the detail view is mounted.
+ * Tells the daemon to include segmented progress detail (chunkSize, doneRanges,
+ * activeRanges) for this download while the detail view is mounted.
  */
 export function useDownloadProgressWatch(downloadId: string | null | undefined): void {
   const connection = useConnectionStore((s) => s.connection);

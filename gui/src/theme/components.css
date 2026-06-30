@@ -568,6 +568,68 @@
   flex-shrink: 0;
 }
 
+html.avar-electron .avar-header--desktop {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+html.avar-electron .avar-header--desktop button,
+html.avar-electron .avar-header--desktop a,
+html.avar-electron .avar-header--desktop input,
+html.avar-electron .avar-header--desktop .avar-window-controls,
+html.avar-electron .avar-header--desktop .avar-extension-panel {
+  -webkit-app-region: no-drag;
+}
+
+.avar-window-controls {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  margin-inline: -0.35rem;
+}
+
+.avar-window-controls__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.35rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--avar-text-muted);
+  cursor: pointer;
+  font-size: 0.72rem;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.avar-window-controls__btn:hover {
+  background: var(--avar-bg-muted);
+  color: var(--avar-text);
+}
+
+.avar-window-controls__btn--close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+html.avar-electron-darwin .avar-header--desktop {
+  padding-inline-start: 0.35rem;
+}
+
+html.avar-electron-darwin .avar-header--desktop .avar-window-controls {
+  order: -1;
+  margin-inline: 0 0.25rem;
+}
+
+html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop {
+  padding-inline-end: 0;
+}
+
+html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window-controls {
+  margin-inline-start: 0.15rem;
+}
+
 .avar-header__brand h1,
 .avar-header__title {
   margin: 0;
@@ -1278,6 +1340,13 @@
   display: flex;
   align-items: flex-start;
   gap: 0.35rem;
+}
+
+.avar-download-detail__value-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex-shrink: 0;
 }
 
 .avar-download-detail__value-row .avar-download-detail__url,
@@ -2476,6 +2545,10 @@
   height: 100%;
   background: var(--avar-primary);
   border-radius: 1px;
+}
+
+.avar-progress__range--active {
+  background: color-mix(in srgb, var(--avar-primary) 55%, var(--avar-bg-muted));
 }
 
 .avar-progress__section-divider {

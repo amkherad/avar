@@ -505,6 +505,13 @@
     "stopAll": "Stop All",
     "activeDownloads": "Active downloads"
   },
+  "window": {
+    "controls": "Window controls",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
   "extensionPanel": {
     "aria": "Browser extension integration",
     "title": "Extension integration",

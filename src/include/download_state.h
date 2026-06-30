@@ -34,6 +34,7 @@ typedef struct {
     uint64_t total_size;
     uint64_t bytes_downloaded;
     size_t chunk_size;
+    /* Byte ranges durably written to the temp file (fsynced before persisting). */
     ByteRange *done_ranges;
     size_t done_range_count;
     size_t done_range_capacity;
@@ -59,7 +60,7 @@ int download_state_init_chunks(DownloadState *state, uint64_t total_size, size_t
 
 bool download_state_all_chunks_done(const DownloadState *state);
 
-/* Marks [start, end] inclusive as downloaded; merges with adjacent completed ranges. */
+/* Marks [start, end] inclusive as durably on disk; merges with adjacent ranges. */
 int download_state_mark_range_done(DownloadState *state, uint64_t start, uint64_t end);
 
 bool download_state_is_range_done(const DownloadState *state, uint64_t start, uint64_t end);

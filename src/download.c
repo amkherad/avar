@@ -384,6 +384,7 @@ typedef struct ChunkSlot {
     uint64_t chunk_write_offset;
     uint64_t chunk_received;
     uint64_t chunk_expected;
+    uint64_t persisted_received;
     uint64_t last_activity_ms;
     bool headers_received;
     bool streaming;
@@ -430,6 +431,8 @@ typedef struct DownloadJob {
     uint64_t chunk_expected;
     uint64_t stream_received;
     uint64_t stream_expected;
+    uint64_t stream_persisted;
+    uint64_t chunk_persisted;
     bool streaming;
     bool pending_schedule;
     bool schedule_deferred;
@@ -444,6 +447,8 @@ typedef struct DownloadJob {
     uint64_t connect_deadline_ms;
     uint64_t last_activity_ms;
     uint64_t last_progress_ms;
+    uint64_t last_persist_ms;
+    uint64_t bytes_since_persist;
     uint64_t last_speed_sample_ms;
     uint64_t last_speed_bytes;
     double last_speed_bps;
@@ -483,6 +488,8 @@ static void set_error(DownloadJob *job, const char *fmt, ...);
 static void close_file(DownloadJob *job);
 
 static void sync_temp_file(DownloadJob *job);
+
+static bool persist_buffered_progress(DownloadJob *job, bool force);
 
 static char *build_job_dir(const char *temp_dir, const char *item_id);
 
@@ -698,14 +705,128 @@ static uint64_t job_bytes_done(const DownloadJob *job) {
     uint64_t bytes = download_state_bytes_done(job->state);
     if (job->slots != NULL) {
         for (size_t i = 0; i < job->slot_capacity; i++) {
-            if (job->slots[i].in_use && job->slots[i].streaming) {
-                bytes += job->slots[i].chunk_received;
+            const ChunkSlot *slot = &job->slots[i];
+            if (!slot->in_use || !slot->streaming || slot->chunk_received <= slot->persisted_received) {
+                continue;
             }
+            bytes += slot->chunk_received - slot->persisted_received;
         }
     } else if (job->streaming) {
-        bytes += job->chunk_received;
+        if (job->chunk_received > job->chunk_persisted) {
+            bytes += job->chunk_received - job->chunk_persisted;
+        }
     }
     return bytes;
+}
+
+static uint64_t job_unpersisted_bytes(const DownloadJob *job) {
+    if (job == NULL) {
+        return 0U;
+    }
+
+    uint64_t bytes = 0U;
+
+    if (job->slots != NULL) {
+        for (size_t i = 0U; i < job->slot_capacity; i++) {
+            const ChunkSlot *slot = &job->slots[i];
+            if (!slot->in_use || !slot->streaming || slot->chunk_received <= slot->persisted_received) {
+                continue;
+            }
+            bytes += slot->chunk_received - slot->persisted_received;
+        }
+        return bytes;
+    }
+
+    if (job->step == DL_STEP_CHUNK && job->streaming && job->chunk_received > job->chunk_persisted) {
+        return job->chunk_received - job->chunk_persisted;
+    }
+
+    if (job->step == DL_STEP_STREAM && job->stream_received > job->stream_persisted) {
+        return job->stream_received - job->stream_persisted;
+    }
+
+    return 0U;
+}
+
+static bool should_persist_now(const DownloadJob *job, const bool force) {
+    if (job == NULL || job_unpersisted_bytes(job) == 0U) {
+        return false;
+    }
+
+    if (force) {
+        return true;
+    }
+
+    if (job->bytes_since_persist >= DL_PROGRESS_PERSIST_MIN_BYTES) {
+        return true;
+    }
+
+    const uint64_t now = mg_millis();
+    return job->last_persist_ms == 0U
+           || now - job->last_persist_ms >= DL_PROGRESS_PERSIST_INTERVAL_MS;
+}
+
+static bool persist_buffered_progress(DownloadJob *job, const bool force) {
+    if (job == NULL || job->state == NULL || job->state_path == NULL) {
+        return false;
+    }
+
+    if (!should_persist_now(job, force)) {
+        return false;
+    }
+
+    sync_temp_file(job);
+
+    if (job->mutex != NULL) {
+        avar_mutex_lock(job->mutex);
+    }
+
+    bool changed = false;
+
+    if (job->slots != NULL) {
+        for (size_t i = 0U; i < job->slot_capacity; i++) {
+            ChunkSlot *slot = &job->slots[i];
+            if (!slot->in_use || !slot->streaming || slot->chunk_received <= slot->persisted_received) {
+                continue;
+            }
+
+            const uint64_t start = slot->chunk_write_offset + slot->persisted_received;
+            const uint64_t end = slot->chunk_write_offset + slot->chunk_received - 1U;
+            if (download_state_mark_range_done(job->state, start, end) != 0) {
+                continue;
+            }
+
+            slot->persisted_received = slot->chunk_received;
+            changed = true;
+        }
+    } else if (job->step == DL_STEP_CHUNK && job->streaming
+               && job->chunk_received > job->chunk_persisted) {
+        const uint64_t start = job->chunk_write_offset + job->chunk_persisted;
+        const uint64_t end = job->chunk_write_offset + job->chunk_received - 1U;
+        if (download_state_mark_range_done(job->state, start, end) == 0) {
+            job->chunk_persisted = job->chunk_received;
+            changed = true;
+        }
+    } else if (job->step == DL_STEP_STREAM && job->stream_received > job->stream_persisted) {
+        const uint64_t end = job->stream_received - 1U;
+        if (download_state_mark_range_done(job->state, 0U, end) == 0) {
+            job->stream_persisted = job->stream_received;
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        job->state->bytes_downloaded = download_state_bytes_done(job->state);
+        (void)download_state_save(job->state, job->state_path);
+        job->bytes_since_persist = 0U;
+        job->last_persist_ms = mg_millis();
+    }
+
+    if (job->mutex != NULL) {
+        avar_mutex_unlock(job->mutex);
+    }
+
+    return changed;
 }
 
 static void sync_state_metadata(DownloadJob *job, const char *status) {
@@ -713,13 +834,15 @@ static void sync_state_metadata(DownloadJob *job, const char *status) {
         return;
     }
 
+    (void)persist_buffered_progress(job, true);
+
     if (job->mutex != NULL) {
         avar_mutex_lock(job->mutex);
     }
 
     free(job->state->status);
     job->state->status = status != NULL ? strdup(status) : NULL;
-    job->state->bytes_downloaded = job_bytes_done(job);
+    job->state->bytes_downloaded = download_state_bytes_done(job->state);
 
     if (job->item_id != NULL) {
         free(job->state->id);
@@ -896,6 +1019,69 @@ static void reset_retry_count_on_success(DownloadJob *job) {
     job->error_count = 0U;
 }
 
+static void json_append_byte_range(cJSON *ranges, const uint64_t start, const uint64_t end) {
+    if (ranges == NULL || start > end) {
+        return;
+    }
+
+    cJSON *pair = cJSON_CreateArray();
+    if (pair == NULL) {
+        return;
+    }
+
+    cJSON_AddItemToArray(pair, cJSON_CreateNumber((double)start));
+    cJSON_AddItemToArray(pair, cJSON_CreateNumber((double)end));
+    cJSON_AddItemToArray(ranges, pair);
+}
+
+static void json_add_done_ranges(cJSON *obj, const DownloadState *state) {
+    if (obj == NULL || state == NULL) {
+        return;
+    }
+
+    cJSON *ranges = cJSON_AddArrayToObject(obj, "doneRanges");
+    if (ranges == NULL) {
+        return;
+    }
+
+    for (size_t i = 0U; i < state->done_range_count; i++) {
+        json_append_byte_range(ranges, state->done_ranges[i].start, state->done_ranges[i].end);
+    }
+}
+
+static void json_add_active_ranges(cJSON *obj, const DownloadJob *job) {
+    if (obj == NULL || job == NULL) {
+        return;
+    }
+
+    cJSON *ranges = cJSON_AddArrayToObject(obj, "activeRanges");
+    if (ranges == NULL) {
+        return;
+    }
+
+    if (job->slots != NULL) {
+        for (size_t i = 0U; i < job->slot_capacity; i++) {
+            const ChunkSlot *slot = &job->slots[i];
+            if (!slot->in_use || !slot->streaming || slot->chunk_received <= slot->persisted_received) {
+                continue;
+            }
+
+            const uint64_t start = slot->chunk_write_offset + slot->persisted_received;
+            const uint64_t end = slot->chunk_write_offset + slot->chunk_received - 1U;
+            json_append_byte_range(ranges, start, end);
+        }
+        return;
+    }
+
+    if (job->step == DL_STEP_CHUNK && job->streaming && job->chunk_received > job->chunk_persisted) {
+        const uint64_t start = job->chunk_write_offset + job->chunk_persisted;
+        const uint64_t end = job->chunk_write_offset + job->chunk_received - 1U;
+        json_append_byte_range(ranges, start, end);
+    } else if (job->step == DL_STEP_STREAM && job->stream_received > job->stream_persisted) {
+        json_append_byte_range(ranges, job->stream_persisted, job->stream_received - 1U);
+    }
+}
+
 static char *build_item_json(const DownloadJob *job, const char *status) {
     const uint64_t total = job->state != NULL ? job->state->total_size : 0;
     const uint64_t done_bytes = job_bytes_done(job);
@@ -950,20 +1136,8 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
     if (job->state != NULL && job->state->total_size > 0U && job->state->chunk_size > 0U
         && download_progress_is_watched(job->item_id)) {
         cJSON_AddNumberToObject(obj, AVAR_FIELD_CHUNK_SIZE, (double)job->state->chunk_size);
-        cJSON *ranges = cJSON_AddArrayToObject(obj, "doneRanges");
-        if (ranges != NULL) {
-            for (size_t i = 0U; i < job->state->done_range_count; i++) {
-                cJSON *pair = cJSON_CreateArray();
-                if (pair == NULL) {
-                    continue;
-                }
-                cJSON_AddItemToArray(pair,
-                                     cJSON_CreateNumber((double)job->state->done_ranges[i].start));
-                cJSON_AddItemToArray(pair,
-                                     cJSON_CreateNumber((double)job->state->done_ranges[i].end));
-                cJSON_AddItemToArray(ranges, pair);
-            }
-        }
+        json_add_done_ranges(obj, job->state);
+        json_add_active_ranges(obj, job);
     }
 
     char *json = cJSON_PrintUnformatted(obj);
@@ -1072,19 +1246,21 @@ static uint64_t job_column_bytes_done(const DownloadJob *job, const uint64_t col
     if (job->slots != NULL && job->state != NULL) {
         for (size_t i = 0; i < job->slot_capacity; i++) {
             const ChunkSlot *slot = &job->slots[i];
-            if (!slot->in_use || !slot->streaming || slot->chunk_received == 0) {
+            if (!slot->in_use || !slot->streaming || slot->chunk_received <= slot->persisted_received) {
                 continue;
             }
 
+            const uint64_t recv_start = slot->chunk_write_offset + slot->persisted_received;
             const uint64_t recv_end = slot->chunk_write_offset + slot->chunk_received;
-            done += column_bytes_covered(col_start, col_end_excl, slot->chunk_write_offset, recv_end);
+            done += column_bytes_covered(col_start, col_end_excl, recv_start, recv_end);
         }
-    } else if (job->step == DL_STEP_CHUNK && job->streaming && job->chunk_received > 0) {
-        const uint64_t start = job->chunk_write_offset;
+    } else if (job->step == DL_STEP_CHUNK && job->streaming
+               && job->chunk_received > job->chunk_persisted) {
+        const uint64_t start = job->chunk_write_offset + job->chunk_persisted;
         const uint64_t end = job->chunk_write_offset + job->chunk_received;
         done += column_bytes_covered(col_start, col_end_excl, start, end);
-    } else if (job->step == DL_STEP_STREAM && job->stream_received > 0) {
-        done += column_bytes_covered(col_start, col_end_excl, 0U, job->stream_received);
+    } else if (job->step == DL_STEP_STREAM && job->stream_received > job->stream_persisted) {
+        done += column_bytes_covered(col_start, col_end_excl, job->stream_persisted, job->stream_received);
     }
 
     const uint64_t col_width = col_end_excl - col_start;
@@ -1369,6 +1545,7 @@ static bool slot_write_body(DownloadJob *job, ChunkSlot *slot, const void *data,
     }
 
     slot->chunk_received += len;
+    job->bytes_since_persist += len;
     touch_slot_activity(slot);
     return true;
 }
@@ -1785,6 +1962,7 @@ static bool append_stream(DownloadJob *job, const void *data, const size_t len) 
 
     fflush(job->fp);
     job->stream_received += len;
+    job->bytes_since_persist += len;
     job->last_activity_ms = mg_millis();
     return true;
 }
@@ -1852,6 +2030,7 @@ static void begin_chunk_body(DownloadJob *job, ChunkSlot *slot, struct mg_connec
         }
         if (slot == NULL) {
             job->chunk_received += to_write;
+            job->bytes_since_persist += to_write;
         }
     }
 
@@ -1887,6 +2066,7 @@ static void slot_reset_for_request(ChunkSlot *slot, struct mg_connection *c, con
     slot->chunk_write_offset = range_start;
     slot->chunk_received = 0U;
     slot->chunk_expected = 0U;
+    slot->persisted_received = 0U;
     slot->headers_received = false;
     slot->streaming = false;
     slot->request_sent = false;
@@ -1919,6 +2099,11 @@ static bool slot_mark_segment_done(DownloadJob *job, ChunkSlot *slot, struct mg_
         avar_mutex_lock(job->mutex);
     }
     (void)download_state_mark_range_done(job->state, slot->range_start, slot->range_end);
+    slot->persisted_received = slot->chunk_received;
+    job->state->bytes_downloaded = download_state_bytes_done(job->state);
+    (void)download_state_save(job->state, job->state_path);
+    job->bytes_since_persist = 0U;
+    job->last_persist_ms = mg_millis();
     if (job->mutex != NULL) {
         avar_mutex_unlock(job->mutex);
     }
@@ -2106,6 +2291,7 @@ static bool finalize_download(DownloadJob *job) {
         return !job->failed;
     }
 
+    (void)persist_buffered_progress(job, true);
     close_file(job);
 
     if (job->state != NULL && job->state->total_size > 0) {
@@ -2206,6 +2392,7 @@ static void flush_recv_body(DownloadJob *job, ChunkSlot *slot, struct mg_connect
             return;
         }
         job->chunk_received += len;
+        job->bytes_since_persist += len;
     } else if (!append_stream(job, c->recv.buf, c->recv.len)) {
         return;
     }
@@ -2312,6 +2499,11 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
             }
             (void)download_state_mark_range_done(job->state, job->active_range_start,
                                                  job->active_range_end);
+            job->chunk_persisted = job->chunk_received;
+            job->state->bytes_downloaded = download_state_bytes_done(job->state);
+            (void)download_state_save(job->state, job->state_path);
+            job->bytes_since_persist = 0U;
+            job->last_persist_ms = mg_millis();
             if (job->mutex != NULL) {
                 avar_mutex_unlock(job->mutex);
             }
@@ -2864,6 +3056,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
                     return;
                 }
                 job->chunk_received += len;
+                job->bytes_since_persist += len;
             } else {
                 const size_t len = c->recv.len;
                 if (!append_stream(job, c->recv.buf, len)) {
@@ -2881,6 +3074,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
 
             if (mg_millis() - job->last_progress_ms >= 200) {
                 print_progress(job);
+                (void)persist_buffered_progress(job, false);
                 (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
             }
         }
@@ -3028,6 +3222,11 @@ static int run_download_inner(DownloadJob *job) {
 
     if (job->step == DL_STEP_STREAM) {
         job->stream_received = existing_file_size(job->temp_path);
+        if (job->state != NULL) {
+            job->stream_persisted = download_state_bytes_done(job->state);
+        }
+    } else if (job->state != NULL) {
+        job->chunk_persisted = 0U;
     }
 
     job->last_speed_bytes = job_bytes_done(job);

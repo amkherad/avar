@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useDataStore } from "@/stores/dataStore";
 import { progressPercent } from "@/components/download/format";
@@ -8,6 +8,7 @@ const MAX_TRAY_DOWNLOADS = 3;
 export function useElectronTrayDownloads(): void {
   const { t } = useTranslation();
   const downloads = useDataStore((s) => s.downloads);
+  const lastPayloadRef = useRef<string | null>(null);
 
   const activeItems = useMemo(() => {
     return downloads
@@ -21,14 +22,22 @@ export function useElectronTrayDownloads(): void {
       }));
   }, [downloads]);
 
+  const sectionLabel = t("tray.activeDownloads");
+
   useEffect(() => {
     if (!window.avar?.isElectron) {
       return;
     }
 
+    const payloadKey = JSON.stringify({ sectionLabel, items: activeItems });
+    if (payloadKey === lastPayloadRef.current) {
+      return;
+    }
+
+    lastPayloadRef.current = payloadKey;
     void window.avar.setTrayActiveDownloads({
-      sectionLabel: t("tray.activeDownloads"),
+      sectionLabel,
       items: activeItems,
     });
-  }, [activeItems, t]);
+  }, [activeItems, sectionLabel]);
 }

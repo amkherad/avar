@@ -1250,6 +1250,7 @@ static cJSON *handle_queue_stop(cJSON *params) {
 typedef struct StreamClient {
     struct mg_connection *connection;
     bool websocket;
+    bool wants_stats;
     struct StreamClient *next;
 } StreamClient;
 
@@ -1261,6 +1262,24 @@ typedef struct StreamClient {
 static StreamClient *_stream_clients = NULL;
 
 static void stream_client_unregister(struct mg_connection *connection);
+
+static StreamClient *stream_client_find(struct mg_connection *connection) {
+    for (StreamClient *cursor = _stream_clients; cursor != NULL; cursor = cursor->next) {
+        if (cursor->connection == connection) {
+            return cursor;
+        }
+    }
+    return NULL;
+}
+
+static bool daemon_rpc_any_client_wants_stats(void) {
+    for (StreamClient *cursor = _stream_clients; cursor != NULL; cursor = cursor->next) {
+        if (cursor->connection != NULL && !cursor->connection->is_closing && cursor->wants_stats) {
+            return true;
+        }
+    }
+    return false;
+}
 
 static uint64_t fnv1a_update(uint64_t hash, const unsigned char *data, const size_t len) {
     for (size_t i = 0; i < len; ++i) {
@@ -1382,7 +1401,8 @@ bool daemon_rpc_frontend_clients_active(const unsigned grace_seconds) {
     return now - _frontend_last_activity < (time_t)grace_seconds;
 }
 
-static void stream_client_register(struct mg_connection *connection, const bool websocket) {
+static void stream_client_register(struct mg_connection *connection, const bool websocket,
+                                   const bool wants_stats) {
     if (connection == NULL) {
         return;
     }
@@ -1395,6 +1415,7 @@ static void stream_client_register(struct mg_connection *connection, const bool 
     }
     node->connection = connection;
     node->websocket = websocket;
+    node->wants_stats = wants_stats;
     node->next = _stream_clients;
     _stream_clients = node;
     daemon_rpc_note_frontend_activity();
@@ -1460,7 +1481,7 @@ bool daemon_rpc_build_snapshot(char **json_out) {
         }
     }
 
-    cJSON *stats = handle_system_stats();
+    cJSON *stats = daemon_rpc_any_client_wants_stats() ? handle_system_stats() : NULL;
 
     cJSON_AddStringToObject(root, "type", "snapshot");
     cJSON_AddItemToObject(root, "health", health);
@@ -1530,13 +1551,13 @@ void daemon_rpc_streams_tick(struct mg_mgr *mgr) {
     free(snapshot);
 }
 
-void daemon_rpc_stream_attach_sse(struct mg_connection *connection) {
-    stream_client_register(connection, false);
+void daemon_rpc_stream_attach_sse(struct mg_connection *connection, const bool wants_stats) {
+    stream_client_register(connection, false, wants_stats);
     daemon_rpc_stream_send(connection, false);
 }
 
-void daemon_rpc_stream_attach_ws(struct mg_connection *connection) {
-    stream_client_register(connection, true);
+void daemon_rpc_stream_attach_ws(struct mg_connection *connection, const bool wants_stats) {
+    stream_client_register(connection, true, wants_stats);
     daemon_rpc_stream_send(connection, true);
 }
 
@@ -1552,6 +1573,13 @@ void daemon_rpc_stream_handle_ws_message(struct mg_connection *connection, const
     }
 
     daemon_rpc_note_frontend_activity();
+
+    const StreamClient *client = stream_client_find(connection);
+    if (client == NULL || !client->wants_stats) {
+        mg_ws_send(connection, AVAR_STREAM_UNCHANGED_JSON, strlen(AVAR_STREAM_UNCHANGED_JSON),
+                   WEBSOCKET_OP_TEXT);
+        return;
+    }
 
     cJSON *stats = handle_system_stats();
     if (stats == NULL) {

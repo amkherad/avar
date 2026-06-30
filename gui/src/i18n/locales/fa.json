@@ -505,6 +505,13 @@
     "stopAll": "توقف همه",
     "activeDownloads": "دانلودهای فعال"
   },
+  "window": {
+    "controls": "کنترل‌های پنجره",
+    "minimize": "کوچک‌کردن",
+    "maximize": "بزرگ‌کردن",
+    "restore": "بازیابی",
+    "close": "بستن"
+  },
   "table": {
     "settings": "تنظیمات جدول"
   },

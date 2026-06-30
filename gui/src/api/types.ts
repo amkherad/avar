@@ -71,6 +71,9 @@ export interface DownloadInfo {
 
   doneRanges?: Array<[number, number]>;
 
+  /** Bytes written to disk but not yet merged into doneRanges (live downloads only). */
+  activeRanges?: Array<[number, number]>;
+
   errorCount?: number;
 
   maxRetries?: number | null;

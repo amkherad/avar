@@ -2,6 +2,7 @@ import { parseSnapshotPayload, parseStreamStatsPayload, isUnchangedStreamPayload
 import type { SnapshotPayload, SystemStatsInfo } from "@/api/types";
 import type { DaemonClient } from "@/api/daemon";
 import { isPushSyncChannel, resolveSyncChannel } from "@/lib/syncChannel";
+import { footerMonitorsEnabled } from "@/lib/footerMonitors";
 import { appLogger } from "@/lib/appLogger";
 import { useConfigStore } from "@/stores/configStore";
 import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
@@ -57,8 +58,13 @@ function handleStreamMessage(raw: unknown): void {
   }
 }
 
+function wantsSystemStats(): boolean {
+  const { config } = useConfigStore.getState();
+  return footerMonitorsEnabled(config.footerMonitors);
+}
+
 function startSseSync(client: DaemonClient): SyncStopFn {
-  const url = client.getEventsUrl();
+  const url = client.getEventsUrl(wantsSystemStats());
   appLogger.gui.info("SSE sync connecting", url);
   const source = new EventSource(url, { withCredentials: false });
 
@@ -95,7 +101,7 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
   let closed = false;
 
   const connect = () => {
-    const wsUrl = client.getWebSocketUrl();
+    const wsUrl = client.getWebSocketUrl(wantsSystemStats());
     appLogger.gui.info("WebSocket sync connecting", wsUrl);
     ws = new WebSocket(wsUrl);
 
@@ -221,7 +227,15 @@ export function initSyncCoordinator(): () => void {
     const channelChanged = state.config.syncChannel !== prev.config.syncChannel;
     const intervalChanged =
       state.config.refreshIntervalMs !== prev.config.refreshIntervalMs;
-    if (channelChanged || intervalChanged) {
+    const statsInterestChanged =
+      footerMonitorsEnabled(state.config.footerMonitors) !==
+      footerMonitorsEnabled(prev.config.footerMonitors);
+
+    if (statsInterestChanged && !footerMonitorsEnabled(state.config.footerMonitors)) {
+      useDataStore.getState().setStats(null);
+    }
+
+    if (channelChanged || intervalChanged || statsInterestChanged) {
       appLogger.gui.info("Sync config changed — restarting sync");
       restartDataSync();
     }

@@ -131,6 +131,26 @@ AVAR_TEST(download_state_init_chunks_clips_stale_ranges) {
     download_state_free(state);
 }
 
+/* Simulates periodic persistence of in-flight segment bytes (partial chunk progress). */
+AVAR_TEST(download_state_incremental_partial_ranges) {
+    DownloadState *state = download_state_create("https://x", "x", "/t", "/d", 600000U, DL_CHUNK_SIZE);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 0U, 65535U), 0);
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, DL_CHUNK_SIZE, DL_CHUNK_SIZE + 65535U), 0);
+    AVAR_ASSERT_EQ(state->done_range_count, 2U);
+    AVAR_ASSERT(!download_state_is_segment_done(state, 0U));
+    AVAR_ASSERT(!download_state_is_segment_done(state, 1U));
+    AVAR_ASSERT_EQ(download_state_bytes_done(state), 131072U);
+
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 0U, DL_CHUNK_SIZE - 1U), 0);
+    AVAR_ASSERT(download_state_is_segment_done(state, 0U));
+    AVAR_ASSERT(!download_state_is_segment_done(state, 1U));
+    AVAR_ASSERT_EQ(download_state_bytes_done(state), DL_CHUNK_SIZE + 65536U);
+
+    download_state_free(state);
+}
+
 AVAR_TEST(download_state_proxy_roundtrip) {
     setup_temp_state_path();
 
@@ -160,4 +180,5 @@ AVAR_TEST_MAIN(
         run_download_state_overlapping_ranges_counted_once();
         run_download_state_clamps_range_to_total_size();
         run_download_state_init_chunks_clips_stale_ranges();
+        run_download_state_incremental_partial_ranges();
         run_download_state_proxy_roundtrip();)

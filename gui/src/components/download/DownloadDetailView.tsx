@@ -193,11 +193,18 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
               ) : (
                 <>
                   <span className="avar-download-detail__url">{url}</span>
-                  <CopyButton text={url!} label={t("download.copyUrl")} />
-                  <Button size="sm" variant="secondary" onClick={beginEditUrl}>
-                    <FontAwesomeIcon icon={faPen} />
-                    {t("download.editUrl")}
-                  </Button>
+                  <div className="avar-download-detail__value-actions">
+                    <CopyButton text={url!} label={t("download.copyUrl")} />
+                    <button
+                      type="button"
+                      className="avar-copy-btn"
+                      aria-label={t("download.editUrl")}
+                      title={t("download.editUrl")}
+                      onClick={beginEditUrl}
+                    >
+                      <FontAwesomeIcon icon={faPen} />
+                    </button>
+                  </div>
                 </>
               )}
             </dd>

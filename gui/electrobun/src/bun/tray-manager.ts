@@ -136,18 +136,45 @@ function buildTrayMenu(): MenuItemConfig[] {
   return template;
 }
 
-function updateTrayTooltip() {
-  if (!tray) {
-    return;
+let lastTrayTitle = "Avar";
+
+function trayDownloadsEqual(
+  a: AvarTrayActiveDownloads["items"],
+  b: AvarTrayActiveDownloads["items"],
+): boolean {
+  if (a.length !== b.length) {
+    return false;
   }
+  return a.every(
+    (item, index) =>
+      item.id === b[index].id &&
+      item.filename === b[index].filename &&
+      item.percent === b[index].percent,
+  );
+}
+
+function buildTrayTitleText(): string {
   if (trayActiveDownloads.items.length === 0) {
-    tray.setTitle("Avar");
-    return;
+    return "Avar";
   }
   const lines = trayActiveDownloads.items.map(
     (item) => `${item.filename} (${item.percent}%)`,
   );
-  tray.setTitle(["Avar", ...lines].join("\n"));
+  return ["Avar", ...lines].join("\n");
+}
+
+function updateTrayTooltip() {
+  if (!tray) {
+    return;
+  }
+
+  const nextTitle = buildTrayTitleText();
+  if (nextTitle === lastTrayTitle) {
+    return;
+  }
+
+  lastTrayTitle = nextTitle;
+  tray.setTitle(nextTitle);
 }
 
 function handleTrayAction(action: string) {
@@ -205,27 +232,51 @@ export function createTray(options: {
 }
 
 export function setTrayLabels(labels: AvarTrayLabels): void {
-  Object.assign(trayLabels, labels);
+  const next = { ...trayLabels, ...labels };
+  const unchanged =
+    next.show === trayLabels.show &&
+    next.exit === trayLabels.exit &&
+    next.startAll === trayLabels.startAll &&
+    next.pauseAll === trayLabels.pauseAll &&
+    next.resumeAll === trayLabels.resumeAll &&
+    next.stopAll === trayLabels.stopAll;
+
+  if (unchanged) {
+    return;
+  }
+
+  Object.assign(trayLabels, next);
   tray?.setMenu(buildTrayMenu());
 }
 
 export function setTrayActiveDownloads(payload: AvarTrayActiveDownloads): void {
+  const nextItems = Array.isArray(payload.items)
+    ? payload.items
+        .filter(
+          (item) =>
+            item &&
+            typeof item.id === "string" &&
+            typeof item.filename === "string" &&
+            typeof item.percent === "number",
+        )
+        .slice(0, 3)
+    : [];
+
+  const nextSectionLabel =
+    typeof payload.sectionLabel === "string"
+      ? payload.sectionLabel
+      : trayActiveDownloads.sectionLabel;
+
+  if (
+    nextSectionLabel === trayActiveDownloads.sectionLabel &&
+    trayDownloadsEqual(nextItems, trayActiveDownloads.items)
+  ) {
+    return;
+  }
+
   trayActiveDownloads = {
-    sectionLabel:
-      typeof payload.sectionLabel === "string"
-        ? payload.sectionLabel
-        : trayActiveDownloads.sectionLabel,
-    items: Array.isArray(payload.items)
-      ? payload.items
-          .filter(
-            (item) =>
-              item &&
-              typeof item.id === "string" &&
-              typeof item.filename === "string" &&
-              typeof item.percent === "number",
-          )
-          .slice(0, 3)
-      : [],
+    sectionLabel: nextSectionLabel,
+    items: nextItems,
   };
   tray?.setMenu(buildTrayMenu());
   updateTrayTooltip();
