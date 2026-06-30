@@ -1201,7 +1201,7 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 .avar-download-toolbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem 1.25rem;
   margin-bottom: 1rem;
@@ -1234,9 +1234,22 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 .avar-download-toolbar__end {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: 0.75rem;
   margin-inline-start: auto;
+}
+
+.avar-download-toolbar__filters {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.avar-download-toolbar__view-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .avar-download-toolbar__selection {
@@ -1294,6 +1307,12 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+.avar-download-list:not(.avar-download-list--cards) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .avar-download-list--cards {
@@ -1877,6 +1896,7 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 .avar-data-table__scroll-x--flex {
   flex: 1;
   min-height: 0;
+  overflow: auto;
 }
 
 .avar-data-table__scroll-y {
@@ -1888,12 +1908,14 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 .avar-data-table__scroll-x--flex .avar-data-table__inner {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
 }
 
-.avar-data-table__scroll-x--flex .avar-data-table__scroll-y {
-  flex: 1;
-  min-height: 0;
+.avar-data-table--flex .avar-data-table__header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--avar-bg-elevated);
 }
 
 .avar-data-table__inner {
@@ -1991,13 +2013,19 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 }
 
 .avar-download-toolbar__status-filter {
-  display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.35rem;
   font-size: 0.85rem;
   color: var(--avar-text-muted);
   white-space: nowrap;
-  min-width: 9rem;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.avar-download-toolbar__status-filter .avar-field__label {
+  margin: 0;
+  white-space: nowrap;
 }
 
 .avar-download-toolbar__status-filter .avar-dropdown__trigger {
@@ -2093,6 +2121,8 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 .avar-data-table__th--actions,
 .avar-data-table__cell--actions {
   justify-self: end;
+  overflow: visible;
+  white-space: nowrap;
 }
 
 .avar-data-table__empty {
@@ -2270,6 +2300,8 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 .avar-queue-actions--table {
   margin-top: 0;
   justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.2rem;
 }
 
 .avar-error-boundary {
@@ -3122,6 +3154,38 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
   gap: 1rem;
   min-height: 0;
   flex: 1;
+}
+
+.avar-queue-settings__table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.avar-queue-settings .avar-data-table--flex {
+  flex: 1;
+  min-height: 0;
+}
+
+.avar-data-table--compact .avar-data-table__th,
+.avar-data-table--compact .avar-data-table__cell {
+  padding-block: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.avar-data-table--compact .avar-data-table__header {
+  font-size: 0.68rem;
+}
+
+.avar-data-table--compact .avar-data-table__body .avar-data-table__row {
+  min-height: 2rem;
+}
+
+.avar-data-table--compact .avar-badge {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.4rem;
 }
 
 .avar-queue-settings .avar-data-table {

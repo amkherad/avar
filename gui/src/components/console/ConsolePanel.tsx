@@ -68,17 +68,9 @@ export function ConsolePanel() {
 
     async function poll() {
       const epoch = useConsoleStore.getState().daemonLogEpoch;
-      let offset = useConsoleStore.getState().daemonLogOffset;
+      const offset = useConsoleStore.getState().daemonLogOffset;
       try {
-        let { logs, nextOffset } = await client!.getLogs(80, offset);
-        if (!logs.trim() && offset > 0) {
-          const bootstrap = await client!.getLogs(80, 0);
-          if (bootstrap.logs.trim()) {
-            offset = 0;
-            logs = bootstrap.logs;
-            nextOffset = bootstrap.nextOffset;
-          }
-        }
+        const { logs, nextOffset } = await client!.getLogs(80, offset);
         if (!cancelled && logs.trim().length > 0) {
           appendDaemonLines(logs, epoch);
         }
@@ -127,10 +119,8 @@ export function ConsolePanel() {
       return;
     }
     try {
-      const { nextOffset } = await client.getLogs(1, offset);
-      if (nextOffset > offset) {
-        setDaemonLogOffset(nextOffset);
-      }
+      const tail = await client.skipLogCursor(offset);
+      setDaemonLogOffset(tail);
     } catch {
       // Display is already cleared; keep the current consume offset on failure.
     }

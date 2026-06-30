@@ -66,6 +66,12 @@ QueueError queue_stop(const char *id);
 /** Returns true when the queue scheduler flag is set. */
 bool queue_is_started(const char *id);
 
+/**
+ * Clears the queue started flag when it is set and no items in the queue are
+ * downloading or queued. Safe to call after download status changes.
+ */
+void queue_sync_started_state(const char *queue_id);
+
 size_t queue_count(void);
 
 /**

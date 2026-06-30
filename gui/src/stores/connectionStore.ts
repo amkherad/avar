@@ -9,6 +9,7 @@ import {
 import { footerMonitorsEnabled } from "@/lib/footerMonitors";
 import { isPushSyncChannel, resolveSyncChannel } from "@/lib/syncChannel";
 import { useConfigStore, waitForConfigHydration } from "@/stores/configStore";
+import { useConsoleStore } from "@/stores/consoleStore";
 import { useDataStore } from "@/stores/dataStore";
 import { appLogger } from "@/lib/appLogger";
 
@@ -261,6 +262,7 @@ useConfigStore.subscribe((state, prev) => {
 
   if (sessionChanged || syncChannelChanged) {
     useDataStore.getState().clear();
+    useConsoleStore.getState().resetDaemonLogCursor();
     useConnectionStore.getState().reconnectClient();
     useConnectionStore.getState().startPingMonitor();
   } else if (pingIntervalChanged) {

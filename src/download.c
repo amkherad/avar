@@ -488,6 +488,8 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
 static void apply_proxy_to_state(DownloadState *state, const char *proxy_override);
 static void background_download_task_by_id(void *arg);
 static int update_download_item_status(const char *item_id, const char *status);
+static void sync_queue_started_for_job(const DownloadJob *job);
+static void sync_queue_started_for_item_id(const char *item_id);
 static void log_download_item_status(const char *item_id, const char *filename, const char *status);
 static void log_job_status(const DownloadJob *job, const char *status);
 static char *download_item_state_path(const char *item_id);
@@ -1212,6 +1214,7 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
     if (rc == 0) {
         log_job_status(job, status);
         (void)download_item_strip_config_url(job->item_id);
+        sync_queue_started_for_job(job);
     }
     return rc;
 }
@@ -4066,6 +4069,33 @@ static void log_job_status(const DownloadJob *job, const char *status) {
     log_download_item_status(job->item_id, job->filename, status);
 }
 
+static void sync_queue_started_for_job(const DownloadJob *job) {
+    if (job == NULL || job->state == NULL || job->state->queue_id == NULL
+        || job->state->queue_id[0] == '\0') {
+        return;
+    }
+
+    queue_sync_started_state(job->state->queue_id);
+}
+
+static void sync_queue_started_for_item_id(const char *item_id) {
+    if (item_id == NULL) {
+        return;
+    }
+
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return;
+    }
+
+    char *queue_id =
+            get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_QUEUE_ID);
+    if (queue_id != NULL && queue_id[0] != '\0') {
+        queue_sync_started_state(queue_id);
+    }
+    free(queue_id);
+}
+
 static int update_download_item_status(const char *item_id, const char *status) {
     if (item_id == NULL || status == NULL) {
         return -1;
@@ -4106,6 +4136,7 @@ static int update_download_item_status(const char *item_id, const char *status) 
     cJSON_free(updated);
     if (rc == 0) {
         log_download_item_status(item_id, filename, status);
+        sync_queue_started_for_item_id(item_id);
     }
     return rc;
 }

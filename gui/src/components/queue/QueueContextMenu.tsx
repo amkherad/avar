@@ -3,7 +3,11 @@ import { useTranslation } from "react-i18next";
 import { faPenToSquare, faPlay, faStop, faTrash } from "@fortawesome/free-solid-svg-icons";
 import type { QueueInfo } from "@/api/types";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
-import { isDefaultQueue } from "@/queue/defaultQueue";
+import {
+  isDefaultQueue,
+  queueHasLifecycleActions,
+  queueIsEditable,
+} from "@/queue/defaultQueue";
 
 export interface QueueContextMenuProps {
   queue: QueueInfo | null;
@@ -33,10 +37,11 @@ export function QueueContextMenu({
   const { t } = useTranslation();
 
   const items = useMemo((): ContextMenuItem[] => {
-    if (!queue || queue.readonly || isDefaultQueue(queue.id)) {
+    if (!queue || !queueHasLifecycleActions(queue)) {
       return [];
     }
 
+    const isDefault = isDefaultQueue(queue.id);
     const list: ContextMenuItem[] = [
       {
         id: "start",
@@ -54,7 +59,7 @@ export function QueueContextMenu({
       },
     ];
 
-    if (showModify && onModify) {
+    if (!isDefault && showModify && onModify) {
       list.push({
         id: "modify",
         label: t("queue.modify"),
@@ -64,7 +69,7 @@ export function QueueContextMenu({
       });
     }
 
-    if (showDelete) {
+    if (!isDefault && showDelete) {
       list.push({
         id: "delete",
         label: t("queue.delete"),

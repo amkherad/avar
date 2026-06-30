@@ -9,6 +9,10 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Select } from "@/components/ui/Select";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import { QueueContextMenu } from "@/components/queue/QueueContextMenu";
+import {
+  queueHasLifecycleActions,
+  queueIsEditable,
+} from "@/queue/defaultQueue";
 import { useLayoutStore } from "@/stores/layoutStore";
 import type { QueueSort, QueueStatusFilter } from "@/lib/queueFilterSort";
 
@@ -16,6 +20,7 @@ export interface QueueTableProps {
   queues: QueueInfo[];
   downloadCounts: Record<string, number>;
   selectedIds: string[];
+  compact?: boolean;
   showCheckboxes?: boolean;
   showDelete?: boolean;
   showModify?: boolean;
@@ -41,6 +46,7 @@ export function QueueTable({
   queues,
   downloadCounts,
   selectedIds,
+  compact = false,
   showCheckboxes = false,
   showDelete = false,
   showModify = false,
@@ -120,7 +126,7 @@ export function QueueTable({
           </Select>
         ),
         render: (queue) => {
-          if (queue.readonly) {
+          if (!queueHasLifecycleActions(queue)) {
             return <span className="avar-list__meta">—</span>;
           }
           const statusLabel = queue.running ? t("queue.running") : t("queue.stopped");
@@ -144,38 +150,42 @@ export function QueueTable({
   }, [columnWidths, downloadCounts, onStatusFilterChange, setColumn, statusFilter, t]);
 
   function renderActions(queue: QueueInfo) {
-    if (queue.readonly) {
+    const showTransport = queueHasLifecycleActions(queue);
+    const showEditActions = queueIsEditable(queue);
+    if (!showTransport && !showEditActions) {
       return null;
     }
     const busy = busyId === queue.id || batchBusy;
     return (
       <div className="avar-queue-actions avar-queue-actions--table">
-        {queue.running ? (
-          <Button
-            size="sm"
-            variant="secondary"
-            className="avar-btn--icon-only"
-            loading={busy}
-            aria-label={t("queue.stop")}
-            title={t("queue.stop")}
-            onClick={() => onStop(queue.id)}
-          >
-            <FontAwesomeIcon icon={faStop} />
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            variant="secondary"
-            className="avar-btn--icon-only"
-            loading={busy}
-            aria-label={t("queue.start")}
-            title={t("queue.start")}
-            onClick={() => onStart(queue.id)}
-          >
-            <FontAwesomeIcon icon={faPlay} />
-          </Button>
-        )}
-        {showModify && onModify ? (
+        {showTransport ? (
+          queue.running ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="avar-btn--icon-only"
+              loading={busy}
+              aria-label={t("queue.stop")}
+              title={t("queue.stop")}
+              onClick={() => onStop(queue.id)}
+            >
+              <FontAwesomeIcon icon={faStop} />
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="avar-btn--icon-only"
+              loading={busy}
+              aria-label={t("queue.start")}
+              title={t("queue.start")}
+              onClick={() => onStart(queue.id)}
+            >
+              <FontAwesomeIcon icon={faPlay} />
+            </Button>
+          )
+        ) : null}
+        {showEditActions && showModify && onModify ? (
           <Button
             size="sm"
             variant="ghost"
@@ -187,7 +197,7 @@ export function QueueTable({
             <FontAwesomeIcon icon={faPenToSquare} />
           </Button>
         ) : null}
-        {showDelete ? (
+        {showEditActions && showDelete ? (
           <Button
             size="sm"
             variant="ghost"
@@ -204,6 +214,9 @@ export function QueueTable({
     );
   }
 
+  const actionColumnWidth =
+    36 + (showModify ? 36 : 0) + (showDelete ? 36 : 0) + (showModify || showDelete ? 16 : 0);
+
   return (
     <>
       <DataTable
@@ -213,7 +226,7 @@ export function QueueTable({
         selectedIds={selectedIds}
         showCheckboxes={showCheckboxes}
         selectAllLabel={t("queue.selectAll")}
-        isRowSelectable={(queue) => !queue.readonly}
+        isRowSelectable={(queue) => queueIsEditable(queue)}
         getCheckboxLabel={(queue) => queue.name}
         onToggleSelect={onToggleSelect}
         onSelectAll={onSelectAll}
@@ -226,9 +239,13 @@ export function QueueTable({
         }
         loading={loading}
         emptyMessage={emptyMessage ?? t("queue.empty")}
-        trailing={{ width: 48, variant: "actions", render: renderActions }}
+        trailing={{
+          width: Math.max(actionColumnWidth, 40),
+          variant: "actions",
+          render: renderActions,
+        }}
         onRowContextMenu={(queue, event) => {
-          if (queue.readonly) {
+          if (!queueHasLifecycleActions(queue)) {
             return;
           }
           onContextMenu?.(queue.id, event);
@@ -238,7 +255,9 @@ export function QueueTable({
             y: event.clientY,
           });
         }}
-        variant="bordered"
+        variant={compact ? "flex" : "bordered"}
+        interactive={compact}
+        className={compact ? "avar-data-table--compact" : undefined}
         chrome={{
           showCheckboxes,
           onToggleCheckboxes,

@@ -358,6 +358,28 @@ static char *get_config_from_env(stringa key) {
     return strdup(value);
 }
 
+static char *config_scalar_to_string(const cJSON *item) {
+    if (item == NULL) {
+        return NULL;
+    }
+
+    if (cJSON_IsString(item) && item->valuestring != NULL) {
+        return strdup(item->valuestring);
+    }
+
+    if (cJSON_IsNumber(item)) {
+        char buffer[64];
+        snprintf(buffer, sizeof buffer, "%.0f", item->valuedouble);
+        return strdup(buffer);
+    }
+
+    if (cJSON_IsBool(item)) {
+        return strdup(cJSON_IsTrue(item) ? "true" : "false");
+    }
+
+    return NULL;
+}
+
 char *get_config(stringa key) {
     char *env_value = get_config_from_env(key);
     if (env_value != NULL) {
@@ -378,12 +400,7 @@ char *get_config(stringa key) {
     const cJSON *item = cJSON_GetObjectItemCaseSensitive(parent, leaf);
     free(leaf);
 
-    if (item == NULL || !cJSON_IsString(item) || item->valuestring == NULL) {
-        config_unlock();
-        return NULL;
-    }
-
-    char *value = strdup(item->valuestring);
+    char *value = config_scalar_to_string(item);
     config_unlock();
     return value;
 }
@@ -621,14 +638,7 @@ char *get_config_array_item_field(const char *key, const size_t index, const cha
         return NULL;
     }
 
-    char *result = NULL;
-    if (cJSON_IsString(value) && value->valuestring != NULL) {
-        result = strdup(value->valuestring);
-    } else if (cJSON_IsNumber(value)) {
-        char buffer[32];
-        snprintf(buffer, sizeof buffer, "%.0f", value->valuedouble);
-        result = strdup(buffer);
-    }
+    char *result = config_scalar_to_string(value);
 
     config_unlock();
     return result;

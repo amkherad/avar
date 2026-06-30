@@ -18,7 +18,6 @@ export interface DownloadTableProps {
   selectedIds: string[];
   loading?: boolean;
   emptyMessage?: string;
-  showCheckboxes?: boolean;
   page: number;
   pageSize: number;
   totalItems: number;
@@ -30,11 +29,8 @@ export interface DownloadTableProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
   onSelect: (id: string, event?: React.MouseEvent) => void;
-  onToggleSelect: (id: string) => void;
-  onSelectAll: (checked: boolean) => void;
   onOpen: (id: string) => void;
   onContextMenu?: (id: string, event: React.MouseEvent) => void;
-  onToggleCheckboxes: () => void;
 }
 
 function statusTone(status: string): "default" | "success" | "warning" | "danger" | "info" {
@@ -58,7 +54,6 @@ export function DownloadTable({
   selectedIds,
   loading = false,
   emptyMessage,
-  showCheckboxes = false,
   page,
   pageSize,
   totalItems,
@@ -70,11 +65,8 @@ export function DownloadTable({
   onPageChange,
   onPageSizeChange,
   onSelect,
-  onToggleSelect,
-  onSelectAll,
   onOpen,
   onContextMenu,
-  onToggleCheckboxes,
 }: DownloadTableProps) {
   const { t } = useTranslation();
   const { formatBytePair, formatTransferRate } = useUnitFormat();
@@ -173,11 +165,6 @@ export function DownloadTable({
       columns={columns}
       getRowId={(item) => item.id || item.filename}
       selectedIds={selectedIds}
-      showCheckboxes={showCheckboxes}
-      selectAllLabel={t("download.selectAll")}
-      getCheckboxLabel={(item) => item.filename}
-      onToggleSelect={onToggleSelect}
-      onSelectAll={onSelectAll}
       sort={sort}
       onSortChange={(next) =>
         onSortChange({
@@ -193,12 +180,6 @@ export function DownloadTable({
       onRowContextMenu={(item, event) => onContextMenu?.(item.id, event)}
       variant="flex"
       interactive
-      chrome={{
-        showCheckboxes,
-        onToggleCheckboxes,
-        toggleCheckboxesLabel: t("download.toggleCheckboxes"),
-        settingsLabel: t("table.settings"),
-      }}
       pagination={{
         page,
         pageSize,

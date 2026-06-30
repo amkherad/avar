@@ -105,7 +105,6 @@ export function DaemonSettings() {
         fsBrowseEnabled ? "true" : "false",
       );
       appLogger.gui.info("Daemon settings saved");
-      await load();
       await useDataStore.getState().refresh();
       setSaved(true);
     } catch (err) {

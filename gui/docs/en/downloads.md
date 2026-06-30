@@ -37,8 +37,6 @@ In **table view**, use the status dropdown in the **Status** column header. Clic
 | Select one | Click a row |
 | Add to selection | **Ctrl+click** (or **Cmd+click** on macOS) |
 | Range select | **Shift+click** from the last selected item |
-| Checkbox mode | Toggle the checkbox button in the toolbar |
-| Select all (table) | Header checkbox when checkbox mode is enabled |
 
 When one or more downloads are selected, batch action buttons appear on the left side of the toolbar: pause/resume, start/stop, and delete.
 

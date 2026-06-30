@@ -84,7 +84,7 @@ export function DownloadToolbar({
   }
 
   startGroups.push(
-    <div key="view-mode" role="group" aria-label={t("download.viewMode")}>
+    <div key="view-mode" className="avar-download-toolbar__view-mode" role="group" aria-label={t("download.viewMode")}>
       <Button
         size="sm"
         variant={viewMode === "grid" ? "secondary" : "ghost"}
@@ -120,31 +120,33 @@ export function DownloadToolbar({
       </div>
 
       <div className="avar-download-toolbar__end">
-        {showStatusFilter ? (
-          <Select
-            compact
-            className="avar-download-toolbar__status-filter"
-            label={t("download.statusFilter")}
-            value={statusFilter}
-            onChange={(e) => onStatusFilterChange(e.target.value as DownloadStatusFilter)}
-          >
-            <option value="all">{t("download.statusFilterAll")}</option>
-            {availableStatuses.map((status) => (
-              <option key={status} value={status}>
-                {formatDownloadStatus(status, t)}
-              </option>
-            ))}
-          </Select>
-        ) : null}
+        <div className="avar-download-toolbar__filters">
+          {showStatusFilter ? (
+            <Select
+              compact
+              className="avar-download-toolbar__status-filter"
+              label={t("download.statusFilter")}
+              value={statusFilter}
+              onChange={(e) => onStatusFilterChange(e.target.value as DownloadStatusFilter)}
+            >
+              <option value="all">{t("download.statusFilterAll")}</option>
+              {availableStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {formatDownloadStatus(status, t)}
+                </option>
+              ))}
+            </Select>
+          ) : null}
 
-        <Input
-          ref={searchRef}
-          className="avar-download-toolbar__search avar-download-toolbar__search--compact"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={t("download.searchPlaceholder")}
-          aria-label={t("download.searchPlaceholder")}
-        />
+          <Input
+            ref={searchRef}
+            className="avar-download-toolbar__search avar-download-toolbar__search--compact"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder={t("download.searchPlaceholder")}
+            aria-label={t("download.searchPlaceholder")}
+          />
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import type { QueueInfo } from "@/api/types";
+import { isDefaultQueue } from "@/queue/defaultQueue";
 
 export type QueueStatusFilter = "all" | "running" | "stopped";
 
@@ -70,8 +71,8 @@ export function sortQueues(
       return descA.localeCompare(descB) * direction;
     }
     if (sort.key === "status") {
-      const rankA = a.readonly ? 2 : a.running ? 0 : 1;
-      const rankB = b.readonly ? 2 : b.running ? 0 : 1;
+      const rankA = a.readonly && !isDefaultQueue(a.id) ? 2 : a.running ? 0 : 1;
+      const rankB = b.readonly && !isDefaultQueue(b.id) ? 2 : b.running ? 0 : 1;
       if (rankA !== rankB) {
         return (rankA - rankB) * direction;
       }

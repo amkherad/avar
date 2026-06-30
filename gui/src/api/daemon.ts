@@ -244,6 +244,21 @@ export class DaemonClient {
     };
   }
 
+  /** Advance past buffered daemon log lines without returning their text. */
+  async skipLogCursor(since = 0, batchSize = 256): Promise<number> {
+    let cursor = since;
+    for (;;) {
+      const { logs, nextOffset } = await this.getLogs(batchSize, cursor);
+      if (nextOffset <= cursor) {
+        return cursor;
+      }
+      cursor = nextOffset;
+      if (!logs.trim()) {
+        return cursor;
+      }
+    }
+  }
+
   async addDownload(options: AddDownloadParams | string, queueName?: string): Promise<void> {
     const params: Record<string, unknown> =
       typeof options === "string"

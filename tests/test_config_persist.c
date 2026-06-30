@@ -59,6 +59,59 @@ AVAR_TEST(config_get_or_default) {
     free(present);
 }
 
+AVAR_TEST(config_get_scalar_types) {
+    setup_temp_config();
+
+    char typed_path[512];
+    snprintf(typed_path, sizeof typed_path, "%s%ctyped-config.json", g_guard.work_dir,
+             PATH_SEPARATOR);
+
+    FILE *file = fopen(typed_path, "wb");
+    AVAR_ASSERT_NOT_NULL(file);
+    fputs("{\"dm\":{\"segmentation\":{\"concurrency\":8,\"enabled\":true,\"strategy\":\"left-heavy\"}}}",
+          file);
+    fclose(file);
+
+    AVAR_ASSERT_EQ(load_config(typed_path), 0);
+
+    char *concurrency = get_config("dm.segmentation.concurrency");
+    AVAR_ASSERT_NOT_NULL(concurrency);
+    AVAR_ASSERT_STR_EQ(concurrency, "8");
+    free(concurrency);
+
+    char *enabled = get_config("dm.segmentation.enabled");
+    AVAR_ASSERT_NOT_NULL(enabled);
+    AVAR_ASSERT_STR_EQ(enabled, "true");
+    free(enabled);
+
+    char *strategy = get_config("dm.segmentation.strategy");
+    AVAR_ASSERT_NOT_NULL(strategy);
+    AVAR_ASSERT_STR_EQ(strategy, "left-heavy");
+    free(strategy);
+}
+
+AVAR_TEST(config_set_scalar_roundtrip) {
+    setup_temp_config();
+
+    AVAR_ASSERT_EQ(set_config("dm.segmentation.concurrency", "12"), 0);
+    char *concurrency = get_config("dm.segmentation.concurrency");
+    AVAR_ASSERT_NOT_NULL(concurrency);
+    AVAR_ASSERT_STR_EQ(concurrency, "12");
+    free(concurrency);
+
+    AVAR_ASSERT_EQ(set_config("dm.segmentation.strategy", "left-heavy"), 0);
+    char *strategy = get_config("dm.segmentation.strategy");
+    AVAR_ASSERT_NOT_NULL(strategy);
+    AVAR_ASSERT_STR_EQ(strategy, "left-heavy");
+    free(strategy);
+
+    AVAR_ASSERT_EQ(set_config("dm.segmentation.enabled", "false"), 0);
+    char *enabled = get_config("dm.segmentation.enabled");
+    AVAR_ASSERT_NOT_NULL(enabled);
+    AVAR_ASSERT_STR_EQ(enabled, "false");
+    free(enabled);
+}
+
 AVAR_TEST(config_array_json_and_replace) {
     setup_temp_config();
 
@@ -112,5 +165,7 @@ AVAR_TEST_MAIN(
         run_config_save_and_load_roundtrip();
         run_config_reset_key();
         run_config_get_or_default();
+        run_config_get_scalar_types();
+        run_config_set_scalar_roundtrip();
         run_config_array_json_and_replace();
         run_config_array_remove_where();)

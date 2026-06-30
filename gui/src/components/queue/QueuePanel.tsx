@@ -9,7 +9,14 @@ import { FontAwesomeIcon } from "@/icons";
 import { faPlus, faSliders } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { createDefaultQueueInfo, isDefaultQueue, withDefaultQueue } from "@/queue/defaultQueue";
+import {
+  createDefaultQueueInfo,
+  defaultQueueDownloads,
+  isDefaultQueue,
+  queueIsEditable,
+  withDefaultQueue,
+} from "@/queue/defaultQueue";
+import { startDownloads, stopDownloads } from "@/lib/downloadActions";
 import { showConfirmDialog } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
 import {
@@ -35,10 +42,6 @@ export interface QueuePanelProps {
   onModifyQueue?: (id: string) => void;
 }
 
-function actionableQueue(queue: QueueInfo): boolean {
-  return !queue.readonly && !isDefaultQueue(queue.id);
-}
-
 export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: QueuePanelProps) {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
@@ -52,7 +55,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
     t("queue.defaultName"),
     t("queue.defaultDescription"),
   );
-  const displayQueues = withDefaultQueue(queues, defaultQueue);
+  const displayQueues = withDefaultQueue(queues, defaultQueue, downloads);
   const downloadCounts = selectDownloadCounts(displayQueues, downloads);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -97,11 +100,38 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
   }
 
   async function runQueueAction(id: string, actionName: string, action: () => Promise<void>) {
-    if (!client || isDefaultQueue(id)) {
+    if (!client) {
       return;
     }
+
+    if (isDefaultQueue(id)) {
+      if (actionName !== "start" && actionName !== "stop") {
+        return;
+      }
+      appLogger.gui.debug(`Default queue ${actionName}`);
+      setBusyId(id);
+      setError(null);
+      try {
+        const unassigned = defaultQueueDownloads(downloads);
+        const ids = unassigned.map((item) => item.id);
+        if (actionName === "start") {
+          await startDownloads(client, ids, downloads);
+        } else {
+          await stopDownloads(client, ids, downloads);
+        }
+        appLogger.gui.info("Default queue action completed", actionName);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : t("common.error");
+        setError(message);
+        appLogger.gui.error("Default queue action failed", message);
+      } finally {
+        setBusyId(null);
+      }
+      return;
+    }
+
     const queue = displayQueues.find((item) => item.id === id);
-    if (!queue || queue.readonly) {
+    if (!queue || !queueIsEditable(queue)) {
       return;
     }
     appLogger.gui.debug(`Queue ${actionName}`, queue.name);
@@ -130,7 +160,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
     }
     const targets = ids.filter((id) => {
       const queue = displayQueues.find((item) => item.id === id);
-      return queue ? actionableQueue(queue) : false;
+      return queue ? queueIsEditable(queue) : false;
     });
     if (targets.length === 0) {
       return;
@@ -190,7 +220,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
       return;
     }
     setSelectedQueueIds(
-      filteredQueues.filter(actionableQueue).map((queue) => queue.id),
+      filteredQueues.filter(queueIsEditable).map((queue) => queue.id),
     );
   }
 
@@ -256,30 +286,33 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             }
             onBatchDelete={(ids) => void confirmDelete(ids)}
           />
-          <QueueTable
-            queues={filteredQueues}
-            downloadCounts={downloadCounts}
-            selectedIds={selectedQueueIds}
-            showCheckboxes={showCheckboxes}
-            showDelete={showDelete}
-            showModify={showModify}
-            onStart={(id) => void runQueueAction(id, "start", () => client!.startQueue(id))}
-            onStop={(id) => void runQueueAction(id, "stop", () => client!.stopQueue(id))}
-            onModify={handleModify}
-            onDelete={(id) => void confirmDelete([id])}
-            onToggleSelect={handleToggleSelect}
-            onSelectAll={handleSelectAll}
-            onToggleCheckboxes={() => setShowCheckboxes((value) => !value)}
-            onContextMenu={handleContextMenu}
-            busyId={busyId}
-            batchBusy={batchBusy}
-            loading={status === "loading" && queues.length === 0 && downloads.length === 0}
-            emptyMessage={emptyMessage}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            sort={sort}
-            onSortChange={setSort}
-          />
+          <div className="avar-queue-settings__table">
+            <QueueTable
+              compact
+              queues={filteredQueues}
+              downloadCounts={downloadCounts}
+              selectedIds={selectedQueueIds}
+              showCheckboxes={showCheckboxes}
+              showDelete={showDelete}
+              showModify={showModify}
+              onStart={(id) => void runQueueAction(id, "start", () => client!.startQueue(id))}
+              onStop={(id) => void runQueueAction(id, "stop", () => client!.stopQueue(id))}
+              onModify={handleModify}
+              onDelete={(id) => void confirmDelete([id])}
+              onToggleSelect={handleToggleSelect}
+              onSelectAll={handleSelectAll}
+              onToggleCheckboxes={() => setShowCheckboxes((value) => !value)}
+              onContextMenu={handleContextMenu}
+              busyId={busyId}
+              batchBusy={batchBusy}
+              loading={status === "loading" && queues.length === 0 && downloads.length === 0}
+              emptyMessage={emptyMessage}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              sort={sort}
+              onSortChange={setSort}
+            />
+          </div>
         </>
       ) : (
         <>

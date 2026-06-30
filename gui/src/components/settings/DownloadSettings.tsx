@@ -151,7 +151,6 @@ export function DownloadSettings() {
       await client.setConfig("dm.proxy.password", proxy.password);
       await client.setConfig("dm.proxy.noProxy", proxy.noProxy ?? "");
       appLogger.gui.info("Download settings saved");
-      await load();
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));

@@ -422,38 +422,35 @@ export function DataTable<T>({
       >
         <div className="avar-data-table__inner" style={{ minWidth: layout.innerMinWidth }}>
           <div
-            className={variant === "flex" ? "avar-data-table__scroll-y" : undefined}
+            className="avar-data-table__header"
+            style={{ gridTemplateColumns: layout.gridTemplate }}
+            role="row"
           >
-            <div
-              className="avar-data-table__header"
-              style={{ gridTemplateColumns: layout.gridTemplate }}
-              role="row"
-            >
-              {showCheckboxes ? (
-                <div
-                  className="avar-data-table__th avar-data-table__th--checkbox"
-                  role="columnheader"
-                >
-                  <input
-                    type="checkbox"
-                    aria-label={selectAllLabel}
-                    checked={allSelected}
-                    onChange={(e) => onSelectAll?.(e.target.checked)}
-                  />
-                </div>
-              ) : null}
-              {columns.map((column) => renderHeaderCell(column))}
-              {trailing ? (
-                <div
-                  className={`avar-data-table__th ${trailing.variant === "actions" ? "avar-data-table__th--actions" : "avar-data-table__th--fill"}`}
-                  role="columnheader"
-                >
-                  {trailing.header ?? null}
-                </div>
-              ) : null}
-            </div>
+            {showCheckboxes ? (
+              <div
+                className="avar-data-table__th avar-data-table__th--checkbox"
+                role="columnheader"
+              >
+                <input
+                  type="checkbox"
+                  aria-label={selectAllLabel}
+                  checked={allSelected}
+                  onChange={(e) => onSelectAll?.(e.target.checked)}
+                />
+              </div>
+            ) : null}
+            {columns.map((column) => renderHeaderCell(column))}
+            {trailing ? (
+              <div
+                className={`avar-data-table__th ${trailing.variant === "actions" ? "avar-data-table__th--actions" : "avar-data-table__th--fill"}`}
+                role="columnheader"
+              >
+                {trailing.header ?? null}
+              </div>
+            ) : null}
+          </div>
 
-            <div className="avar-data-table__body" role="rowgroup">
+          <div className="avar-data-table__body" role="rowgroup">
             {loading ? (
               <div className="avar-data-table__empty">
                 <Spinner />
@@ -552,7 +549,6 @@ export function DataTable<T>({
                 );
               })
             )}
-            </div>
           </div>
         </div>
       </div>

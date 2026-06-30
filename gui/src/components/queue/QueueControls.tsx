@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@/icons";
 import { faPlay, faStop, faTrash } from "@fortawesome/free-solid-svg-icons";
 import type { QueueInfo } from "@/api/types";
 import { Button } from "@/components/ui/Button";
-import { isDefaultQueue } from "@/queue/defaultQueue";
+import { queueIsEditable } from "@/queue/defaultQueue";
 
 export interface QueueControlsProps {
   queues: QueueInfo[];
@@ -15,7 +15,7 @@ export interface QueueControlsProps {
 }
 
 function actionableQueues(queues: QueueInfo[]): QueueInfo[] {
-  return queues.filter((queue) => !queue.readonly && !isDefaultQueue(queue.id));
+  return queues.filter((queue) => queueIsEditable(queue));
 }
 
 export function QueueControls({

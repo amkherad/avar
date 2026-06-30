@@ -68,9 +68,7 @@ function DownloadPanel({
   const setVisibleDownloadOrder = useDataStore((s) => s.setVisibleDownloadOrder);
   const detailPanelMode = useConfigStore((s) => s.config.detailPanelMode);
   const pageSize = useConfigStore((s) => s.config.downloadPageSize);
-  const showCheckboxes = useConfigStore((s) => s.config.showDownloadCheckboxes);
   const updateConfig = useConfigStore((s) => s.updateConfig);
-  const setSelectedDownloadIds = useDataStore((s) => s.setSelectedDownloadIds);
   const detailPanelOpen = useLayoutStore((s) => s.detailPanelOpen);
   const setDetailPanelOpen = useLayoutStore((s) => s.setDetailPanelOpen);
   const detailPanelWidth = useLayoutStore((s) => s.detailPanelWidth);
@@ -215,23 +213,6 @@ function DownloadPanel({
       void downloadActions.removeWithConfirm(items);
     });
   });
-
-  function handleToggleSelect(downloadId: string) {
-    appLogger.gui.debug("Download selection toggled", downloadId);
-    const next = selectedDownloadIds.includes(downloadId)
-      ? selectedDownloadIds.filter((id) => id !== downloadId)
-      : [...selectedDownloadIds, downloadId];
-    setSelectedDownloadIds(next);
-  }
-
-  function handleSelectAll(checked: boolean) {
-    appLogger.gui.debug("Download select all", checked ? "checked" : "unchecked");
-    if (!checked) {
-      setSelectedDownloadIds([]);
-      return;
-    }
-    setSelectedDownloadIds(pagedDownloads.map((item) => item.id));
-  }
 
   function handleSelect(downloadId: string, event?: React.MouseEvent) {
     const additive = event?.ctrlKey || event?.metaKey;
@@ -395,7 +376,6 @@ function DownloadPanel({
                       ? t("download.searchEmpty")
                       : t("download.empty")
                   }
-                  showCheckboxes={showCheckboxes}
                   page={page}
                   pageSize={pageSize}
                   totalItems={filteredDownloads.length}
@@ -417,14 +397,8 @@ function DownloadPanel({
                     setPage(1);
                   }}
                   onSelect={(id, event) => handleSelect(id, event)}
-                  onToggleSelect={handleToggleSelect}
-                  onSelectAll={handleSelectAll}
                   onOpen={(id) => handleOpen(id)}
                   onContextMenu={handleContextMenu}
-                  onToggleCheckboxes={() => {
-                    appLogger.gui.debug("Download checkboxes toggled", !showCheckboxes);
-                    updateConfig({ showDownloadCheckboxes: !showCheckboxes });
-                  }}
                 />
               )}
             </div>
