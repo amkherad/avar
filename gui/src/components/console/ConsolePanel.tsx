@@ -68,11 +68,18 @@ export function ConsolePanel() {
 
     async function poll() {
       const epoch = useConsoleStore.getState().daemonLogEpoch;
-      const offset = useConsoleStore.getState().daemonLogOffset;
+      let offset = useConsoleStore.getState().daemonLogOffset;
       try {
-        appLogger.gui.debug("Polling daemon logs");
-        const { logs, nextOffset } = await client!.getLogs(80, offset);
-        if (!cancelled && logs) {
+        let { logs, nextOffset } = await client!.getLogs(80, offset);
+        if (!logs.trim() && offset > 0) {
+          const bootstrap = await client!.getLogs(80, 0);
+          if (bootstrap.logs.trim()) {
+            offset = 0;
+            logs = bootstrap.logs;
+            nextOffset = bootstrap.nextOffset;
+          }
+        }
+        if (!cancelled && logs.trim().length > 0) {
           appendDaemonLines(logs, epoch);
         }
         if (!cancelled && nextOffset > offset) {

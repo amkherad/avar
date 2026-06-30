@@ -6,6 +6,16 @@ const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_
   globalThis.AvarExtensionProtocol;
 
 async function collectFromTab(tabId, { forContextMenu = false } = {}) {
+  let pageUrl = null;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab?.url && /^https?:\/\//i.test(tab.url)) {
+      pageUrl = tab.url;
+    }
+  } catch {
+    pageUrl = null;
+  }
+
   try {
     const response = await chrome.tabs.sendMessage(tabId, {
       type: "avar-get-page-media",
@@ -18,7 +28,7 @@ async function collectFromTab(tabId, { forContextMenu = false } = {}) {
       urls: items.map((item) => item.url),
       items,
       selectedItems: response?.selectedItems || [],
-      pageUrl: null,
+      pageUrl: resolvePageReferer(pageUrl, response?.pageUrl) ?? pageUrl,
       pageTitle: response?.pageTitle || null,
     };
   } catch {
@@ -28,7 +38,7 @@ async function collectFromTab(tabId, { forContextMenu = false } = {}) {
       urls: items.map((item) => item.url),
       items,
       selectedItems: [],
-      pageUrl: null,
+      pageUrl,
       pageTitle: null,
     };
   }
@@ -78,13 +88,18 @@ async function pingBridgeEndpoint() {
 async function addDownload(payload) {
   await ensureBridgeReachable(chrome, pingBridgeEndpoint);
   const bridgeUrl = await resolveBridgeUrl();
+  const pageUrl =
+    typeof payload === "string"
+      ? undefined
+      : resolvePageReferer(payload.pageUrl, payload.referer);
   const body =
     typeof payload === "string"
       ? { url: payload, startNow: true }
       : {
           url: payload.url,
           streamKind: payload.streamKind,
-          referer: resolvePageReferer(payload.pageUrl, payload.referer),
+          referer: pageUrl,
+          pageUrl,
           queue: payload.queue,
           startNow: payload.autoStart !== false,
         };

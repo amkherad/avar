@@ -207,20 +207,48 @@ function getLinkRefreshSession(sessionId) {
   return activeLinkRefreshSession;
 }
 
+function pageUrlSpecificity(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return -1;
+  }
+  try {
+    const parsed = new URL(value.trim());
+    const path = parsed.pathname || "/";
+    const hasPath = path !== "/" && path !== "";
+    return (
+      (hasPath ? 1000 : 0) +
+      path.length +
+      parsed.search.length +
+      parsed.hash.length
+    );
+  } catch {
+    return -1;
+  }
+}
+
+function pickFullerPageUrl(...candidates) {
+  const valid = candidates
+    .filter((value) => typeof value === "string" && value.trim())
+    .map((value) => value.trim());
+  if (valid.length === 0) {
+    return undefined;
+  }
+  return valid.reduce((best, current) =>
+    pageUrlSpecificity(current) > pageUrlSpecificity(best) ? current : best,
+  );
+}
+
 function normalizeAddDownloadPayload(payload, pageUrl) {
   const url = typeof payload.url === "string" ? payload.url.trim() : "";
   if (!url) {
     return null;
   }
 
-  const referer =
-    typeof payload.pageUrl === "string" && payload.pageUrl.trim()
-      ? payload.pageUrl.trim()
-      : typeof pageUrl === "string" && pageUrl.trim()
-        ? pageUrl.trim()
-        : typeof payload.referer === "string" && payload.referer.trim()
-          ? payload.referer.trim()
-          : undefined;
+  const referer = pickFullerPageUrl(
+    payload.pageUrl,
+    pageUrl,
+    payload.referer,
+  );
 
   return {
     url,
@@ -265,6 +293,12 @@ function normalizeBatchItems(items, pageUrl) {
     const fileSize =
       typeof raw.fileSize === "number" && raw.fileSize >= 0 ? raw.fileSize : null;
 
+    const itemReferer = pickFullerPageUrl(
+      raw.referer,
+      raw.originalUrl,
+      pageRef,
+    );
+
     normalized.push({
       id: typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : url || `item-${index}`,
       url,
@@ -276,20 +310,8 @@ function normalizeBatchItems(items, pageUrl) {
           : typeof raw.streamKind === "string"
             ? raw.streamKind.trim()
             : undefined,
-      originalUrl:
-        pageRef ||
-        (typeof raw.originalUrl === "string"
-          ? raw.originalUrl.trim()
-          : typeof raw.referer === "string"
-            ? raw.referer.trim()
-            : undefined),
-      referer:
-        pageRef ||
-        (typeof raw.referer === "string"
-          ? raw.referer.trim()
-          : typeof raw.originalUrl === "string"
-            ? raw.originalUrl.trim()
-            : undefined),
+      originalUrl: itemReferer,
+      referer: itemReferer,
       fileSize,
       streamKind:
         typeof raw.streamKind === "string"
@@ -393,10 +415,9 @@ async function handleDownloadAdd(payload) {
   if (typeof payload.streamKind === "string" && payload.streamKind) {
     params.streamKind = payload.streamKind;
   }
-  if (typeof payload.pageUrl === "string" && payload.pageUrl.trim()) {
-    params.referer = payload.pageUrl.trim();
-  } else if (typeof payload.referer === "string" && payload.referer) {
-    params.referer = payload.referer;
+  const referer = pickFullerPageUrl(payload.pageUrl, payload.referer);
+  if (referer) {
+    params.referer = referer;
   }
   if (typeof payload.queue === "string" && payload.queue) {
     params.queue = payload.queue;

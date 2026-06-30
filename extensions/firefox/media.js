@@ -451,6 +451,28 @@ function splitFilenameParts(name) {
   return { stem: name.slice(0, lastDot), extension: name.slice(lastDot) };
 }
 
+/**
+ * Resolution/quality tags appended to numeric media ids (after _ or -).
+ * Each pattern matches the suffix segment only. Extend when new generic tags appear.
+ */
+const NUMERIC_FILENAME_RESOLUTION_SUFFIXES = [
+  /^\d{3,4}p$/i, // 2160p, 1080p, 720p, 480p
+  /^\d{3,4}$/, // 2160, 1080 (height without p)
+  /^\d+k$/i, // 4k, 8k
+  /^4k$/i,
+  /^8k$/i,
+  /^2k$/i,
+  /^hd$/i,
+  /^sd$/i,
+  /^uhd$/i,
+  /^fhd$/i,
+  /^qhd$/i,
+  /^hq$/i,
+  /^lq$/i,
+  /^orig$/i,
+  /^source$/i,
+];
+
 /** True when the basename is only a numeric id (optional resolution/quality tag). */
 function isNumericOnlyFilenameStem(stem) {
   if (!stem) {
@@ -459,7 +481,12 @@ function isNumericOnlyFilenameStem(stem) {
   if (/^\d+$/.test(stem)) {
     return true;
   }
-  return /^\d+([_-](\d{3,4}p|\d+k|4k|8k|hd|sd|uhd|fhd))?$/i.test(stem);
+  const match = /^(\d+)[_-](.+)$/.exec(stem);
+  if (!match) {
+    return false;
+  }
+  const suffix = match[2];
+  return NUMERIC_FILENAME_RESOLUTION_SUFFIXES.some((pattern) => pattern.test(suffix));
 }
 
 function filenameWithPageTitleFallback(candidate, pageTitle) {
@@ -1087,6 +1114,7 @@ if (typeof globalThis !== "undefined") {
     guessFilenameFromUrl,
     isInferableUrlFilename,
     isNumericOnlyFilenameStem,
+    NUMERIC_FILENAME_RESOLUTION_SUFFIXES,
     filenameWithPageTitleFallback,
     sanitizePageTitle,
     itemDisplayFilename,

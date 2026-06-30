@@ -1308,16 +1308,16 @@
 
 .avar-download-detail .avar-progress {
   width: 100%;
-  height: 8px;
-  min-height: 8px;
+  height: 10px;
+  min-height: 10px;
+  flex-shrink: 0;
   margin-top: 0.5rem;
-  border-radius: 4px;
+  border-radius: 2px;
 }
 
-.avar-download-detail .avar-progress--segmented {
-  height: 24px;
-  min-height: 24px;
-  gap: 3px;
+.avar-download-detail .avar-progress--ranges {
+  height: 10px;
+  min-height: 10px;
 }
 
 .avar-download-detail__progress {
@@ -1328,9 +1328,10 @@
   min-width: 0;
 }
 
-.avar-download-detail .avar-progress__segment {
-  border-radius: 3px;
+.avar-download-detail__progress > .avar-progress {
+  flex-shrink: 0;
 }
+
 
 .avar-download-detail__field dt {
   font-size: 0.75rem;
@@ -2464,26 +2465,27 @@
   transition: width 0.25s ease;
 }
 
-.avar-progress--segmented {
-  display: flex;
-  gap: 2px;
-  background: transparent;
-}
-
-.avar-progress__segment {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
+.avar-progress--ranges {
+  position: relative;
   background: var(--avar-bg-muted);
-  border-radius: 2px;
-  overflow: hidden;
 }
 
-.avar-progress__segment-fill {
+.avar-progress__range {
+  position: absolute;
+  top: 0;
   height: 100%;
   background: var(--avar-primary);
-  border-radius: 2px;
-  transition: width 0.25s ease;
+  border-radius: 1px;
+}
+
+.avar-progress__section-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+  background: color-mix(in srgb, var(--avar-bg) 55%, transparent);
+  pointer-events: none;
 }
 
 .avar-connection {

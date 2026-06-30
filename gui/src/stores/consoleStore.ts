@@ -37,6 +37,7 @@ interface ConsoleState {
   append: (entry: Omit<LogEntry, "id">) => void;
   appendDaemonLines: (text: string, epoch: number) => void;
   setDaemonLogOffset: (offset: number) => void;
+  resetDaemonLogCursor: () => void;
   clear: () => number;
   markErrorsSeen: () => void;
   updateSettings: (patch: Partial<ConsoleSettings>) => void;
@@ -219,6 +220,11 @@ export const useConsoleStore = create<ConsoleState>()(
 
       setDaemonLogOffset: (offset) => set({ daemonLogOffset: offset }),
 
+      resetDaemonLogCursor: () => {
+        appLogger.gui.debug("Daemon log cursor reset");
+        set({ daemonLogOffset: 0 });
+      },
+
       updateSettings: (patch) => {
         const keys = Object.keys(patch);
         if (keys.length > 0) {
@@ -245,12 +251,9 @@ export const useConsoleStore = create<ConsoleState>()(
       name: `${GUI_CONFIG_KEY}.console`,
       partialize: (state) => ({
         settings: state.settings,
-        daemonLogOffset: state.daemonLogOffset,
       }),
       merge: (persisted, current) => {
-        const stored = persisted as
-          | Partial<{ settings: Partial<ConsoleSettings>; daemonLogOffset?: number }>
-          | undefined;
+        const stored = persisted as Partial<{ settings: Partial<ConsoleSettings> }> | undefined;
         if (!stored) {
           return current;
         }
@@ -259,10 +262,6 @@ export const useConsoleStore = create<ConsoleState>()(
           settings: stored.settings
             ? { ...defaultSettings, ...stored.settings }
             : current.settings,
-          daemonLogOffset:
-            typeof stored.daemonLogOffset === "number" && stored.daemonLogOffset >= 0
-              ? stored.daemonLogOffset
-              : current.daemonLogOffset,
         };
       },
     },

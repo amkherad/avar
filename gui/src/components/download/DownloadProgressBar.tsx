@@ -1,34 +1,54 @@
 import type { DownloadInfo } from "@/api/types";
 import { progressPercent } from "./format";
 
+/** Above this count, section dividers are too dense to see. */
+const MAX_SECTION_DIVIDERS = 48;
+
 export interface DownloadProgressBarProps {
   download: Pick<DownloadInfo, "bytesDownloaded" | "totalBytes" | "chunkSize" | "doneRanges">;
   className?: string;
 }
 
-function segmentFillPercent(
-  segmentIndex: number,
-  chunkSize: number,
+function rangeStyle(
+  rangeStart: number,
+  rangeEnd: number,
   totalBytes: number,
-  doneRanges: Array<[number, number]>,
-): number {
-  const segmentStart = segmentIndex * chunkSize;
-  const segmentEnd = Math.min(totalBytes, segmentStart + chunkSize);
-  const segmentWidth = segmentEnd - segmentStart;
-  if (segmentWidth <= 0) {
-    return 0;
+): { left: string; width: string } | null {
+  if (totalBytes <= 0 || rangeEnd < rangeStart) {
+    return null;
   }
 
-  let doneInSegment = 0;
-  for (const [rangeStart, rangeEnd] of doneRanges) {
-    const overlapStart = Math.max(rangeStart, segmentStart);
-    const overlapEnd = Math.min(rangeEnd, segmentEnd - 1);
-    if (overlapEnd >= overlapStart) {
-      doneInSegment += overlapEnd - overlapStart + 1;
-    }
+  const clampedStart = Math.max(0, rangeStart);
+  const clampedEnd = Math.min(totalBytes - 1, rangeEnd);
+  if (clampedEnd < clampedStart) {
+    return null;
   }
 
-  return Math.min(100, Math.round((doneInSegment / segmentWidth) * 100));
+  const left = (clampedStart / totalBytes) * 100;
+  const width = ((clampedEnd - clampedStart + 1) / totalBytes) * 100;
+  return { left: `${left}%`, width: `${width}%` };
+}
+
+function sectionDividerPercents(
+  totalBytes: number,
+  chunkSize: number,
+): number[] {
+  const sectionCount = Math.max(1, Math.ceil(totalBytes / chunkSize));
+  if (sectionCount <= 1) {
+    return [];
+  }
+
+  const dividerCount = Math.min(sectionCount - 1, MAX_SECTION_DIVIDERS);
+  const step = (sectionCount - 1) / dividerCount;
+
+  const percents: number[] = [];
+  for (let index = 1; index <= dividerCount; index += 1) {
+    const sectionIndex = Math.round(index * step);
+    const byteOffset = Math.min(totalBytes, sectionIndex * chunkSize);
+    percents.push((byteOffset / totalBytes) * 100);
+  }
+
+  return percents;
 }
 
 export function DownloadProgressBar({ download, className }: DownloadProgressBarProps) {
@@ -36,9 +56,9 @@ export function DownloadProgressBar({ download, className }: DownloadProgressBar
   const totalBytes = download.totalBytes;
   const chunkSize = download.chunkSize ?? 0;
   const doneRanges = download.doneRanges ?? [];
-  const showSegments = totalBytes > 0 && chunkSize > 0 && doneRanges.length > 0;
+  const showRanges = totalBytes > 0 && doneRanges.length > 0;
 
-  if (!showSegments) {
+  if (!showRanges) {
     return (
       <div className={className ?? "avar-progress"} aria-hidden="true">
         <div className="avar-progress__bar" style={{ width: `${percent}%` }} />
@@ -46,25 +66,33 @@ export function DownloadProgressBar({ download, className }: DownloadProgressBar
     );
   }
 
-  const segmentCount = Math.max(1, Math.ceil(totalBytes / chunkSize));
+  const dividerPercents =
+    chunkSize > 0 ? sectionDividerPercents(totalBytes, chunkSize) : [];
 
   return (
     <div
-      className={`${className ?? "avar-progress"} avar-progress--segmented`.trim()}
+      className={`${className ?? "avar-progress"} avar-progress--ranges`.trim()}
       aria-hidden="true"
     >
-      {Array.from({ length: segmentCount }, (_, index) => {
-        const fillPercent =
-          doneRanges.length > 0
-            ? segmentFillPercent(index, chunkSize, totalBytes, doneRanges)
-            : index === 0
-              ? percent
-              : 0;
+      {dividerPercents.map((leftPercent, index) => (
+        <div
+          key={`divider-${index}`}
+          className="avar-progress__section-divider"
+          style={{ left: `${leftPercent}%` }}
+        />
+      ))}
+      {doneRanges.map(([start, end], index) => {
+        const style = rangeStyle(start, end, totalBytes);
+        if (!style) {
+          return null;
+        }
 
         return (
-          <div key={index} className="avar-progress__segment">
-            <div className="avar-progress__segment-fill" style={{ width: `${fillPercent}%` }} />
-          </div>
+          <div
+            key={`range-${start}-${end}-${index}`}
+            className="avar-progress__range"
+            style={style}
+          />
         );
       })}
     </div>

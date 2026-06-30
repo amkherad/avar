@@ -455,8 +455,7 @@ DownloadState *download_state_load(const char *path) {
     clip_done_ranges(state);
     cJSON_Delete(root);
 
-    if (state->url == NULL || state->filename == NULL || state->temp_path == NULL
-        || state->dest_path == NULL) {
+    if (state->url == NULL || state->filename == NULL || state->dest_path == NULL) {
         download_state_free(state);
         return NULL;
     }

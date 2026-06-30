@@ -259,6 +259,17 @@ int avar_data_size_number_width(const uint64_t bytes, const AvarSizeUnit unit) {
     return snprintf(NULL, 0, "%.0f", value);
 }
 
+int avar_progress_percent(const uint64_t done, const uint64_t total) {
+    if (total == 0U) {
+        return 0;
+    }
+    if (done >= total) {
+        return DL_PROGRESS_PERCENT_MAX;
+    }
+
+    return (int) ((done * 100U) / total);
+}
+
 char *format_progress_percent(const int percent, char *buf, const size_t buflen) {
     if (buf == NULL || buflen == 0) {
         return buf;
@@ -496,17 +507,44 @@ int avar_progress_bar_width(const int suffix_len) {
     return avar_progress_bar_width_for_columns(terminal_columns(), suffix_len);
 }
 
-static bool byte_range_overlaps_column(const uint64_t total_size, const int width, const int column,
-                                       const AvarByteRange *range) {
-    if (total_size == 0 || width <= 0 || range == NULL || range->end < range->start) {
+static uint64_t span_bytes_covered(const uint64_t span_start, const uint64_t span_end_excl,
+                                   const uint64_t range_start, const uint64_t range_end_excl) {
+    if (span_start >= span_end_excl || range_start >= range_end_excl) {
+        return 0U;
+    }
+
+    const uint64_t overlap_start = range_start > span_start ? range_start : span_start;
+    const uint64_t overlap_end = range_end_excl < span_end_excl ? range_end_excl : span_end_excl;
+    if (overlap_end <= overlap_start) {
+        return 0U;
+    }
+
+    return overlap_end - overlap_start;
+}
+
+static uint64_t column_bytes_done(const AvarByteRange *ranges, const size_t range_count,
+                                  const uint64_t col_start, const uint64_t col_end_excl) {
+    if (ranges == NULL || col_start >= col_end_excl) {
+        return 0U;
+    }
+
+    uint64_t done = 0U;
+    for (size_t r = 0U; r < range_count; ++r) {
+        done += span_bytes_covered(col_start, col_end_excl, ranges[r].start, ranges[r].end + 1U);
+    }
+
+    const uint64_t col_width = col_end_excl - col_start;
+    return done > col_width ? col_width : done;
+}
+
+static bool column_fully_done(const AvarByteRange *ranges, const size_t range_count,
+                              const uint64_t col_start, const uint64_t col_end_excl) {
+    if (col_start >= col_end_excl) {
         return false;
     }
 
-    const uint64_t col_start = ((uint64_t) column * total_size) / (uint64_t) width;
-    const uint64_t col_end = ((uint64_t) (column + 1) * total_size) / (uint64_t) width;
-    const uint64_t range_end = range->end + 1U;
-
-    return col_start < range_end && range->start < col_end;
+    return column_bytes_done(ranges, range_count, col_start, col_end_excl)
+           >= (col_end_excl - col_start);
 }
 
 char *format_spatial_progress_bar_fn(const uint64_t total_size, const AvarColumnFilledFn is_filled,
@@ -553,12 +591,9 @@ char *format_spatial_progress_bar(const uint64_t total_size, const AvarByteRange
     for (int i = 0; i < width; ++i) {
         bool filled = false;
         if (total_size > 0 && ranges != NULL) {
-            for (size_t r = 0; r < range_count; ++r) {
-                if (byte_range_overlaps_column(total_size, width, i, &ranges[r])) {
-                    filled = true;
-                    break;
-                }
-            }
+            const uint64_t col_start = ((uint64_t) i * total_size) / (uint64_t) width;
+            const uint64_t col_end_excl = ((uint64_t) (i + 1) * total_size) / (uint64_t) width;
+            filled = column_fully_done(ranges, range_count, col_start, col_end_excl);
         }
         buf[(size_t) i + 1U] = filled ? '=' : ' ';
     }
@@ -567,7 +602,8 @@ char *format_spatial_progress_bar(const uint64_t total_size, const AvarByteRange
     return buf;
 }
 
-char *format_progress_bar(const int percent, const int width, char *buf, const size_t buflen) {
+static char *format_progress_bar_filled(const int filled, const int width, char *buf,
+                                        const size_t buflen) {
     if (buf == NULL || buflen == 0 || width <= 0) {
         return buf;
     }
@@ -578,21 +614,60 @@ char *format_progress_bar(const int percent, const int width, char *buf, const s
         return buf;
     }
 
-    int clamped = percent;
+    int clamped = filled;
     if (clamped < 0) {
         clamped = 0;
-    } else if (clamped > 100) {
-        clamped = 100;
+    } else if (clamped > width) {
+        clamped = width;
     }
 
-    const int filled = (clamped * width) / 100;
     buf[0] = '[';
     for (int i = 0; i < width; ++i) {
-        buf[(size_t) i + 1] = i < filled ? '=' : ' ';
+        buf[(size_t) i + 1] = i < clamped ? '=' : ' ';
     }
     buf[(size_t) width + 1] = ']';
     buf[(size_t) width + 2] = '\0';
     return buf;
+}
+
+char *format_progress_bar(const int percent, const int width, char *buf, const size_t buflen) {
+    if (width <= 0) {
+        return buf;
+    }
+
+    int clamped = percent;
+    if (clamped < 0) {
+        clamped = 0;
+    } else if (clamped > DL_PROGRESS_PERCENT_MAX) {
+        clamped = DL_PROGRESS_PERCENT_MAX;
+    }
+
+    int filled = 0;
+    if (clamped >= DL_PROGRESS_PERCENT_MAX) {
+        filled = width;
+    } else {
+        filled = (clamped * width) / DL_PROGRESS_PERCENT_MAX;
+    }
+
+    return format_progress_bar_filled(filled, width, buf, buflen);
+}
+
+char *format_progress_bar_bytes(const uint64_t done, const uint64_t total, const int width, char *buf,
+                                const size_t buflen) {
+    if (width <= 0) {
+        return buf;
+    }
+
+    int filled = 0;
+    if (total > 0U) {
+        if (done >= total) {
+            filled = width;
+        } else {
+            filled = (int) ((done * (uint64_t) width) / total);
+        }
+    }
+
+    return format_progress_bar_filled(filled, width, buf, buflen);
 }
 
 int print_help(int help_message_n, const char *help_message[]) {

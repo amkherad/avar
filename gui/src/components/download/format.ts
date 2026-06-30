@@ -25,7 +25,10 @@ export function progressPercent(done: number, total: number): number {
   if (total <= 0) {
     return 0;
   }
-  return Math.min(100, Math.round((done / total) * 100));
+  if (done >= total) {
+    return 100;
+  }
+  return Math.floor((done * 100) / total);
 }
 
 export function formatTransferRate(

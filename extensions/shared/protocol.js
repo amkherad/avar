@@ -211,18 +211,40 @@
   }
 
   /**
-   * Prefer the full page URL over HTTP Referer values (often origin-only).
+   * Score how specific a page URL is (path, query, hash beyond bare origin).
+   * @param {string} value
+   */
+  function pageUrlSpecificity(value) {
+    try {
+      const parsed = new URL(value.trim());
+      const path = parsed.pathname || "/";
+      const hasPath = path !== "/" && path !== "";
+      return (
+        (hasPath ? 1000 : 0) +
+        path.length +
+        parsed.search.length +
+        parsed.hash.length
+      );
+    } catch {
+      return -1;
+    }
+  }
+
+  /**
+   * Prefer the fullest page URL. HTTP Referer values are often origin-only.
    * @param {string} [pageUrl]
    * @param {string} [referer]
    */
   function resolvePageReferer(pageUrl, referer) {
-    if (isHttpPageUrl(pageUrl)) {
-      return pageUrl.trim();
+    const candidates = [pageUrl, referer]
+      .filter((value) => isHttpPageUrl(value))
+      .map((value) => value.trim());
+    if (candidates.length === 0) {
+      return undefined;
     }
-    if (isHttpPageUrl(referer)) {
-      return referer.trim();
-    }
-    return undefined;
+    return candidates.reduce((best, current) =>
+      pageUrlSpecificity(current) > pageUrlSpecificity(best) ? current : best,
+    );
   }
 
   async function isLinkRefreshActive(baseUrl) {

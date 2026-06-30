@@ -69,6 +69,9 @@ int avar_progress_bar_width(int suffix_len);
 /* Formats bytes using the requested size unit. Returns buf. */
 char *format_data_size(uint64_t bytes, AvarSizeUnit unit, char *buf, size_t buflen);
 
+/* Download progress percent: 100 only when done >= total; otherwise floor(done * 100 / total). */
+int avar_progress_percent(uint64_t done, uint64_t total);
+
 /* Right-aligns the percent in DL_PROGRESS_PERCENT_WIDTH digits (e.g. "  7%"). Returns buf. */
 char *format_progress_percent(int percent, char *buf, size_t buflen);
 
@@ -88,6 +91,9 @@ char *format_transfer_rate_padded(double bytes_per_sec, AvarSpeedUnit unit, int 
 
 /* Builds an ASCII progress bar like "[=======              ]". Returns buf. */
 char *format_progress_bar(int percent, int width, char *buf, size_t buflen);
+
+/* Like format_progress_bar(), but derives fill from byte counts (full bar only when done >= total). */
+char *format_progress_bar_bytes(uint64_t done, uint64_t total, int width, char *buf, size_t buflen);
 
 /* Maps downloaded byte ranges onto a single spatial bar. Returns buf. */
 char *format_spatial_progress_bar(uint64_t total_size, const AvarByteRange *ranges,

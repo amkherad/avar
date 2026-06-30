@@ -8,6 +8,7 @@
 #include "avar.h"
 #include "config.h"
 #include "download.h"
+#include "download_state.h"
 #include "file-system.h"
 #include "queue.h"
 #include "thread_pool.h"
@@ -161,6 +162,35 @@ AVAR_TEST(download_lifecycle_enqueue_and_remove) {
     AVAR_ASSERT_NOT_NULL(dest);
     AVAR_ASSERT(!file_exists(dest));
     free(dest);
+    free(item_id);
+}
+
+AVAR_TEST(download_lifecycle_completed_keeps_state_file) {
+    AVAR_ASSERT(setup_paths());
+
+    char url[256];
+    build_url("plain.txt", url, sizeof url);
+
+    AVAR_ASSERT_EQ(transient_download(url, NULL, "details-test", NULL, true), EXIT_SUCCESS);
+
+    char *item_id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, 0, AVAR_FIELD_ID);
+    AVAR_ASSERT_NOT_NULL(item_id);
+
+    char state_path[768];
+    snprintf(state_path, sizeof state_path, "%s%c%s%c%s", g_temp_dir, PATH_SEPARATOR, item_id,
+             PATH_SEPARATOR, DL_STATE_FILENAME);
+    AVAR_ASSERT(file_exists(state_path));
+
+    DownloadState *state = download_item_state_load(item_id);
+    AVAR_ASSERT_NOT_NULL(state);
+    AVAR_ASSERT_NOT_NULL(state->url);
+    AVAR_ASSERT(strstr(state->url, "plain.txt") != NULL);
+    AVAR_ASSERT_NULL(state->temp_path);
+    AVAR_ASSERT_NOT_NULL(state->dest_path);
+    download_state_free(state);
+
+    AVAR_ASSERT_EQ(download_remove(item_id, true, true, false), EXIT_SUCCESS);
+    AVAR_ASSERT(!file_exists(state_path));
     free(item_id);
 }
 
@@ -364,6 +394,7 @@ AVAR_TEST(download_lifecycle_invalid_operations) {
 
 AVAR_TEST_MAIN(
         run_download_lifecycle_enqueue_and_remove();
+        run_download_lifecycle_completed_keeps_state_file();
         run_download_lifecycle_pause_resume_background();
         run_download_lifecycle_enqueue_proxy_and_active_list();
         run_download_lifecycle_start_stop_background();

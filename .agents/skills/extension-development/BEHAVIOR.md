@@ -242,7 +242,7 @@ bridgeUrl: "http://127.0.0.1:18766"
 3. Sanitized `pageTitle` (with original extension preserved when replacing a numeric stem)
 4. Raw URL segment or full URL
 
-Numeric-only stems: pure digits (`3172036`) or a numeric id plus an optional resolution tag (`3172036_2160p`, `12345-1080p`).
+Numeric-only stems: pure digits (`3172036`) or a numeric id plus an optional resolution tag (`3172036_2160p`, `12345-1080`). Tags are matched via `NUMERIC_FILENAME_RESOLUTION_SUFFIXES` in `media.js` (extend that list for new generic patterns).
 
 ---
 

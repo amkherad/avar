@@ -384,13 +384,7 @@ static void attach_print_progress_line(const char *filename, const uint64_t byte
     free(size_cfg);
     free(speed_cfg);
 
-    int percent = 0;
-    if (total_bytes > 0U) {
-        percent = (int)((100.0 * (double)bytes_downloaded) / (double)total_bytes);
-        if (percent > DL_PROGRESS_PERCENT_MAX) {
-            percent = DL_PROGRESS_PERCENT_MAX;
-        }
-    }
+    const int percent = avar_progress_percent(bytes_downloaded, total_bytes);
 
     char label[ATTACH_PROGRESS_LABEL_MAX];
     attach_format_label(filename, label, sizeof label);
@@ -426,7 +420,11 @@ static void attach_print_progress_line(const char *filename, const uint64_t byte
     }
 
     char bar[DL_PROGRESS_BAR_WIDTH_MAX + 3];
-    format_progress_bar(percent, bar_width, bar, sizeof bar);
+    if (has_total) {
+        format_progress_bar_bytes(bytes_downloaded, total_bytes, bar_width, bar, sizeof bar);
+    } else {
+        format_progress_bar(percent, bar_width, bar, sizeof bar);
+    }
     snprintf(line, sizeof line, "%s %s%s", label, bar, suffix);
 
     attach_clear_line();

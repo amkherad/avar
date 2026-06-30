@@ -59,12 +59,19 @@ function createDownloadIntercept(api, handlers) {
 
   async function resolveInterceptPageUrl(downloadItem) {
     const tab = await resolveInterceptTab(downloadItem.tabId);
-    if (tab?.url && /^https?:\/\//i.test(tab.url)) {
-      return tab.url;
-    }
+    const tabUrl = tab?.url && /^https?:\/\//i.test(tab.url) ? tab.url : undefined;
+    const fallback =
+      typeof globalThis.AvarExtensionProtocol !== "undefined"
+        ? globalThis.AvarExtensionProtocol.resolvePageReferer(
+            downloadItem.referringPage,
+            downloadItem.referrer,
+          )
+        : (downloadItem.referringPage || downloadItem.referrer || "").trim() || undefined;
 
-    const fallback = downloadItem.referringPage || downloadItem.referrer || "";
-    return fallback.trim() || undefined;
+    if (typeof globalThis.AvarExtensionProtocol !== "undefined") {
+      return globalThis.AvarExtensionProtocol.resolvePageReferer(tabUrl, fallback);
+    }
+    return tabUrl || fallback || undefined;
   }
 
   async function resolveInterceptPageTitle(downloadItem) {

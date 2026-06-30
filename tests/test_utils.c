@@ -199,6 +199,38 @@ AVAR_TEST(utils_progress_bar_width_uses_fixed_size_without_tty) {
 #endif
 }
 
+AVAR_TEST(utils_avar_progress_percent_exclusive) {
+    AVAR_ASSERT_EQ(avar_progress_percent(0U, 100U), 0);
+    AVAR_ASSERT_EQ(avar_progress_percent(50U, 100U), 50);
+    AVAR_ASSERT_EQ(avar_progress_percent(99U, 100U), 99);
+    AVAR_ASSERT_EQ(avar_progress_percent(995U, 1000U), 99);
+    AVAR_ASSERT_EQ(avar_progress_percent(999U, 1000U), 99);
+    AVAR_ASSERT_EQ(avar_progress_percent(100U, 100U), 100);
+    AVAR_ASSERT_EQ(avar_progress_percent(1000U, 1000U), 100);
+    AVAR_ASSERT_EQ(avar_progress_percent(0U, 0U), 0);
+}
+
+AVAR_TEST(utils_format_progress_bar_bytes_fills_only_when_complete) {
+    char bar[32];
+
+    format_progress_bar_bytes(50U, 100U, 22, bar, sizeof bar);
+    AVAR_ASSERT_STR_EQ(bar, "[===========           ]");
+
+    format_progress_bar_bytes(99U, 100U, 22, bar, sizeof bar);
+    AVAR_ASSERT_STR_EQ(bar, "[===================== ]");
+
+    format_progress_bar_bytes(100U, 100U, 22, bar, sizeof bar);
+    AVAR_ASSERT_STR_EQ(bar, "[======================]");
+}
+
+AVAR_TEST(utils_format_spatial_progress_bar_requires_full_column) {
+    const AvarByteRange sparse[] = {{0, 0}};
+    char bar[32];
+
+    format_spatial_progress_bar(100, sparse, 1, 20, bar, sizeof bar);
+    AVAR_ASSERT_STR_EQ(bar, "[                    ]");
+}
+
 AVAR_TEST(utils_format_progress_percent_right_aligns) {
     char buf[8];
 
@@ -315,6 +347,9 @@ AVAR_TEST_MAIN(
         run_utils_print_help_returns_success();
         run_utils_format_progress_bar_renders_percent_fill();
         run_utils_format_spatial_progress_bar_renders_separate_regions();
+        run_utils_avar_progress_percent_exclusive();
+        run_utils_format_progress_bar_bytes_fills_only_when_complete();
+        run_utils_format_spatial_progress_bar_requires_full_column();
         run_utils_progress_style_parse_accepts_known_values();
         run_utils_progress_bar_width_accounts_for_brackets();
         run_utils_progress_bar_width_uses_fixed_size_without_tty();
