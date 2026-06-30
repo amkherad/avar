@@ -44,7 +44,7 @@ function buildVendorCopy(): Record<string, string> {
     "../electron/extension-bridge.cjs": "electron/extension-bridge.cjs",
     "../electron/extension-protocol.cjs": "electron/extension-protocol.cjs",
     "../electron/avar-protocol.cjs": "electron/avar-protocol.cjs",
-    "../dev-server.cjs": "dev-server.cjs",
+    "../electron/ports.cjs": "electron/ports.cjs",
     "../desktop/resolve-gui-url.cjs": "desktop/resolve-gui-url.cjs",
     "../desktop/env.cjs": "desktop/env.cjs",
   };
@@ -78,7 +78,7 @@ export default {
       "../electron/extension-bridge.cjs",
       "../electron/extension-protocol.cjs",
       "../electron/avar-protocol.cjs",
-      "../dev-server.cjs",
+      "../electron/ports.cjs",
       "../desktop",
     ],
     mac: {

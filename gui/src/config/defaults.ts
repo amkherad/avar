@@ -63,11 +63,13 @@ export interface GuiConfig {
   byteDisplayUnit: ByteDisplayUnit;
   /** Transfer rate labels (binary KiB/s vs binary Kib/s). */
   transferRateDisplayUnit: TransferRateDisplayUnit;
+  /** When true, closing the main window hides to the system tray (desktop only). */
+  keepInTrayOnClose: boolean;
 }
 
 export const GUI_CONFIG_KEY = "avar.gui.config";
 export const GUI_SECRETS_KEY = "avar.gui.secrets";
-export const GUI_CONFIG_VERSION = 11;
+export const GUI_CONFIG_VERSION = 12;
 
 export const defaultFooterMonitors = (): FooterMonitorSettings => ({
   disk: true,
@@ -115,4 +117,5 @@ export const defaultGuiConfig = (): GuiConfig => ({
   downloadDoubleClickAction: "openFile",
   byteDisplayUnit: "binary",
   transferRateDisplayUnit: "binary-bytes",
+  keepInTrayOnClose: true,
 });

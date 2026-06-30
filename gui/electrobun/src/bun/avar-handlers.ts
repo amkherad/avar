@@ -15,6 +15,7 @@ import { getProxyBaseUrl } from "./desktop-shell";
 import { getExtensionBridgeModule } from "./extension-host";
 import { openPopup } from "./popup-manager";
 import { setTrayActiveDownloads, setTrayLabels } from "./tray-manager";
+import { setKeepInTrayOnClose } from "./close-behavior";
 
 function fsExists(filePath: string): boolean {
   try {
@@ -142,6 +143,9 @@ export function createAvarRpc() {
             return false;
           }
           return Utils.openExternal(trimmed);
+        },
+        setKeepInTrayOnClose: (enabled: boolean) => {
+          setKeepInTrayOnClose(Boolean(enabled));
         },
       },
     },

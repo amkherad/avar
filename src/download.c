@@ -3062,9 +3062,23 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
         }
     }
 
+    download_io_scope_begin(item_id);
+
     apply_proxy_to_state(state, proxy_override);
-    if (state != NULL && state_path != NULL) {
-        (void)download_state_save(state, state_path);
+    if (state != NULL && state_path != NULL && download_state_save(state, state_path) != 0) {
+        free(temp_dir);
+        free(download_dir);
+        free(job_dir);
+        download_state_free(state);
+        free(normalized_url);
+        free(item_id);
+        free(filename);
+        free(temp_path);
+        free(dest_path);
+        free(state_path);
+        download_io_scope_end();
+        LOG_ERROR("Failed to save download state");
+        return EXIT_FAILURE;
     }
 
     free(temp_dir);
@@ -3079,6 +3093,7 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
         free(temp_path);
         free(dest_path);
         free(state_path);
+        download_io_scope_end();
         LOG_ERROR("Failed to initialize download state");
         return EXIT_FAILURE;
     }
@@ -3092,6 +3107,7 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
         free(temp_path);
         free(dest_path);
         free(state_path);
+        download_io_scope_end();
         LOG_ERROR("Out of memory");
         return EXIT_FAILURE;
     }
@@ -3130,10 +3146,12 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
             job_free(job);
             job = NULL;
             if (spawn_id == NULL) {
+                download_io_scope_end();
                 return EXIT_FAILURE;
             }
             if (spawn_download_by_id(spawn_id, proxy_override) != EXIT_SUCCESS) {
                 free(spawn_id);
+                download_io_scope_end();
                 return EXIT_FAILURE;
             }
             rc = wait_for_download_item(spawn_id);
@@ -3160,6 +3178,7 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
     if (job != NULL) {
         job_free(job);
     }
+    download_io_scope_end();
     return rc;
 }
 
@@ -3636,6 +3655,23 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
 
     apply_proxy_to_state(state, proxy_override);
 
+    download_io_scope_begin(item_id);
+    if (state != NULL && state_path != NULL && download_state_save(state, state_path) != 0) {
+        free(temp_dir);
+        free(download_dir);
+        free(job_dir);
+        free(queue_id);
+        download_state_free(state);
+        free(url);
+        free(filename);
+        free(temp_path);
+        free(dest_path);
+        free(state_path);
+        download_io_scope_end();
+        LOG_ERROR("Failed to save download state for item %s", item_id);
+        return EXIT_FAILURE;
+    }
+
     free(temp_dir);
     free(download_dir);
     free(job_dir);
@@ -3648,6 +3684,7 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
         free(temp_path);
         free(dest_path);
         free(state_path);
+        download_io_scope_end();
         return EXIT_FAILURE;
     }
 
@@ -3659,6 +3696,7 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
         free(temp_path);
         free(dest_path);
         free(state_path);
+        download_io_scope_end();
         return EXIT_FAILURE;
     }
 
@@ -3687,6 +3725,7 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
         (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
     }
     job_free(job);
+    download_io_scope_end();
     return rc;
 }
 

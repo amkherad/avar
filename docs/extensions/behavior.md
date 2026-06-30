@@ -103,7 +103,7 @@ When **Put selected links in a separate tab** is enabled (default), Selected and
 Each row shows:
 
 - Type icon (video, audio, image, binary)
-- Display filename (from response headers, URL query/path, or page title as fallback)
+- Display filename (from response headers, URL query/path, or page title when the detected name is only a numeric id)
 - Stream badge (`hls` / `dash`) when applicable
 - File size (from capture headers or a background probe via the bridge)
 - Truncated URL with copy button

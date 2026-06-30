@@ -443,6 +443,40 @@ function sanitizePageTitle(title) {
   return title.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "").trim();
 }
 
+function splitFilenameParts(name) {
+  const lastDot = name.lastIndexOf(".");
+  if (lastDot <= 0) {
+    return { stem: name, extension: "" };
+  }
+  return { stem: name.slice(0, lastDot), extension: name.slice(lastDot) };
+}
+
+/** True when the basename is only a numeric id (optional resolution/quality tag). */
+function isNumericOnlyFilenameStem(stem) {
+  if (!stem) {
+    return false;
+  }
+  if (/^\d+$/.test(stem)) {
+    return true;
+  }
+  return /^\d+([_-](\d{3,4}p|\d+k|4k|8k|hd|sd|uhd|fhd))?$/i.test(stem);
+}
+
+function filenameWithPageTitleFallback(candidate, pageTitle) {
+  if (!candidate) {
+    return "";
+  }
+  const title = sanitizePageTitle(pageTitle || "");
+  if (!title) {
+    return candidate;
+  }
+  const { stem, extension } = splitFilenameParts(candidate);
+  if (!isNumericOnlyFilenameStem(stem)) {
+    return candidate;
+  }
+  return extension ? `${title}${extension}` : title;
+}
+
 function isInferableUrlFilename(name, url) {
   if (!name || name === url) {
     return false;
@@ -527,19 +561,21 @@ function guessFilename(url) {
 }
 
 function itemDisplayFilename(item, pageTitle) {
+  const title = pageTitle || item?.pageTitle || "";
+
   if (item?.filename) {
-    return item.filename;
+    return filenameWithPageTitleFallback(item.filename, title);
   }
 
   const url = item?.url || "";
   const fromUrl = guessFilenameFromUrl(url);
   if (fromUrl && isInferableUrlFilename(fromUrl, url)) {
-    return fromUrl;
+    return filenameWithPageTitleFallback(fromUrl, title);
   }
 
-  const title = sanitizePageTitle(pageTitle || item?.pageTitle || "");
-  if (title) {
-    return title;
+  const sanitized = sanitizePageTitle(title);
+  if (sanitized) {
+    return sanitized;
   }
 
   return fromUrl || url;
@@ -1050,6 +1086,8 @@ if (typeof globalThis !== "undefined") {
     guessFilename,
     guessFilenameFromUrl,
     isInferableUrlFilename,
+    isNumericOnlyFilenameStem,
+    filenameWithPageTitleFallback,
     sanitizePageTitle,
     itemDisplayFilename,
     filterMediaItems,

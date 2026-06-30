@@ -22,6 +22,7 @@ declare global {
       openPath: (filePath: string) => Promise<string>;
       showItemInFolder: (filePath: string) => Promise<string>;
       openExternal: (url: string) => Promise<boolean>;
+      setKeepInTrayOnClose: (enabled: boolean) => Promise<void>;
     };
   }
 }
@@ -50,6 +51,7 @@ window.avar = {
   openPath: (filePath) => rpc.request.openPath(filePath),
   showItemInFolder: (filePath) => rpc.request.showItemInFolder(filePath),
   openExternal: (url) => rpc.request.openExternal(url),
+  setKeepInTrayOnClose: (enabled) => rpc.request.setKeepInTrayOnClose(enabled),
 };
 
 void electroview;

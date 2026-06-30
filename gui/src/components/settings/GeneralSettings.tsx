@@ -206,6 +206,21 @@ export function GeneralSettings() {
         ) : null}
       </section>
 
+      {window.avar?.isElectron ? (
+        <section className="avar-settings-group">
+          <h3 className="avar-settings-group__heading">{t("settings.desktop.title")}</h3>
+          <p className="avar-settings-hint">{t("settings.desktop.hint")}</p>
+          <label className="avar-checkbox-row">
+            <input
+              type="checkbox"
+              checked={config.keepInTrayOnClose}
+              onChange={(e) => updateConfig({ keepInTrayOnClose: e.target.checked })}
+            />
+            {t("settings.desktop.keepInTrayOnClose")}
+          </label>
+        </section>
+      ) : null}
+
       {isPwaSupported() ? (
         <section className="avar-settings-group">
           <h3 className="avar-settings-group__heading">{t("settings.pwa.title")}</h3>

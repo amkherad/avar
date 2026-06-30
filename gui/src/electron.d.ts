@@ -79,6 +79,7 @@ export interface AvarElectronApi {
   openPath: (filePath: string) => Promise<string>;
   showItemInFolder: (filePath: string) => Promise<string>;
   openExternal: (url: string) => Promise<boolean>;
+  setKeepInTrayOnClose: (enabled: boolean) => Promise<void>;
 }
 
 declare global {

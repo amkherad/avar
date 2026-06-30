@@ -10,6 +10,18 @@ import { useDaemonDirectoryPathMode } from "@/hooks/useDirectoryPathMode";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { appLogger } from "@/lib/appLogger";
 
+const SIZE_UNIT_OPTIONS = ["Bytes", "KiB", "MiB", "GiB"] as const;
+const SPEED_UNIT_OPTIONS = [
+  "Bytes/s",
+  "bits/s",
+  "KiB/s",
+  "MiB/s",
+  "GiB/s",
+  "Kib/s",
+  "Mib/s",
+  "Gib/s",
+] as const;
+
 const CONFIG_DEFAULTS = {
   "dm.segmentation.enabled": "true",
   "dm.segmentation.strategy": "balanced",
@@ -18,8 +30,8 @@ const CONFIG_DEFAULTS = {
   "dm.segmentation.minFileSize": "1048576",
   "dm.tempPath": "",
   "dm.downloadPath": "",
-  "dm.progress.sizeUnit": "auto",
-  "dm.progress.speedUnit": "auto",
+  "dm.progress.sizeUnit": "MiB",
+  "dm.progress.speedUnit": "MiB/s",
   "dm.progress.style": "segmented",
   "dm.proxy.enabled": "false",
   "dm.proxy.type": "http",
@@ -43,6 +55,17 @@ const SEGMENT_KEYS = [
   "dm.progress.style",
 ] as const;
 
+function normalizeUnitOption<T extends readonly string[]>(
+  value: string | null | undefined,
+  options: T,
+  fallback: T[number],
+): T[number] {
+  if (value != null && (options as readonly string[]).includes(value)) {
+    return value as T[number];
+  }
+  return fallback;
+}
+
 export function DownloadSettings() {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
@@ -60,8 +83,14 @@ export function DownloadSettings() {
       const next: Record<string, string> = {};
       for (const key of SEGMENT_KEYS) {
         const defaultValue = CONFIG_DEFAULTS[key];
-        next[key] =
-          (await client.getConfig(key, defaultValue)) ?? defaultValue;
+        const raw = (await client.getConfig(key, defaultValue)) ?? defaultValue;
+        if (key === "dm.progress.sizeUnit") {
+          next[key] = normalizeUnitOption(raw, SIZE_UNIT_OPTIONS, CONFIG_DEFAULTS[key]);
+        } else if (key === "dm.progress.speedUnit") {
+          next[key] = normalizeUnitOption(raw, SPEED_UNIT_OPTIONS, CONFIG_DEFAULTS[key]);
+        } else {
+          next[key] = raw;
+        }
       }
       setValues(next);
 
@@ -189,16 +218,28 @@ export function DownloadSettings() {
 
       <section className="avar-settings-group">
         <h3 className="avar-settings-group__heading">{t("settings.download.progress")}</h3>
-        <Input
+        <Select
           label={t("settings.download.sizeUnit")}
-          value={values["dm.progress.sizeUnit"] ?? ""}
+          value={values["dm.progress.sizeUnit"] ?? CONFIG_DEFAULTS["dm.progress.sizeUnit"]}
           onChange={(e) => setField("dm.progress.sizeUnit", e.target.value)}
-        />
-        <Input
+        >
+          {SIZE_UNIT_OPTIONS.map((unit) => (
+            <option key={unit} value={unit}>
+              {unit}
+            </option>
+          ))}
+        </Select>
+        <Select
           label={t("settings.download.speedUnit")}
-          value={values["dm.progress.speedUnit"] ?? ""}
+          value={values["dm.progress.speedUnit"] ?? CONFIG_DEFAULTS["dm.progress.speedUnit"]}
           onChange={(e) => setField("dm.progress.speedUnit", e.target.value)}
-        />
+        >
+          {SPEED_UNIT_OPTIONS.map((unit) => (
+            <option key={unit} value={unit}>
+              {unit}
+            </option>
+          ))}
+        </Select>
         <Select
           label={t("settings.download.progressStyle")}
           value={values["dm.progress.style"] ?? "segmented"}

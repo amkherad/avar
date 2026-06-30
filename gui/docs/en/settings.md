@@ -22,6 +22,7 @@ Use the inner sidebar to switch between setting groups.
 - **Remote downloads** — **Local download folder** used when you copy completed files from a remote daemon to your computer (see **Copy to local folder** in the downloads panel). Ignored for local sessions.
 - **Footer monitors** — Toggle disk, memory, CPU, and network stats in the footer (collected from the daemon when connected). Choose **Text values** or **Histogram + values** to show sparkline-style history for memory, CPU, and network. Histogram mode keeps labels inline with semi-transparent values overlaid on the chart.
 - **Notifications** — Toggle desktop notifications for download status changes, queue start/stop, and connection alerts. In the browser, you may still need to grant notification permission separately.
+- **Keep in system tray when closing the window** (desktop app only) — When enabled (default), closing the main window hides Avar to the system tray. When disabled, closing the main window quits the application completely.
 - **Install web app** — Install Avar as a standalone PWA (when your browser supports it).
 
 ### 🌐 Browser integration
@@ -41,7 +42,7 @@ In the extension **Settings** view, enable **Grab all browser downloads** to sen
 
 ### 🖥️ Desktop tray (Electron)
 
-When running the Electron app, Avar stays available in the system tray (Windows, macOS, KDE, GNOME, and other Linux desktops with tray support). Left-click the tray icon to show the main window; right-click for **Show Avar**, up to three active downloads with progress (oldest first), bulk download actions (**Start All**, **Pause All**, **Resume All**, **Stop All**), and **Exit Avar**. The tray tooltip also summarizes active downloads. Closing the main window hides it to the tray instead of quitting.
+When running the Electron app, Avar stays available in the system tray (Windows, macOS, KDE, GNOME, and other Linux desktops with tray support). Left-click the tray icon to show the main window; right-click for **Show Avar**, up to three active downloads with progress (oldest first), bulk download actions (**Start All**, **Pause All**, **Resume All**, **Stop All**), and **Exit Avar**. The tray tooltip also summarizes active downloads. By default, closing the main window hides it to the tray instead of quitting. Turn off **Keep in system tray when closing the window** under **General** to quit when you close the main window.
 
 Use the **puzzle-piece icon** in the header (next to the theme toggle) to open the extension integration panel: connection status, listen toggle, temporary suspend/resume, bridge URL, protocol version, and extension update availability.
 

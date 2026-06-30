@@ -11,7 +11,7 @@ const {
   createResponse,
   createErrorResponse,
 } = require("./extension-protocol.cjs");
-const { EXTENSION_GUI_URL } = require("../dev-server.cjs");
+const { EXTENSION_GUI_URL } = require("./ports.cjs");
 
 const EXTENSION_PING_TTL_MS = 30_000;
 const BATCH_STASH_TTL_MS = 10 * 60 * 1000;

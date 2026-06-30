@@ -19,4 +19,6 @@ contextBridge.exposeInMainWorld("avar", {
   openPath: (filePath) => ipcRenderer.invoke("download:openLocalFile", filePath),
   showItemInFolder: (filePath) => ipcRenderer.invoke("download:showItemInFolder", filePath),
   openExternal: (url) => ipcRenderer.invoke("shell:openExternal", url),
+  setKeepInTrayOnClose: (enabled) =>
+    ipcRenderer.invoke("desktop:setKeepInTrayOnClose", enabled),
 });

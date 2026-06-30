@@ -237,10 +237,12 @@ bridgeUrl: "http://127.0.0.1:18766"
 
 ## Filename display priority (`itemDisplayFilename`)
 
-1. `item.filename` (from headers/probe)
-2. `guessFilenameFromUrl` if `isInferableUrlFilename`
-3. Sanitized `pageTitle`
+1. `item.filename` (from headers/probe), unless the stem is numeric-only
+2. `guessFilenameFromUrl` if `isInferableUrlFilename`, unless the stem is numeric-only
+3. Sanitized `pageTitle` (with original extension preserved when replacing a numeric stem)
 4. Raw URL segment or full URL
+
+Numeric-only stems: pure digits (`3172036`) or a numeric id plus an optional resolution tag (`3172036_2160p`, `12345-1080p`).
 
 ---
 

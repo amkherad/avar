@@ -78,7 +78,7 @@ export const useLayoutStore = create<LayoutState>()(
       detailPanelWidth: 300,
       detailPanelHeight: 280,
       detailPanelOpen: false,
-      downloadViewMode: "grid",
+      downloadViewMode: "compact",
       downloadTableColumns: defaultTableColumns,
       queueTableColumns: defaultQueueTableColumns,
 

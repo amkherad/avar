@@ -15,6 +15,7 @@ import { initSyncCoordinator } from "@/sync/syncManager";
 import { initNotificationWatcher } from "@/lib/notificationWatcher";
 import { initResumeUnsupportedWatcher } from "@/lib/resumeUnsupportedWatcher";
 import { initBrowserExtensionBridge } from "@/lib/browserExtensionBridge";
+import { initDesktopShellSettings } from "@/lib/desktopShellSettings";
 import { toggleDetailPanelWithSelection } from "@/lib/detailPanel";
 import { useElectronTrayLabels } from "@/hooks/useElectronTrayLabels";
 import { useElectronTrayDownloads } from "@/hooks/useElectronTrayDownloads";
@@ -60,6 +61,7 @@ function AppContent() {
   useEffect(() => initNotificationWatcher(), []);
   useEffect(() => initResumeUnsupportedWatcher(), []);
   useEffect(() => initBrowserExtensionBridge(), []);
+  useEffect(() => initDesktopShellSettings(), []);
   useElectronTrayLabels();
   useElectronTrayDownloads();
 

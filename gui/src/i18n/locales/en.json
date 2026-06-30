@@ -340,6 +340,11 @@
       "hint": "Show desktop notifications when downloads change status, queues start or stop, or the daemon connection is lost.",
       "enabled": "Show notifications"
     },
+    "desktop": {
+      "title": "Desktop",
+      "hint": "Options for the Avar desktop app (Electron).",
+      "keepInTrayOnClose": "Keep in system tray when closing the window"
+    },
     "pwa": {
       "title": "Install web app",
       "hint": "Install Avar as a standalone app in your browser. Notifications require permission.",

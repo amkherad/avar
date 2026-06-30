@@ -9,9 +9,6 @@ void download_io_scope_begin(const char *item_id);
 /* Ends the active-download write scope on the current thread. */
 void download_io_scope_end(void);
 
-/* True when config.json may be written (no active downloads, or caller is in scope). */
-bool download_io_config_write_allowed(void);
-
 /* True when state.json at path may be written by the current caller. */
 bool download_io_state_write_allowed(const char *path);
 

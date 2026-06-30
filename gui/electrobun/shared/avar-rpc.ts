@@ -84,6 +84,7 @@ export type AvarRpcSchema = {
       openPath: { params: string; response: string };
       showItemInFolder: { params: string; response: string };
       openExternal: { params: string; response: boolean };
+      setKeepInTrayOnClose: { params: boolean; response: void };
     };
     messages: Record<never, unknown>;
   };

@@ -73,7 +73,8 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "desktop/**/*"
     ],
     "mac": {
       "category": "public.app-category.utilities",

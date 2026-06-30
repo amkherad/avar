@@ -16,6 +16,7 @@ export interface HeaderProps {
 export function Header({ page, onNavigate, onOpenSettings }: HeaderProps) {
   const { t } = useTranslation();
   const isDashboard = page === "dashboard";
+  const iconSrc = `${import.meta.env.BASE_URL.replace(/\/?$/, "/")}icon.svg`;
 
   return (
     <header className="avar-header">
@@ -31,7 +32,7 @@ export function Header({ page, onNavigate, onOpenSettings }: HeaderProps) {
             <FontAwesomeIcon icon={faArrowLeft} />
           </Button>
         ) : null}
-        <img src="/icon.svg" alt="" className="avar-header__icon" />
+        <img src={iconSrc} alt="" className="avar-header__icon" />
         <h1 className="avar-header__title">
           {t("app.title")}
           <span className="avar-header__subtitle">{t("app.subtitle")}</span>

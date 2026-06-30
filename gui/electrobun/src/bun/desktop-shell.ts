@@ -8,7 +8,7 @@
 export const DAEMON_TARGET = process.env.AVAR_DAEMON_URL || "http://127.0.0.1:8000";
 const PROXY_HOST = "127.0.0.1";
 const PROXY_PORT = Number(process.env.AVAR_ELECTRON_PROXY_PORT || 18765);
-/** Matches gui/dev-server.cjs — Vite binds to localhost (IPv6 on Windows). */
+/** Matches gui/electron/ports.cjs — Vite binds to localhost (IPv6 on Windows). */
 const DEV_SERVER_FALLBACK = "http://localhost:56000";
 
 export const APP_TITLE = "Avar";

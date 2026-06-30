@@ -16,6 +16,7 @@ import {
   openBatchPopup,
 } from "./popup-manager";
 import { createTray, destroyTray } from "./tray-manager";
+import { shouldKeepInTrayOnClose } from "./close-behavior";
 import { loadAvarProtocol } from "./vendor-paths";
 
 const SHELL_ELECTROBUN = "electrobun";
@@ -99,10 +100,16 @@ async function createMainWindow(): Promise<BrowserWindow> {
   mainWindow = win;
   attachWebviewHandlers(win);
 
-  win.on("close", () => {
-    if (!appIsQuitting) {
-      mainWindow = null;
+  win.on("close", (event: { response?: { allow: boolean } }) => {
+    if (appIsQuitting) {
+      return;
     }
+    if (shouldKeepInTrayOnClose()) {
+      event.response = { allow: false };
+      win.hide();
+      return;
+    }
+    requestQuit();
   });
 
   if (channel === "dev") {

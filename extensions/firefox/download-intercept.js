@@ -46,21 +46,33 @@ function createDownloadIntercept(api, handlers) {
     return false;
   }
 
+  async function resolveInterceptTab(tabId) {
+    if (typeof tabId !== "number" || tabId < 0) {
+      return null;
+    }
+    try {
+      return await api.tabs.get(tabId);
+    } catch {
+      return null;
+    }
+  }
+
   async function resolveInterceptPageUrl(downloadItem) {
-    const tabId = downloadItem.tabId;
-    if (typeof tabId === "number" && tabId >= 0) {
-      try {
-        const tab = await api.tabs.get(tabId);
-        if (tab?.url && /^https?:\/\//i.test(tab.url)) {
-          return tab.url;
-        }
-      } catch {
-        // Tab may already be closed.
-      }
+    const tab = await resolveInterceptTab(downloadItem.tabId);
+    if (tab?.url && /^https?:\/\//i.test(tab.url)) {
+      return tab.url;
     }
 
     const fallback = downloadItem.referringPage || downloadItem.referrer || "";
     return fallback.trim() || undefined;
+  }
+
+  async function resolveInterceptPageTitle(downloadItem) {
+    const tab = await resolveInterceptTab(downloadItem.tabId);
+    if (tab?.title) {
+      return tab.title;
+    }
+    return downloadItem.title || "";
   }
 
   async function handleDownloadCreated(downloadItem) {
@@ -105,10 +117,18 @@ function createDownloadIntercept(api, handlers) {
     }
 
     const pageUrl = await resolveInterceptPageUrl(downloadItem);
-    const filename = downloadItem.filename || downloadItem.suggestedFilename || "";
+    const pageTitle = await resolveInterceptPageTitle(downloadItem);
+    const rawFilename = downloadItem.filename || downloadItem.suggestedFilename || "";
     const classified =
       typeof AvarMedia !== "undefined" ? AvarMedia.classifyMediaUrl(url) : null;
     const streamKind = classified?.kind || "direct";
+    const filename =
+      typeof AvarMedia !== "undefined"
+        ? AvarMedia.itemDisplayFilename(
+            { url, filename: rawFilename || undefined, kind: streamKind },
+            pageTitle,
+          )
+        : rawFilename;
     const defaultQueueId = stored.defaultQueueId || null;
 
     try {
@@ -118,7 +138,7 @@ function createDownloadIntercept(api, handlers) {
         filename,
         referer: pageUrl,
         pageUrl,
-        pageTitle: downloadItem.title || "",
+        pageTitle,
         defaultQueueId,
       });
     } catch (error) {

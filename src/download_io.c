@@ -27,13 +27,6 @@ void download_io_scope_end(void) {
     atomic_fetch_sub_explicit(&g_download_io_scope_count, 1U, memory_order_acq_rel);
 }
 
-bool download_io_config_write_allowed(void) {
-    if (atomic_load_explicit(&g_download_io_scope_count, memory_order_acquire) == 0U) {
-        return true;
-    }
-    return g_download_io_scope;
-}
-
 static char *item_id_from_state_path(const char *path) {
     if (path == NULL) {
         return NULL;

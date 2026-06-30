@@ -134,6 +134,7 @@ let tray = null;
 /** @type {import('electron').BrowserWindow | null} */
 let mainWindow = null;
 let appIsQuitting = false;
+let keepInTrayOnClose = true;
 
 const trayLabels = {
   show: "Show Avar",
@@ -389,6 +390,7 @@ function createWindow() {
     minHeight: 640,
     title: "Avar",
     icon: loadAppIcon(),
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -401,8 +403,16 @@ function createWindow() {
 
   win.on("close", (event) => {
     if (!appIsQuitting) {
-      event.preventDefault();
-      win.hide();
+      if (keepInTrayOnClose) {
+        event.preventDefault();
+        win.hide();
+      } else {
+        appIsQuitting = true;
+        if (tray) {
+          tray.destroy();
+          tray = null;
+        }
+      }
     }
   });
 
@@ -568,6 +578,10 @@ ipcMain.handle("extensionBridge:getUrl", () => {
   return ELECTRON_EXTENSION_BRIDGE_URL;
 });
 
+ipcMain.handle("desktop:setKeepInTrayOnClose", (_event, enabled) => {
+  keepInTrayOnClose = enabled !== false;
+});
+
 ipcMain.handle("tray:setLabels", (_event, labels) => {
   if (labels && typeof labels === "object") {
     Object.assign(trayLabels, labels);
@@ -605,6 +619,10 @@ ipcMain.handle("tray:setActiveDownloads", (_event, payload) => {
 
 if (gotTheLock) {
   app.whenReady().then(() => {
+    if (app.isPackaged) {
+      Menu.setApplicationMenu(null);
+    }
+
     registerAvarProtocol(app);
 
     startExtensionBridge();
