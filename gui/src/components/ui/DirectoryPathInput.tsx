@@ -88,16 +88,15 @@ export function DirectoryPathInput({
           {showBrowse ? (
             <Button
               type="button"
-              size="md"
+              size="sm"
               variant="secondary"
-              className="avar-directory-path-input__browse"
+              className="avar-directory-path-input__browse avar-btn--icon-only"
               disabled={disabled}
               onClick={browseHandler}
               title={t("directoryPath.browse")}
               aria-label={t("directoryPath.browse")}
             >
               <FontAwesomeIcon icon={faFolderOpen} />
-              {t("directoryPath.browse")}
             </Button>
           ) : null}
         </div>

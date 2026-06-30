@@ -44,6 +44,59 @@ SegmentStrategy segment_strategy_from_string(const char *value) {
     return SegmentStrategyBalanced;
 }
 
+bool segment_ranges_overlap(const uint64_t a_start, const uint64_t a_end, const uint64_t b_start,
+                            const uint64_t b_end) {
+    if (a_start > a_end || b_start > b_end) {
+        return false;
+    }
+
+    return a_start <= b_end && b_start <= a_end;
+}
+
+static bool range_overlaps_in_flight(const ByteRange *in_flight, const size_t in_flight_count,
+                                     const uint64_t start, const uint64_t end) {
+    if (in_flight == NULL) {
+        return false;
+    }
+
+    for (size_t i = 0U; i < in_flight_count; i++) {
+        if (segment_ranges_overlap(start, end, in_flight[i].start, in_flight[i].end)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+uint64_t segment_next_reserve_end(const DownloadState *state, const ByteRange *in_flight,
+                                  const size_t in_flight_count, const uint64_t current_end) {
+    if (state == NULL || state->total_size == 0U) {
+        return current_end;
+    }
+
+    const size_t chunk_size = state->chunk_size > 0U ? state->chunk_size : DL_CHUNK_SIZE;
+    const uint64_t total_end = state->total_size - 1U;
+    if (current_end >= total_end) {
+        return current_end;
+    }
+
+    const uint64_t next_start = current_end + 1U;
+    uint64_t next_end = next_start + (uint64_t)chunk_size - 1U;
+    if (next_end > total_end) {
+        next_end = total_end;
+    }
+
+    if (download_state_is_range_done(state, next_start, next_end)) {
+        return current_end;
+    }
+
+    if (range_overlaps_in_flight(in_flight, in_flight_count, next_start, next_end)) {
+        return current_end;
+    }
+
+    return next_end;
+}
+
 bool segment_should_enable(const DownloadSegmentConfig *cfg, const uint64_t total_size,
                            const bool ranges_supported) {
     if (cfg == NULL || !cfg->enabled || !ranges_supported) {

@@ -383,17 +383,26 @@ typedef struct ChunkSlot {
     struct mg_connection *conn;
     uint64_t range_start;
     uint64_t range_end;
+    uint64_t reserved_end;
     uint64_t chunk_write_offset;
     uint64_t chunk_received;
     uint64_t chunk_expected;
+    uint64_t response_remaining;
     uint64_t persisted_received;
     uint64_t last_activity_ms;
     bool headers_received;
     bool streaming;
     bool request_sent;
     bool keep_alive;
+    bool continuous;
+    bool draining;
     bool in_use;
 } ChunkSlot;
+
+typedef struct RangeInFlightCtx {
+    const DownloadJob *job;
+    const ChunkSlot *exclude;
+} RangeInFlightCtx;
 
 typedef struct DlConnCtx {
     DownloadJob *job;
@@ -538,12 +547,21 @@ static bool next_pending_segment(const DownloadJob *job, uint64_t *start_out, ui
 static uint64_t existing_file_size(const char *path);
 
 static void send_request(DownloadJob *job, struct mg_connection *c, uint64_t range_start, uint64_t range_end,
-                         bool keep_alive);
+                         bool keep_alive, bool continuous);
 
 static bool slot_pick_next_range(DownloadJob *job, ChunkSlot *slot, ByteRange *out);
 
 static void slot_reset_for_request(ChunkSlot *slot, struct mg_connection *c, uint64_t range_start,
                                    uint64_t range_end);
+
+static void slot_collect_in_flight(const DownloadJob *job, const ChunkSlot *exclude,
+                                   ByteRange *out, size_t *count);
+
+static bool slot_try_extend_reservation(DownloadJob *job, ChunkSlot *slot);
+
+static void slot_begin_draining(ChunkSlot *slot);
+
+static void slot_finish_continuous(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c);
 
 static void slot_finish_segment(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c);
 
@@ -1548,8 +1566,16 @@ static void touch_slot_activity(ChunkSlot *slot) {
 }
 
 /* Bytes still expected for this slot's range, or UINT64_MAX when the size is
- * not yet known (no Content-Length parsed). */
+ * not yet known (no Content-Length parsed). Continuous slots use reserved_end. */
 static uint64_t slot_bytes_remaining(const ChunkSlot *slot) {
+    if (slot->continuous) {
+        const uint64_t pos = slot->range_start + slot->chunk_received;
+        if (pos > slot->reserved_end) {
+            return 0U;
+        }
+        return slot->reserved_end - pos + 1U;
+    }
+
     if (slot->chunk_expected == 0U) {
         return UINT64_MAX;
     }
@@ -1558,10 +1584,44 @@ static uint64_t slot_bytes_remaining(const ChunkSlot *slot) {
                    : slot->chunk_expected - slot->chunk_received;
 }
 
+static bool slot_prepare_write(DownloadJob *job, ChunkSlot *slot, size_t *len) {
+    if (job == NULL || slot == NULL || len == NULL || *len == 0U) {
+        return false;
+    }
+
+    if (!slot->continuous) {
+        return true;
+    }
+
+    const uint64_t pos = slot->range_start + slot->chunk_received;
+    if (pos > slot->reserved_end) {
+        *len = 0U;
+        return false;
+    }
+
+    uint64_t avail = slot->reserved_end - pos + 1U;
+    while ((uint64_t)*len > avail) {
+        if (!slot_try_extend_reservation(job, slot)) {
+            break;
+        }
+        avail = slot->reserved_end - pos + 1U;
+    }
+
+    if ((uint64_t)*len > avail) {
+        *len = (size_t)avail;
+    }
+
+    return *len > 0U;
+}
+
 /* Writes received body bytes for a segment slot, clamping to the slot's range so
  * a misbehaving server cannot overflow into a neighbouring segment. Any bytes
  * past the range boundary are intentionally dropped. Returns false on I/O error. */
 static bool slot_write_body(DownloadJob *job, ChunkSlot *slot, const void *data, size_t len) {
+    if (!slot_prepare_write(job, slot, &len)) {
+        return len == 0U;
+    }
+
     const uint64_t remaining = slot_bytes_remaining(slot);
     if (remaining != UINT64_MAX && (uint64_t)len > remaining) {
         len = (size_t)remaining;
@@ -1575,9 +1635,23 @@ static bool slot_write_body(DownloadJob *job, ChunkSlot *slot, const void *data,
     }
 
     slot->chunk_received += len;
+    if (slot->response_remaining >= len) {
+        slot->response_remaining -= len;
+    } else {
+        slot->response_remaining = 0U;
+    }
     job->bytes_since_persist += len;
     touch_slot_activity(slot);
     return true;
+}
+
+static void slot_begin_draining(ChunkSlot *slot) {
+    if (slot == NULL) {
+        return;
+    }
+
+    slot->draining = true;
+    slot->streaming = false;
 }
 
 static ChunkSlot *chunk_slot_acquire(DownloadJob *job, const uint64_t range_start,
@@ -1593,6 +1667,8 @@ static ChunkSlot *chunk_slot_acquire(DownloadJob *job, const uint64_t range_star
             slot->in_use = true;
             slot->range_start = range_start;
             slot->range_end = range_end;
+            slot->reserved_end = range_end;
+            slot->continuous = job->segment_mode;
             slot->keep_alive = job->segment_mode;
             slot->last_activity_ms = mg_millis();
             return slot;
@@ -1625,18 +1701,66 @@ static size_t count_active_slots(const DownloadJob *job) {
 }
 
 static bool range_in_flight_predicate(const void *ctx, const uint64_t start, const uint64_t end) {
-    const DownloadJob *job = (const DownloadJob *)ctx;
+    const RangeInFlightCtx *rctx = (const RangeInFlightCtx *)ctx;
+    const DownloadJob *job = rctx != NULL ? rctx->job : NULL;
     if (job == NULL || job->slots == NULL) {
         return true;
     }
 
     for (size_t i = 0; i < job->slot_capacity; i++) {
-        if (job->slots[i].in_use && job->slots[i].range_start == start
-            && job->slots[i].range_end == end) {
+        const ChunkSlot *slot = &job->slots[i];
+        if (!slot->in_use || slot == rctx->exclude) {
+            continue;
+        }
+
+        if (segment_ranges_overlap(start, end, slot->range_start, slot->reserved_end)) {
             return false;
         }
     }
 
+    return true;
+}
+
+static void slot_collect_in_flight(const DownloadJob *job, const ChunkSlot *exclude,
+                                   ByteRange *out, size_t *count) {
+    if (job == NULL || out == NULL || count == NULL) {
+        return;
+    }
+
+    *count = 0U;
+    if (job->slots == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < job->slot_capacity; i++) {
+        const ChunkSlot *slot = &job->slots[i];
+        if (!slot->in_use || slot == exclude) {
+            continue;
+        }
+
+        out[*count].start = slot->range_start;
+        out[*count].end = slot->reserved_end;
+        (*count)++;
+    }
+}
+
+static bool slot_try_extend_reservation(DownloadJob *job, ChunkSlot *slot) {
+    if (job == NULL || slot == NULL || job->state == NULL || !slot->continuous) {
+        return false;
+    }
+
+    ByteRange in_flight[32];
+    size_t in_flight_count = 0U;
+    slot_collect_in_flight(job, slot, in_flight, &in_flight_count);
+
+    const uint64_t extended =
+            segment_next_reserve_end(job->state, in_flight, in_flight_count, slot->reserved_end);
+    if (extended <= slot->reserved_end) {
+        return false;
+    }
+
+    slot->reserved_end = extended;
+    slot->range_end = extended;
     return true;
 }
 
@@ -1769,7 +1893,7 @@ static uint64_t existing_file_size(const char *path) {
 }
 
 static void send_request(DownloadJob *job, struct mg_connection *c, const uint64_t range_start,
-                         const uint64_t range_end, const bool keep_alive) {
+                         const uint64_t range_end, const bool keep_alive, const bool continuous) {
     const struct mg_str host = mg_url_host(job->current_url);
     const char *uri = mg_url_uri(job->current_url);
     const DlConnCtx *ctx = (const DlConnCtx *)c->fn_data;
@@ -1777,7 +1901,8 @@ static void send_request(DownloadJob *job, struct mg_connection *c, const uint64
         uri = job->current_url;
     }
 
-    LOG_DEBUG("Sending http request to %s keep_alive=%d", job->current_url, keep_alive);
+    LOG_DEBUG("Sending http request to %s keep_alive=%d continuous=%d", job->current_url,
+              keep_alive, continuous);
 
     mg_printf(c,
               "GET %s HTTP/1.1\r\n"
@@ -1795,8 +1920,12 @@ static void send_request(DownloadJob *job, struct mg_connection *c, const uint64
     }
 
     if (job->step == DL_STEP_CHUNK) {
-        mg_printf(c, "Range: bytes=%llu-%llu\r\n", (unsigned long long) range_start,
-                  (unsigned long long) range_end);
+        if (continuous) {
+            mg_printf(c, "Range: bytes=%llu-\r\n", (unsigned long long) range_start);
+        } else {
+            mg_printf(c, "Range: bytes=%llu-%llu\r\n", (unsigned long long) range_start,
+                      (unsigned long long) range_end);
+        }
     } else if (job->step == DL_STEP_STREAM && range_start > 0) {
         mg_printf(c, "Range: bytes=%llu-\r\n", (unsigned long long) range_start);
     }
@@ -1874,15 +2003,16 @@ static void send_request_for_slot(DownloadJob *job, struct mg_connection *c, Chu
     }
 
     const bool keep_alive = chunk_request_keep_alive(job, slot);
+    const bool continuous = slot != NULL && slot->continuous;
 
     if (slot != NULL && job->step == DL_STEP_CHUNK) {
-        send_request(job, c, slot->range_start, slot->range_end, keep_alive);
+        send_request(job, c, slot->range_start, slot->range_end, keep_alive, continuous);
     } else if (job->step == DL_STEP_CHUNK) {
-        send_request(job, c, job->active_range_start, job->active_range_end, keep_alive);
+        send_request(job, c, job->active_range_start, job->active_range_end, keep_alive, false);
     } else if (job->step == DL_STEP_STREAM) {
-        send_request(job, c, job->stream_received, 0, false);
+        send_request(job, c, job->stream_received, 0, false, false);
     } else {
-        send_request(job, c, 0, 0, false);
+        send_request(job, c, 0, 0, false, false);
     }
 }
 
@@ -2074,9 +2204,10 @@ static bool slot_pick_next_range(DownloadJob *job, ChunkSlot *slot, ByteRange *o
         return false;
     }
 
+    RangeInFlightCtx ctx = {.job = job, .exclude = slot};
     ByteRange ranges[1];
-    const size_t selected =
-            segment_select_chunks(&job->seg_cfg, job->state, 1U, range_in_flight_predicate, job, ranges);
+    const size_t selected = segment_select_chunks(&job->seg_cfg, job->state, 1U,
+                                                  range_in_flight_predicate, &ctx, ranges);
     if (selected == 0U) {
         return false;
     }
@@ -2093,12 +2224,15 @@ static void slot_reset_for_request(ChunkSlot *slot, struct mg_connection *c, con
 
     slot->range_start = range_start;
     slot->range_end = range_end;
+    slot->reserved_end = range_end;
     slot->chunk_write_offset = range_start;
     slot->chunk_received = 0U;
     slot->chunk_expected = 0U;
+    slot->response_remaining = 0U;
     slot->persisted_received = 0U;
     slot->headers_received = false;
     slot->streaming = false;
+    slot->draining = false;
     slot->request_sent = false;
     slot->last_activity_ms = mg_millis();
     c->data[0] = '\0';
@@ -2109,13 +2243,21 @@ static bool slot_mark_segment_done(DownloadJob *job, ChunkSlot *slot, struct mg_
         return false;
     }
 
-    if (download_state_is_range_done(job->state, slot->range_start, slot->range_end)) {
+    if (slot->chunk_received == 0U) {
+        return false;
+    }
+
+    const uint64_t done_start = slot->range_start;
+    const uint64_t done_end = slot->range_start + slot->chunk_received - 1U;
+
+    if (download_state_is_range_done(job->state, done_start, done_end)) {
         return true;
     }
 
     flush_recv_body(job, slot, c);
 
-    if (slot->chunk_expected > 0U && slot->chunk_received < slot->chunk_expected) {
+    if (!slot->continuous && slot->chunk_expected > 0U
+        && slot->chunk_received < slot->chunk_expected) {
         LOG_DEBUG("Incomplete segment %llu-%llu (%llu / %llu bytes), will retry",
                   (unsigned long long)slot->range_start, (unsigned long long)slot->range_end,
                   (unsigned long long)slot->chunk_received,
@@ -2128,7 +2270,7 @@ static bool slot_mark_segment_done(DownloadJob *job, ChunkSlot *slot, struct mg_
     if (job->mutex != NULL) {
         avar_mutex_lock(job->mutex);
     }
-    (void)download_state_mark_range_done(job->state, slot->range_start, slot->range_end);
+    (void)download_state_mark_range_done(job->state, done_start, done_end);
     slot->persisted_received = slot->chunk_received;
     job->state->bytes_downloaded = download_state_bytes_done(job->state);
     (void)download_state_save(job->state, job->state_path);
@@ -2141,8 +2283,63 @@ static bool slot_mark_segment_done(DownloadJob *job, ChunkSlot *slot, struct mg_
     return true;
 }
 
+static void slot_reuse_for_next_range(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c,
+                                      const ByteRange next) {
+    LOG_DEBUG("Reusing connection for segment %llu-%llu, jobId: %s",
+              (unsigned long long)next.start, (unsigned long long)next.end, job->item_id);
+    slot_reset_for_request(slot, c, next.start, next.end);
+    slot->request_sent = true;
+    c->data[0] = 1;
+    send_request(job, c, next.start, next.end, true, slot->continuous);
+    touch_slot_activity(slot);
+}
+
+static void slot_finish_continuous(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c) {
+    if (job == NULL || slot == NULL || c == NULL) {
+        return;
+    }
+
+    if (!slot_mark_segment_done(job, slot, c)) {
+        chunk_slot_release(job, slot);
+        note_segment_failure(job);
+        request_close(job, c, false);
+        return;
+    }
+
+    slot->chunk_received = 0U;
+    slot->chunk_expected = 0U;
+    slot->draining = false;
+    slot->response_remaining = 0U;
+    print_progress(job);
+    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+
+    if (download_state_all_chunks_done(job->state)) {
+        chunk_slot_release(job, slot);
+        request_close(job, c, false);
+        (void)finalize_download(job);
+        return;
+    }
+
+    if (job->segment_mode && slot->keep_alive) {
+        ByteRange next = {0};
+        if (slot_pick_next_range(job, slot, &next)) {
+            slot_reuse_for_next_range(job, slot, c, next);
+            return;
+        }
+    }
+
+    chunk_slot_release(job, slot);
+    request_close(job, c, false);
+    job->schedule_deferred = true;
+}
+
 static void slot_finish_segment(DownloadJob *job, ChunkSlot *slot, struct mg_connection *c) {
     if (job == NULL || slot == NULL || c == NULL) {
+        return;
+    }
+
+    if (slot->continuous) {
+        slot_finish_continuous(job, slot, c);
         return;
     }
 
@@ -2169,13 +2366,7 @@ static void slot_finish_segment(DownloadJob *job, ChunkSlot *slot, struct mg_con
     if (job->segment_mode && slot->keep_alive) {
         ByteRange next = {0};
         if (slot_pick_next_range(job, slot, &next)) {
-            LOG_DEBUG("Reusing connection for segment %llu-%llu, jobId: %s",
-                      (unsigned long long)next.start, (unsigned long long)next.end, job->item_id);
-            slot_reset_for_request(slot, c, next.start, next.end);
-            slot->request_sent = true;
-            c->data[0] = 1;
-            send_request(job, c, next.start, next.end, true);
-            touch_slot_activity(slot);
+            slot_reuse_for_next_range(job, slot, c, next);
             return;
         }
     }
@@ -2190,7 +2381,12 @@ static bool complete_chunk_slot(DownloadJob *job, ChunkSlot *slot, struct mg_con
         return false;
     }
 
-    if (download_state_is_range_done(job->state, slot->range_start, slot->range_end)) {
+    if (slot->chunk_received == 0U) {
+        return false;
+    }
+
+    const uint64_t done_end = slot->range_start + slot->chunk_received - 1U;
+    if (download_state_is_range_done(job->state, slot->range_start, done_end)) {
         chunk_slot_release(job, slot);
         return true;
     }
@@ -2629,9 +2825,10 @@ static void schedule_pending_chunks(DownloadJob *job) {
     ByteRange ranges[32];
     const size_t max_select = capacity < (sizeof ranges / sizeof ranges[0]) ? capacity
                                                                             : (sizeof ranges / sizeof ranges[0]);
+    const RangeInFlightCtx ctx = {.job = job, .exclude = NULL};
     const size_t selected =
             segment_select_chunks(&job->seg_cfg, job->state, max_select, range_in_flight_predicate,
-                                  job, ranges);
+                                  &ctx, ranges);
     if (selected == 0) {
         return;
     }
@@ -2836,7 +3033,11 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
         const uint64_t len = strtoull(buffer, NULL, 10);
 
         if (slot != NULL && job->step == DL_STEP_CHUNK) {
-            slot->chunk_expected = len;
+            if (slot->continuous) {
+                slot->response_remaining = len;
+            } else {
+                slot->chunk_expected = len;
+            }
         } else if (job->step == DL_STEP_CHUNK) {
             job->chunk_expected = len;
         } else if (job->step == DL_STEP_STREAM && job->stream_expected == 0) {
@@ -2856,7 +3057,7 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
         return;
     }
 
-    if (slot != NULL && job->step == DL_STEP_CHUNK && slot->chunk_expected == 0) {
+    if (slot != NULL && job->step == DL_STEP_CHUNK && !slot->continuous && slot->chunk_expected == 0) {
         slot->chunk_expected = slot->range_end - slot->range_start + 1U;
     } else if (slot == NULL && job->step == DL_STEP_CHUNK && job->chunk_expected == 0) {
         job->chunk_expected = job->active_range_end - job->active_range_start + 1U;
@@ -3006,7 +3207,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
                 job->chunk_expected = 0U;
                 job->request_sent = false;
                 c->data[0] = '\0';
-                send_request(job, c, start, end, true);
+                send_request(job, c, start, end, true, false);
                 job->request_sent = true;
                 c->data[0] = 1;
             } else {
@@ -3072,11 +3273,37 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             }
         }
 
-        if (streaming && c->recv.len > 0) {
+        if ((streaming || (slot != NULL && slot->draining)) && c->recv.len > 0) {
+            if (slot != NULL && slot->draining) {
+                size_t discard = c->recv.len;
+                if (slot->response_remaining > 0U && discard > slot->response_remaining) {
+                    discard = (size_t)slot->response_remaining;
+                }
+                if (slot->response_remaining >= discard) {
+                    slot->response_remaining -= discard;
+                } else {
+                    slot->response_remaining = 0U;
+                }
+                c->recv.len = 0;
+
+                if (slot->response_remaining == 0U) {
+                    slot_finish_continuous(job, slot, c);
+                }
+                return;
+            }
+
             if (slot != NULL) {
                 if (!slot_write_body(job, slot, c->recv.buf, c->recv.len)) {
                     request_close(job, c, false);
                     return;
+                }
+
+                if (slot->continuous && slot->streaming && !slot->draining) {
+                    const uint64_t done_end = slot->range_start + slot->chunk_received;
+                    if (done_end == slot->reserved_end + 1U
+                        && !slot_try_extend_reservation(job, slot)) {
+                        slot_begin_draining(slot);
+                    }
                 }
             } else if (job->step == DL_STEP_CHUNK) {
                 const size_t len = c->recv.len;
@@ -3096,9 +3323,19 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             }
             c->recv.len = 0;
 
-            if (slot != NULL && slot->streaming && slot->chunk_expected > 0U
+            if (slot != NULL && slot->draining) {
+                return;
+            }
+
+            if (slot != NULL && slot->streaming && !slot->continuous && slot->chunk_expected > 0U
                 && slot->chunk_received >= slot->chunk_expected) {
                 slot_finish_segment(job, slot, c);
+                return;
+            }
+
+            if (slot != NULL && slot->continuous && !slot->draining && slot->response_remaining == 0U
+                && slot->chunk_received > 0U) {
+                slot_finish_continuous(job, slot, c);
                 return;
             }
 

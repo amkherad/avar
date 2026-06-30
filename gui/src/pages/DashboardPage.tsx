@@ -421,8 +421,6 @@ function DownloadPanel({
                   onSelectAll={handleSelectAll}
                   onOpen={(id) => handleOpen(id)}
                   onContextMenu={handleContextMenu}
-                  viewMode={downloadViewMode}
-                  onViewModeChange={setDownloadViewMode}
                   onToggleCheckboxes={() => {
                     appLogger.gui.debug("Download checkboxes toggled", !showCheckboxes);
                     updateConfig({ showDownloadCheckboxes: !showCheckboxes });

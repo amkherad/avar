@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faStop, faTableCells, faTableList } from "@fortawesome/free-solid-svg-icons";
@@ -51,90 +51,101 @@ export function DownloadToolbar({
   useShortcutAction("download.search", () => searchRef.current?.focus());
 
   const showStopAll = stoppableIds.length > 0;
+  const showSelection = selectedDownloads.length > 0;
+
+  const startGroups: ReactNode[] = [];
+
+  if (showStopAll) {
+    startGroups.push(
+      <Button
+        key="stop-all"
+        size="sm"
+        variant="secondary"
+        loading={busy}
+        title={t("download.stopAll")}
+        aria-label={t("download.stopAll")}
+        onClick={() => void stop(stoppableIds)}
+      >
+        <FontAwesomeIcon icon={faStop} />
+        {t("download.stopAll")}
+      </Button>,
+    );
+  }
+
+  if (showSelection) {
+    startGroups.push(
+      <>
+        <span className="avar-download-toolbar__selection">
+          {t("download.selectedCount", { count: selectedDownloads.length })}
+        </span>
+        <DownloadControls downloads={selectedDownloads} />
+      </>,
+    );
+  }
+
+  startGroups.push(
+    <div key="view-mode" role="group" aria-label={t("download.viewMode")}>
+      <Button
+        size="sm"
+        variant={viewMode === "grid" ? "secondary" : "ghost"}
+        aria-pressed={viewMode === "grid"}
+        title={t("download.viewGrid")}
+        onClick={() => onViewModeChange("grid")}
+      >
+        <FontAwesomeIcon icon={faTableCells} />
+      </Button>
+      <Button
+        size="sm"
+        variant={viewMode === "compact" ? "secondary" : "ghost"}
+        aria-pressed={viewMode === "compact"}
+        title={t("download.viewCompact")}
+        onClick={() => onViewModeChange("compact")}
+      >
+        <FontAwesomeIcon icon={faTableList} />
+      </Button>
+    </div>,
+  );
 
   return (
     <div className="avar-download-toolbar">
       <div className="avar-download-toolbar__start">
-        {showStopAll ? (
-          <div className="avar-download-toolbar__group">
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={busy}
-              title={t("download.stopAll")}
-              aria-label={t("download.stopAll")}
-              onClick={() => void stop(stoppableIds)}
-            >
-              <FontAwesomeIcon icon={faStop} />
-              {t("download.stopAll")}
-            </Button>
-          </div>
-        ) : null}
-
-        {selectedDownloads.length > 0 ? (
+        {startGroups.map((group, index) => (
           <div
-            className={`avar-download-toolbar__group${showStopAll ? "" : " avar-download-toolbar__group--leading"}`}
+            key={index}
+            className={`avar-download-toolbar__group${index === 0 ? " avar-download-toolbar__group--leading" : ""}`}
           >
-            <span className="avar-download-toolbar__selection">
-              {t("download.selectedCount", { count: selectedDownloads.length })}
-            </span>
-            <DownloadControls downloads={selectedDownloads} />
+            {group}
           </div>
-        ) : null}
-
-        {viewMode === "grid" ? (
-          <div
-            className="avar-download-toolbar__group"
-            role="group"
-            aria-label={t("download.viewMode")}
-          >
-            <Button
-              size="sm"
-              variant={viewMode === "grid" ? "secondary" : "ghost"}
-              aria-pressed={viewMode === "grid"}
-              title={t("download.viewGrid")}
-              onClick={() => onViewModeChange("grid")}
-            >
-              <FontAwesomeIcon icon={faTableCells} />
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === "compact" ? "secondary" : "ghost"}
-              aria-pressed={viewMode === "compact"}
-              title={t("download.viewCompact")}
-              onClick={() => onViewModeChange("compact")}
-            >
-              <FontAwesomeIcon icon={faTableList} />
-            </Button>
-          </div>
-        ) : null}
+        ))}
       </div>
 
-      <Input
-        ref={searchRef}
-        className="avar-download-toolbar__search avar-download-toolbar__search--compact"
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
-        placeholder={t("download.searchPlaceholder")}
-        aria-label={t("download.searchPlaceholder")}
-      />
+      <div className="avar-download-toolbar__end">
+        {showStatusFilter ? (
+          <Select
+            compact
+            className="avar-download-toolbar__status-filter"
+            label={t("download.statusFilter")}
+            value={statusFilter}
+            onChange={(e) => onStatusFilterChange(e.target.value as DownloadStatusFilter)}
+          >
+            <option value="all">{t("download.statusFilterAll")}</option>
+            {availableStatuses.map((status) => (
+              <option key={status} value={status}>
+                {formatDownloadStatus(status, t)}
+              </option>
+            ))}
+          </Select>
+        ) : null}
 
-      {showStatusFilter ? (
-        <Select
-          compact
-          className="avar-download-toolbar__status-filter"
-          label={t("download.statusFilter")}
-          value={statusFilter}
-          onChange={(e) => onStatusFilterChange(e.target.value as DownloadStatusFilter)}
-        >
-          <option value="all">{t("download.statusFilterAll")}</option>
-          {availableStatuses.map((status) => (
-            <option key={status} value={status}>
-              {formatDownloadStatus(status, t)}
-            </option>
-          ))}
-        </Select>
-      ) : null}
+        <Input
+          ref={searchRef}
+          className="avar-download-toolbar__search avar-download-toolbar__search--compact"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder={t("download.searchPlaceholder")}
+          aria-label={t("download.searchPlaceholder")}
+        />
+      </div>
     </div>
   );
 }

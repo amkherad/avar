@@ -2,9 +2,7 @@
 #define AVAR_UTILS_H
 
 #include <stdint.h>
-#include <wchar.h>
 
-#define string      const wchar_t  *
 #define stringa     const char  *
 
 bool is_valid_url(stringa url, stringa validSchemes[]);

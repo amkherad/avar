@@ -216,25 +216,21 @@ export function SessionSelector() {
         aria-haspopup="listbox"
         onClick={() => setMenuOpen((open) => !open)}
       >
-        <div className="avar-session-selector__status-column">
-          <span
-            className={`avar-connection__dot ${connection === "connected" ? "avar-connection__dot--ok" : ""}`}
-          />
-          <button
-            type="button"
-            className="avar-session-selector__refresh"
-            aria-label={t("session.refresh")}
-            title={t("session.refresh")}
-            disabled={refreshing}
-            onClick={(event) => void handleRefreshSession(event)}
-          >
-            <FontAwesomeIcon icon={faArrowsRotate} spin={refreshing} />
-          </button>
-        </div>
-        <span className="avar-session-selector__info">
-          <span className="avar-session-selector__label">{activeSession.label}</span>
-          <span className="avar-session-selector__status">{connectionLabel}</span>
-        </span>
+        <span
+          className={`avar-connection__dot avar-session-selector__dot ${connection === "connected" ? "avar-connection__dot--ok" : ""}`}
+        />
+        <span className="avar-session-selector__label">{activeSession.label}</span>
+        <button
+          type="button"
+          className="avar-session-selector__refresh"
+          aria-label={t("session.refresh")}
+          title={t("session.refresh")}
+          disabled={refreshing}
+          onClick={(event) => void handleRefreshSession(event)}
+        >
+          <FontAwesomeIcon icon={faArrowsRotate} spin={refreshing} />
+        </button>
+        <span className="avar-session-selector__status">{connectionLabel}</span>
         <span className={`avar-session-selector__chevron ${menuOpen ? "avar-session-selector__chevron--open" : ""}`}>
           <FontAwesomeIcon icon={faChevronDown} />
         </span>

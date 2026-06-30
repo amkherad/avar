@@ -210,6 +210,51 @@ AVAR_TEST(segment_select_respects_max_count) {
     download_state_free(state);
 }
 
+AVAR_TEST(segment_ranges_overlap_detects_shared_bytes) {
+    AVAR_ASSERT(segment_ranges_overlap(0U, 100U, 50U, 150U));
+    AVAR_ASSERT(segment_ranges_overlap(50U, 150U, 0U, 100U));
+    AVAR_ASSERT(!segment_ranges_overlap(0U, 99U, 100U, 199U));
+    AVAR_ASSERT(segment_ranges_overlap(100U, 100U, 100U, 100U));
+}
+
+AVAR_TEST(segment_next_reserve_end_extends_when_clear) {
+    DownloadState *state = download_state_create("https://example.com/a", "a.bin", "/t/a", "/d/a",
+                                                 512U * 1024U, 64U * 1024U);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    const uint64_t extended =
+            segment_next_reserve_end(state, NULL, 0U, 64U * 1024U - 1U);
+    AVAR_ASSERT_EQ(extended, 128U * 1024U - 1U);
+
+    download_state_free(state);
+}
+
+AVAR_TEST(segment_next_reserve_end_blocks_on_in_flight) {
+    DownloadState *state = download_state_create("https://example.com/a", "a.bin", "/t/a", "/d/a",
+                                                 512U * 1024U, 64U * 1024U);
+    AVAR_ASSERT_NOT_NULL(state);
+
+    const ByteRange in_flight[] = {{.start = 128U * 1024U, .end = 192U * 1024U - 1U}};
+    const uint64_t extended =
+            segment_next_reserve_end(state, in_flight, 1U, 128U * 1024U - 1U);
+    AVAR_ASSERT_EQ(extended, 128U * 1024U - 1U);
+
+    download_state_free(state);
+}
+
+AVAR_TEST(segment_next_reserve_end_blocks_on_done_range) {
+    DownloadState *state = download_state_create("https://example.com/a", "a.bin", "/t/a", "/d/a",
+                                                 512U * 1024U, 64U * 1024U);
+    AVAR_ASSERT_NOT_NULL(state);
+    AVAR_ASSERT_EQ(download_state_mark_range_done(state, 64U * 1024U, 128U * 1024U - 1U), 0);
+
+    const uint64_t extended =
+            segment_next_reserve_end(state, NULL, 0U, 64U * 1024U - 1U);
+    AVAR_ASSERT_EQ(extended, 64U * 1024U - 1U);
+
+    download_state_free(state);
+}
+
 AVAR_TEST_MAIN(
         run_segment_select_left_heavy_orders_from_start();
         run_segment_select_balanced_spreads_across_file();
@@ -221,4 +266,8 @@ AVAR_TEST_MAIN(
         run_segment_select_balanced_skips_in_flight_chunks();
         run_segment_select_skips_completed_segments();
         run_segment_select_balanced_concurrency_exceeds_segments();
-        run_segment_select_respects_max_count();)
+        run_segment_select_respects_max_count();
+        run_segment_ranges_overlap_detects_shared_bytes();
+        run_segment_next_reserve_end_extends_when_clear();
+        run_segment_next_reserve_end_blocks_on_in_flight();
+        run_segment_next_reserve_end_blocks_on_done_range();)

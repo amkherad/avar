@@ -1,12 +1,11 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { faTableCells, faTableList } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Select } from "@/components/ui/Select";
 import { TruncateWithTooltip } from "@/components/ui/TruncateWithTooltip";
 import type { DownloadInfo } from "@/api/types";
-import { useLayoutStore, type DownloadViewMode } from "@/stores/layoutStore";
+import { useLayoutStore } from "@/stores/layoutStore";
 import { progressPercent } from "./format";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import { useUnitFormat } from "@/hooks/useUnitFormat";
@@ -35,8 +34,6 @@ export interface DownloadTableProps {
   onSelectAll: (checked: boolean) => void;
   onOpen: (id: string) => void;
   onContextMenu?: (id: string, event: React.MouseEvent) => void;
-  viewMode: DownloadViewMode;
-  onViewModeChange: (mode: DownloadViewMode) => void;
   onToggleCheckboxes: () => void;
 }
 
@@ -77,8 +74,6 @@ export function DownloadTable({
   onSelectAll,
   onOpen,
   onContextMenu,
-  viewMode,
-  onViewModeChange,
   onToggleCheckboxes,
 }: DownloadTableProps) {
   const { t } = useTranslation();
@@ -199,23 +194,6 @@ export function DownloadTable({
       variant="flex"
       interactive
       chrome={{
-        viewModeLabel: t("download.viewMode"),
-        viewButtons: [
-          {
-            id: "grid",
-            label: t("download.viewGrid"),
-            icon: faTableCells,
-            active: viewMode === "grid",
-            onClick: () => onViewModeChange("grid"),
-          },
-          {
-            id: "compact",
-            label: t("download.viewCompact"),
-            icon: faTableList,
-            active: viewMode === "compact",
-            onClick: () => onViewModeChange("compact"),
-          },
-        ],
         showCheckboxes,
         onToggleCheckboxes,
         toggleCheckboxesLabel: t("download.toggleCheckboxes"),
