@@ -5,7 +5,7 @@
  * via relative paths from the bundle output directory.
  */
 
-const DAEMON_TARGET = process.env.AVAR_DAEMON_URL || "http://127.0.0.1:8000";
+export const DAEMON_TARGET = process.env.AVAR_DAEMON_URL || "http://127.0.0.1:8000";
 const PROXY_HOST = "127.0.0.1";
 const PROXY_PORT = Number(process.env.AVAR_ELECTRON_PROXY_PORT || 18765);
 /** Matches gui/dev-server.cjs — Vite binds to localhost (IPv6 on Windows). */
@@ -61,6 +61,10 @@ export function stopDaemonProxy(): void {
   }
   proxyServer.stop();
   proxyServer = null;
+}
+
+export function getProxyBaseUrl(): string {
+  return `http://${PROXY_HOST}:${PROXY_PORT}`;
 }
 
 export async function waitForUrl(url: string, timeoutMs = 60_000): Promise<void> {

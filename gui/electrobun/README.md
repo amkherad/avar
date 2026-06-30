@@ -1,8 +1,6 @@
-# Electrobun desktop shell (experiment)
+# Electrobun desktop shell
 
-Minimal desktop wrapper using [Electrobun](https://electrobun.dev/) (Bun main process + native system webview). Goal: explore a small cross-platform desktop bundle as an alternative to Electron.
-
-This shell runs the **same** Avar GUI SPA as Electron, but without the Electron preload bridge (`window.avar`). Behavior matches the **web** build: use session settings and enable **Use dev proxy** during development.
+Desktop wrapper using [Electrobun](https://electrobun.dev/) (Bun main process + native system webview). Runs the **same** Avar GUI SPA as Electron with full `window.avar` bridge parity.
 
 ## Prerequisites
 
@@ -31,29 +29,31 @@ npm run build:desktop
 
 ## Architecture
 
-Shared desktop code lives in `gui/desktop/` (reused via `createRequire` from the Bun main process):
+| Component | Purpose |
+|-----------|---------|
+| `src/bun/index.ts` | Main process: windows, tray, extension bridge, daemon proxy |
+| `src/views/avar-preload.ts` | Preload RPC bridge → `window.avar` (same API as Electron) |
+| `shared/avar-rpc.ts` | Typed RPC contract between Bun and the webview |
+| `src/bun/desktop-shell.ts` | Daemon HTTP proxy and GUI URL resolution |
+| `electrobun.config.ts` | Bundles `gui/dist/`, extension bridge modules, preload view |
 
-| Module | Purpose |
-|--------|---------|
-| `env.cjs` | Daemon URL, proxy port, window defaults |
-| `daemon-proxy.cjs` | Local HTTP proxy to the daemon |
-| `resolve-gui-url.cjs` | Dev / bundled / file URL resolution |
-| `static-server.cjs` | Serves `dist/` when a local HTTP origin is required |
+Shared desktop logic is **reused** from `gui/electron/` (extension bridge, protocol) and `gui/desktop/` via copy into the app bundle — Electron sources are not modified.
 
-`gui/electrobun/` is a parallel entry point; it does not replace `gui/electron/` or `gui/tiny/`.
+The Bun entrypoint must be `src/bun/index.ts` (outputs `app/bun/index.js`).
 
-The Bun entrypoint must be `src/bun/index.ts` (outputs `app/bun/index.js`) — the Electrobun launcher does not load `main.js`.
+## Feature parity (Electrobun vs Electron)
 
-## Limitations (Electrobun vs Electron)
-
-Electrobun does **not** provide:
-
-- System tray
-- Native popups / directory picker
-- Desktop notifications via main process
-- Browser extension bridge
-- `window.avar` preload API
-
-For full desktop features, use Electron (`npm run dev:desktop`).
+| Feature | Electrobun |
+|---------|------------|
+| `window.avar` preload API | Yes (RPC) |
+| Daemon HTTP proxy (`getProxyBaseUrl`) | Yes |
+| Browser extension bridge | Yes |
+| System tray + bulk download actions | Yes |
+| Native popups (add download / batch) | Yes |
+| Directory picker | Yes |
+| Desktop notifications | Yes |
+| Open file / show in folder / external URLs | Yes |
+| Remote download file save | Yes |
+| `avar://` deep links | macOS (Electrobun `urlSchemes`); Windows/Linux when OS registration is available |
 
 Packaged artifacts are written under `gui/electrobun/artifacts/` (Electrobun default).

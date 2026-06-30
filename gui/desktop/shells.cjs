@@ -3,12 +3,26 @@
  */
 
 const SHELL_ELECTRON = "electron";
+const SHELL_ELECTROBUN = "electrobun";
 const SHELL_TINY = "tiny";
 
 /** @type {Record<string, { label: string, capabilities: string[] }>} */
 const SHELLS = {
   [SHELL_ELECTRON]: {
     label: "Electron",
+    capabilities: [
+      "preload-bridge",
+      "daemon-proxy",
+      "extension-bridge",
+      "system-tray",
+      "native-popups",
+      "native-notifications",
+      "directory-picker",
+      "remote-file-save",
+    ],
+  },
+  [SHELL_ELECTROBUN]: {
+    label: "Electrobun",
     capabilities: [
       "preload-bridge",
       "daemon-proxy",
@@ -32,6 +46,7 @@ function shellHasCapability(shellId, capability) {
 
 module.exports = {
   SHELL_ELECTRON,
+  SHELL_ELECTROBUN,
   SHELL_TINY,
   SHELLS,
   shellHasCapability,

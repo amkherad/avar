@@ -39,22 +39,48 @@ function buildDistCopy(): Record<string, string> {
   return copy;
 }
 
+function buildVendorCopy(): Record<string, string> {
+  return {
+    "../electron/extension-bridge.cjs": "electron/extension-bridge.cjs",
+    "../electron/extension-protocol.cjs": "electron/extension-protocol.cjs",
+    "../electron/avar-protocol.cjs": "electron/avar-protocol.cjs",
+    "../dev-server.cjs": "dev-server.cjs",
+    "../desktop/resolve-gui-url.cjs": "desktop/resolve-gui-url.cjs",
+    "../desktop/env.cjs": "desktop/env.cjs",
+  };
+}
+
 export default {
   app: {
     name: "Avar",
     identifier: "io.avar.gui.electrobun",
     version: packageJson.version,
+    urlSchemes: ["avar"],
   },
   runtime: {
-    exitOnLastWindowClosed: true,
+    exitOnLastWindowClosed: false,
   },
   build: {
     bun: {
       entrypoint: "src/bun/index.ts",
       packages: "external",
     },
-    views: {},
-    copy: buildDistCopy(),
+    views: {
+      avarbridge: {
+        entrypoint: "src/views/avar-preload.ts",
+      },
+    },
+    copy: {
+      ...buildVendorCopy(),
+      ...buildDistCopy(),
+    },
+    watch: [
+      "../electron/extension-bridge.cjs",
+      "../electron/extension-protocol.cjs",
+      "../electron/avar-protocol.cjs",
+      "../dev-server.cjs",
+      "../desktop",
+    ],
     mac: {
       bundleCEF: false,
     },
