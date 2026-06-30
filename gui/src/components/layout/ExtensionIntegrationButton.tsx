@@ -10,6 +10,7 @@ import {
   useExtensionBridgeStatus,
 } from "@/lib/browserExtensionBridge";
 import { copyTextToClipboard } from "@/lib/curlCommand";
+import { appLogger } from "@/lib/appLogger";
 
 export function ExtensionIntegrationButton() {
   const { t } = useTranslation();
@@ -63,6 +64,7 @@ export function ExtensionIntegrationButton() {
   async function handleCopyUrl() {
     const ok = await copyTextToClipboard(bridgeStatus.bridgeUrl);
     if (ok) {
+      appLogger.gui.debug("Extension bridge URL copied");
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     }
@@ -76,7 +78,10 @@ export function ExtensionIntegrationButton() {
         className="avar-extension-panel__trigger"
         aria-label={t("extensionPanel.aria")}
         aria-expanded={open}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          appLogger.gui.debug("Extension panel", open ? "closed" : "opened");
+          setOpen((prev) => !prev);
+        }}
       >
         <span
           className={`avar-extension-panel__dot ${

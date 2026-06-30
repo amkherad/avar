@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { StrictMode } from "react";
 import type { DownloadInfo } from "@/api/types";
 import { DownloadSizeMismatchModal } from "@/components/download/DownloadSizeMismatchModal";
+import { appLogger } from "@/lib/appLogger";
 
 export type DownloadSizeMismatchChoice = "restart" | "new" | "cancel";
 
@@ -31,6 +32,7 @@ export function promptDownloadSizeMismatch(
   download: DownloadInfo,
   context: DownloadSizeMismatchContext,
 ): Promise<DownloadSizeMismatchChoice> {
+  appLogger.gui.debug("Download size mismatch prompt", download.filename);
   return new Promise((resolve) => {
     ensurePromptHost();
 

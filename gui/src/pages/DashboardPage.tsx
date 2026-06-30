@@ -217,6 +217,7 @@ function DownloadPanel({
   });
 
   function handleToggleSelect(downloadId: string) {
+    appLogger.gui.debug("Download selection toggled", downloadId);
     const next = selectedDownloadIds.includes(downloadId)
       ? selectedDownloadIds.filter((id) => id !== downloadId)
       : [...selectedDownloadIds, downloadId];
@@ -224,6 +225,7 @@ function DownloadPanel({
   }
 
   function handleSelectAll(checked: boolean) {
+    appLogger.gui.debug("Download select all", checked ? "checked" : "unchecked");
     if (!checked) {
       setSelectedDownloadIds([]);
       return;
@@ -253,14 +255,17 @@ function DownloadPanel({
     }
 
     if (doubleClickAction === "openFile" && isCompleted(download.status)) {
+      appLogger.gui.debug("Download double-click open file", downloadId);
       void downloadActions.openFile([download]);
       return;
     }
 
+    appLogger.gui.debug("Download details popup opened", downloadId);
     void openDownloadPopup(download, t("download.detailsTitle"));
   }
 
   function handleContextMenu(downloadId: string, event: React.MouseEvent) {
+    appLogger.gui.debug("Download context menu", downloadId);
     const download = queueDownloads.find((d) => d.id === downloadId);
     if (!download) {
       return;
@@ -318,7 +323,10 @@ function DownloadPanel({
             }
             actions={
               <>
-                <Button size="sm" variant="secondary" onClick={() => setBatchAddOpen(true)}>
+                <Button size="sm" variant="secondary" onClick={() => {
+                  appLogger.gui.debug("Batch add dialog opened");
+                  setBatchAddOpen(true);
+                }}>
                   <FontAwesomeIcon icon={faListUl} />
                   {t("download.batchAdd.button")}
                 </Button>
@@ -339,9 +347,15 @@ function DownloadPanel({
 
             <DownloadToolbar
               searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
+              onSearchChange={(query) => {
+                appLogger.gui.debug("Download search", query || "(cleared)");
+                setSearchQuery(query);
+              }}
               statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
+              onStatusFilterChange={(filter) => {
+                appLogger.gui.debug("Download status filter", filter);
+                setStatusFilter(filter);
+              }}
               availableStatuses={availableStatuses}
               showStatusFilter={downloadViewMode === "grid"}
               viewMode={downloadViewMode}
@@ -389,9 +403,16 @@ function DownloadPanel({
                   onStatusFilterChange={setStatusFilter}
                   availableStatuses={availableStatuses}
                   sort={sort}
-                  onSortChange={setSort}
-                  onPageChange={setPage}
+                  onSortChange={(next) => {
+                    appLogger.gui.debug("Download sort", next.key ?? "none");
+                    setSort(next);
+                  }}
+                  onPageChange={(nextPage) => {
+                    appLogger.gui.debug("Download page", nextPage);
+                    setPage(nextPage);
+                  }}
                   onPageSizeChange={(size) => {
+                    appLogger.gui.debug("Download page size", size);
                     updateConfig({ downloadPageSize: size });
                     setPage(1);
                   }}
@@ -402,9 +423,10 @@ function DownloadPanel({
                   onContextMenu={handleContextMenu}
                   viewMode={downloadViewMode}
                   onViewModeChange={setDownloadViewMode}
-                  onToggleCheckboxes={() =>
-                    updateConfig({ showDownloadCheckboxes: !showCheckboxes })
-                  }
+                  onToggleCheckboxes={() => {
+                    appLogger.gui.debug("Download checkboxes toggled", !showCheckboxes);
+                    updateConfig({ showDownloadCheckboxes: !showCheckboxes });
+                  }}
                 />
               )}
             </div>

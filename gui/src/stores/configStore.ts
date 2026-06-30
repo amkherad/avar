@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { appLogger } from "@/lib/appLogger";
 import {
   defaultFooterMonitors,
   defaultGuiConfig,
@@ -43,12 +44,24 @@ export const useConfigStore = create<ConfigState>()(
       config: defaultGuiConfig(),
       sessionSecrets: {},
 
-      updateConfig: (patch) =>
-        set((state) => ({ config: { ...state.config, ...patch } })),
+      updateConfig: (patch) => {
+        const keys = Object.keys(patch);
+        if (keys.length > 0) {
+          appLogger.gui.debug("Config updated", keys.join(", "));
+        }
+        set((state) => ({ config: { ...state.config, ...patch } }));
+      },
 
-      setConfig: (config) => set({ config }),
+      setConfig: (config) => {
+        appLogger.gui.debug("Config replaced", config.activeSessionId);
+        set({ config });
+      },
 
-      setSessionAuthToken: (sessionId, token) =>
+      setSessionAuthToken: (sessionId, token) => {
+        appLogger.gui.debug(
+          token?.trim() ? "Session auth token set" : "Session auth token cleared",
+          sessionId,
+        );
         set((state) => {
           const next = { ...state.sessionSecrets };
           if (token?.trim()) {
@@ -57,7 +70,8 @@ export const useConfigStore = create<ConfigState>()(
             delete next[sessionId];
           }
           return { sessionSecrets: next };
-        }),
+        });
+      },
 
       getSessionWithSecrets: (session) => {
         const token = get().sessionSecrets[session.id];

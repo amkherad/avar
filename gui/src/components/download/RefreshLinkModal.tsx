@@ -19,6 +19,7 @@ import { copyTextToClipboard } from "@/lib/curlCommand";
 import { showConfirmDialog } from "@/lib/popup";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore } from "@/stores/dataStore";
+import { appLogger } from "@/lib/appLogger";
 
 export interface RefreshLinkModalProps {
   download: DownloadInfo;
@@ -44,6 +45,7 @@ async function applyRefreshedLink(
       cancelLabel: t("common.cancel"),
     });
     if (!confirmed.confirmed) {
+      appLogger.gui.debug("Referer mismatch rejected", download.id);
       return false;
     }
   }
@@ -87,6 +89,7 @@ async function applyRefreshedLink(
     originalPage: referer,
   });
   await useDataStore.getState().refresh();
+  appLogger.gui.info("Download link refreshed", download.filename);
   return true;
 }
 
@@ -205,6 +208,7 @@ export function RefreshLinkModal({ download, details, onClose }: RefreshLinkModa
   }, [client, details, download, onClose, sessionId, t, waiting]);
 
   async function handleCancel() {
+    appLogger.gui.debug("Link refresh cancelled", download.id);
     await cleanup();
     onClose();
   }

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { GUI_CONFIG_KEY } from "@/config/defaults";
+import { appLogger } from "@/lib/appLogger";
 
 export type LogSource = "gui" | "daemon";
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -131,6 +132,7 @@ export const useConsoleStore = create<ConsoleState>()(
       settings: defaultSettings,
 
       setOpen: (open) => {
+        appLogger.gui.debug("Console", open ? "opened" : "closed");
         if (open) {
           set({ open: true, hasUnseenErrors: false });
           return;
@@ -140,6 +142,7 @@ export const useConsoleStore = create<ConsoleState>()(
 
       toggleOpen: () => {
         const { open } = get();
+        appLogger.gui.debug("Console", open ? "closed" : "opened");
         if (open) {
           set({ open: false });
         } else {
@@ -208,6 +211,7 @@ export const useConsoleStore = create<ConsoleState>()(
       },
 
       clear: () => {
+        appLogger.gui.debug("Console cleared");
         const nextEpoch = get().daemonLogEpoch + 1;
         set({ entries: [], hasUnseenErrors: false, daemonLogEpoch: nextEpoch });
         return nextEpoch;
@@ -215,7 +219,11 @@ export const useConsoleStore = create<ConsoleState>()(
 
       setDaemonLogOffset: (offset) => set({ daemonLogOffset: offset }),
 
-      updateSettings: (patch) =>
+      updateSettings: (patch) => {
+        const keys = Object.keys(patch);
+        if (keys.length > 0) {
+          appLogger.gui.debug("Console settings updated", keys.join(", "));
+        }
         set((state) => {
           const settings = { ...state.settings, ...patch };
           const severityTightened =
@@ -230,7 +238,8 @@ export const useConsoleStore = create<ConsoleState>()(
               : state.entries;
 
           return { settings, entries };
-        }),
+        });
+      },
     }),
     {
       name: `${GUI_CONFIG_KEY}.console`,

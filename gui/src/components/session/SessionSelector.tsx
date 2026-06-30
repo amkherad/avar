@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { useConfigStore } from "@/stores/configStore";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { appLogger } from "@/lib/appLogger";
 import { showConfirmDialog } from "@/lib/popup";
 
 function newSessionId(): string {
@@ -79,6 +80,7 @@ export function SessionSelector() {
   }, [menuOpen]);
 
   function openAdd() {
+    appLogger.gui.debug("Session add dialog opened");
     setEditingId(null);
     setLabel("");
     setBaseUrl("http://127.0.0.1:8000");
@@ -91,6 +93,7 @@ export function SessionSelector() {
   }
 
   function openEdit(id: string) {
+    appLogger.gui.debug("Session edit dialog opened", id);
     const session = getSessionWithSecrets(
       config.sessions.find((s) => s.id === id) ?? config.sessions[0],
     );
@@ -128,6 +131,7 @@ export function SessionSelector() {
       sessions,
       activeSessionId: editingId ?? sessionId,
     });
+    appLogger.gui.info(editingId ? "Session updated" : "Session added", payload.label);
     setModalOpen(false);
   }
 
@@ -144,6 +148,7 @@ export function SessionSelector() {
       cancelLabel: t("common.cancel"),
     });
     if (!result.confirmed) {
+      appLogger.gui.debug("Session remove cancelled", session.label);
       return;
     }
 
@@ -159,15 +164,18 @@ export function SessionSelector() {
       activeSessionId:
         config.activeSessionId === id ? sessions[0].id : config.activeSessionId,
     });
+    appLogger.gui.info("Session removed", session.label);
     setMenuOpen(false);
   }
 
   function selectSession(id: string) {
+    appLogger.gui.debug("Session selected", id);
     updateConfig({ activeSessionId: id });
     setMenuOpen(false);
   }
 
   async function testConnection() {
+    appLogger.gui.debug("Session connection test");
     setTestResult("idle");
     const client = createDaemonClient({
       baseUrl,
@@ -176,6 +184,7 @@ export function SessionSelector() {
     });
     const ok = await client.ping();
     setTestResult(ok ? "ok" : "fail");
+    appLogger.gui.debug("Session connection test", ok ? "ok" : "fail");
   }
 
   if (!activeSession) {

@@ -78,7 +78,7 @@ static void rpc_unlock(void) {
 #endif
 }
 
-static cJSON *rpc_error(int code, const char *message, cJSON *id) {
+static cJSON *rpc_error(int code, const char *message, const cJSON *id) {
     cJSON *root = cJSON_CreateObject();
     cJSON *error = cJSON_CreateObject();
     if (root == NULL || error == NULL) {
@@ -98,7 +98,7 @@ static cJSON *rpc_error(int code, const char *message, cJSON *id) {
     return root;
 }
 
-static cJSON *rpc_result(cJSON *result, cJSON *id) {
+static cJSON *rpc_result(cJSON *result, const cJSON *id) {
     cJSON *root = cJSON_CreateObject();
     if (root == NULL) {
         return NULL;
@@ -1569,12 +1569,14 @@ void daemon_rpc_stream_handle_ws_message(struct mg_connection *connection, const
     free(printed);
 }
 
-static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
+static cJSON *dispatch_method(const char *method, const cJSON *params, const cJSON *id) {
     (void)id;
 
     if (method == NULL) {
         return NULL;
     }
+
+    cJSON *mutable_params = params != NULL ? (cJSON *)params : cJSON_CreateObject();
 
     if (strcmp(method, "ping") == 0) {
         return handle_ping();
@@ -1586,64 +1588,64 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
         return handle_system_stats();
     }
     if (strcmp(method, "download.add") == 0) {
-        return handle_download_add(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_add(mutable_params);
     }
     if (strcmp(method, "cli.exec") == 0) {
-        return handle_cli_exec(params != NULL ? params : cJSON_CreateObject(), NULL);
+        return handle_cli_exec(mutable_params, NULL);
     }
     if (strcmp(method, "logs.get") == 0) {
-        return handle_logs_get(params != NULL ? params : cJSON_CreateObject());
+        return handle_logs_get(mutable_params);
     }
     if (strcmp(method, "queue.list") == 0) {
         return handle_queue_list();
     }
     if (strcmp(method, "queue.add") == 0) {
-        return handle_queue_add(params != NULL ? params : cJSON_CreateObject());
+        return handle_queue_add(mutable_params);
     }
     if (strcmp(method, "queue.remove") == 0) {
-        return handle_queue_remove(params != NULL ? params : cJSON_CreateObject());
+        return handle_queue_remove(mutable_params);
     }
     if (strcmp(method, "queue.edit") == 0) {
-        return handle_queue_edit(params != NULL ? params : cJSON_CreateObject());
+        return handle_queue_edit(mutable_params);
     }
     if (strcmp(method, "queue.start") == 0) {
-        return handle_queue_start(params != NULL ? params : cJSON_CreateObject());
+        return handle_queue_start(mutable_params);
     }
     if (strcmp(method, "queue.stop") == 0) {
-        return handle_queue_stop(params != NULL ? params : cJSON_CreateObject());
+        return handle_queue_stop(mutable_params);
     }
     if (strcmp(method, "downloads.list") == 0) {
         return handle_downloads_list();
     }
     if (strcmp(method, "download.watch") == 0) {
-        return handle_download_watch(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_watch(mutable_params);
     }
     if (strcmp(method, "download.unwatch") == 0) {
-        return handle_download_unwatch(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_unwatch(mutable_params);
     }
     if (strcmp(method, "download.checksum") == 0) {
-        return handle_download_checksum(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_checksum(mutable_params);
     }
     if (strcmp(method, "download.resolvePath") == 0) {
-        return handle_download_resolve_path(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_resolve_path(mutable_params);
     }
     if (strcmp(method, "download.setUrl") == 0) {
-        return handle_download_set_url(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_set_url(mutable_params);
     }
     if (strcmp(method, "download.setSource") == 0) {
-        return handle_download_set_source(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_set_source(mutable_params);
     }
     if (strcmp(method, "download.probe") == 0) {
-        return handle_download_probe(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_probe(mutable_params);
     }
     if (strcmp(method, "download.getDetails") == 0) {
-        return handle_download_get_details(params != NULL ? params : cJSON_CreateObject());
+        return handle_download_get_details(mutable_params);
     }
     if (strcmp(method, "fs.browse") == 0) {
         if (!daemon_server_fs_browse_enabled()) {
             return NULL;
         }
-        return handle_fs_browse(params != NULL ? params : cJSON_CreateObject());
+        return handle_fs_browse(mutable_params);
     }
     if (strcmp(method, "daemon.reload") == 0) {
         DaemonConfig cfg;

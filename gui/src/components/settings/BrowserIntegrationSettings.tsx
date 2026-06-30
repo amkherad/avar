@@ -32,7 +32,7 @@ import {
 
 } from "@/lib/browserExtensionBridge";
 
-
+import { appLogger } from "@/lib/appLogger";
 
 const BROWSERS: BrowserId[] = ["chrome", "firefox", "edge", "opera"];
 
@@ -70,6 +70,8 @@ export function BrowserIntegrationSettings() {
 
   async function handleInstall(browser: BrowserId) {
 
+    appLogger.gui.debug("Browser extension install", browser);
+
     setInstalling(browser);
 
     setStatus(null);
@@ -98,6 +100,8 @@ export function BrowserIntegrationSettings() {
 
     await navigator.clipboard.writeText(guiUrl);
 
+    appLogger.gui.debug("Extension GUI URL copied");
+
     setStatus(t("settings.browser.guiUrlCopied"));
 
   }
@@ -105,6 +109,8 @@ export function BrowserIntegrationSettings() {
 
 
   async function handleEnableNotifications() {
+
+    appLogger.gui.debug("Notification permission requested");
 
     const permission = await requestNotificationPermission();
 

@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import type { DownloadDetails, DownloadInfo } from "@/api/types";
 import { RefreshLinkModal } from "@/components/download/RefreshLinkModal";
+import { appLogger } from "@/lib/appLogger";
 import { useConnectionStore } from "@/stores/connectionStore";
 
 interface RefreshLinkContext {
@@ -28,6 +29,7 @@ export function useRefreshLinkModal() {
         return;
       }
 
+      appLogger.gui.debug("Link refresh opened", download.id);
       setContext({ download, details: seedDetailsFromDownload(download) });
 
       void (async () => {

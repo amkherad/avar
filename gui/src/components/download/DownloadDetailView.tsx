@@ -20,6 +20,7 @@ import { progressPercent } from "./format";
 import { DownloadProgressBar } from "./DownloadProgressBar";
 import { DownloadChecksumTools } from "./DownloadChecksumTools";
 import { useRefreshLinkModal } from "@/hooks/useRefreshLinkModal";
+import { appLogger } from "@/lib/appLogger";
 
 export interface DownloadDetailViewProps {
   download: DownloadInfo;
@@ -77,18 +78,21 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
     const command = buildDownloadCurl(download.filename, url, referer);
     const ok = await copyTextToClipboard(command);
     if (ok) {
+      appLogger.gui.debug("Download curl command copied");
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     }
   }
 
   function beginEditUrl() {
+    appLogger.gui.debug("Download URL edit started", download.id);
     setUrlDraft(url ?? "");
     setUrlError(null);
     setEditingUrl(true);
   }
 
   function cancelEditUrl() {
+    appLogger.gui.debug("Download URL edit cancelled", download.id);
     setUrlDraft(url ?? "");
     setUrlError(null);
     setEditingUrl(false);

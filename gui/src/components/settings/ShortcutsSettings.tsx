@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
 import { useConfigStore } from "@/stores/configStore";
+import { appLogger } from "@/lib/appLogger";
 import {
   defaultShortcutMap,
   formatCombo,
@@ -38,11 +39,13 @@ export function ShortcutsSettings() {
   }, []);
 
   function handleRecord(id: ShortcutActionId) {
+    appLogger.gui.debug("Shortcut rebind started", id);
     function onKeyDown(event: KeyboardEvent) {
       event.preventDefault();
       event.stopPropagation();
 
       if (event.key === "Escape") {
+        appLogger.gui.debug("Shortcut rebind cancelled", id);
         window.removeEventListener("keydown", onKeyDown, true);
         return;
       }
@@ -73,6 +76,7 @@ export function ShortcutsSettings() {
       updateConfig({
         shortcuts: { ...shortcuts, [id]: combo },
       });
+      appLogger.gui.debug("Shortcut rebound", `${id} -> ${combo}`);
       window.removeEventListener("keydown", onKeyDown, true);
     }
 
@@ -80,6 +84,7 @@ export function ShortcutsSettings() {
   }
 
   function resetAll() {
+    appLogger.gui.debug("Shortcuts reset to defaults");
     updateConfig({ shortcuts: defaultShortcutMap() });
   }
 

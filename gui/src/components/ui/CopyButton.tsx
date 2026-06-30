@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
 import { faCheck, faCopy } from "@fortawesome/free-solid-svg-icons";
 import { copyTextToClipboard } from "@/lib/curlCommand";
+import { appLogger } from "@/lib/appLogger";
 
 export interface CopyButtonProps {
   text: string;
@@ -17,6 +18,7 @@ export function CopyButton({ text, label, className = "" }: CopyButtonProps) {
   async function handleCopy() {
     const ok = await copyTextToClipboard(text);
     if (ok) {
+      appLogger.gui.debug("Copied to clipboard", label);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     }

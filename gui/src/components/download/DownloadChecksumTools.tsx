@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { CHECKSUM_ALGORITHMS, type ChecksumAlgorithm } from "@/api/checksumTypes";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { appLogger } from "@/lib/appLogger";
 import { isCompleted } from "@/lib/downloadStatus";
 
 export interface DownloadChecksumToolsProps {
@@ -41,6 +42,7 @@ export function DownloadChecksumTools({ downloadId, status }: DownloadChecksumTo
     setComputedHash(null);
     setValidationState(null);
 
+    appLogger.gui.debug("Download checksum compute", `${algorithm} ${downloadId}`);
     try {
       const result = await client.computeDownloadChecksum(
         downloadId,
@@ -54,6 +56,12 @@ export function DownloadChecksumTools({ downloadId, status }: DownloadChecksumTo
       setComputedHash(result.checksum);
       if (expectedHash.trim()) {
         setValidationState(result.match ? "match" : "mismatch");
+        appLogger.gui.debug(
+          "Download checksum validation",
+          result.match ? "match" : "mismatch",
+        );
+      } else {
+        appLogger.gui.debug("Download checksum computed", result.checksum.slice(0, 16));
       }
     } catch {
       setError(t("download.checksum.error"));

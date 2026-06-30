@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useConfigStore } from "@/stores/configStore";
 
+import { appLogger } from "@/lib/appLogger";
 import {
   DEFAULT_EXTENSION_GUI_URL,
   ELECTRON_EXTENSION_BRIDGE_URL,
@@ -32,6 +33,7 @@ export function setExtensionBridgeSuspended(suspended: boolean): void {
   if (bridgeSuspended === suspended) {
     return;
   }
+  appLogger.gui.debug("Extension bridge", suspended ? "suspended" : "resumed");
   bridgeSuspended = suspended;
   void syncBridgeSettings();
   for (const listener of suspendListeners) {

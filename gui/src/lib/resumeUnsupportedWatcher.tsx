@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import type { DownloadInfo } from "@/api/types";
 import { ResumeUnsupportedModal } from "@/components/download/ResumeUnsupportedModal";
 import { isResumeUnsupportedDownload } from "@/lib/resumeUnsupported";
+import { appLogger } from "@/lib/appLogger";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore } from "@/stores/dataStore";
 
@@ -40,9 +41,11 @@ async function runPromptAction(
 
   try {
     if (choice === "restart") {
+      appLogger.gui.info("Resume unsupported: restart", download.filename);
       await client.restartDownload(download.id);
       handledIds.add(download.id);
     } else if (choice === "new") {
+      appLogger.gui.info("Resume unsupported: new download", download.filename);
       const details = await client.getDownloadDetails(download.id);
       if (!details.url) {
         return;
@@ -58,6 +61,7 @@ async function runPromptAction(
       handledIds.add(download.id);
       dismissedIds.add(download.id);
     } else {
+      appLogger.gui.debug("Resume unsupported dismissed", download.filename);
       dismissedIds.add(download.id);
     }
   } finally {
@@ -93,6 +97,7 @@ function maybePrompt(download: DownloadInfo): void {
   }
 
   activeDownloadId = download.id;
+  appLogger.gui.debug("Resume unsupported prompt", download.filename);
   renderPrompt(download, false);
 }
 

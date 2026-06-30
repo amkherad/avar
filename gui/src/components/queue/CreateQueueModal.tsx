@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { appLogger } from "@/lib/appLogger";
 
 export interface CreateQueueModalProps {
   open: boolean;
@@ -36,6 +37,7 @@ export function CreateQueueModal({ open, onClose, onCreated }: CreateQueueModalP
         name: name.trim(),
         description: description.trim() || undefined,
       });
+      appLogger.gui.info("Queue created", name.trim());
       reset();
       onCreated(id);
       onClose();

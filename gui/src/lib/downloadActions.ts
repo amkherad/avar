@@ -113,6 +113,7 @@ export async function resumeDownloads(
       const details = await resolveDownloadDetails(client, item);
       const allowed = await guardDownloadStartSize(client, item, details);
       if (!allowed) {
+        appLogger.gui.debug("Download resume skipped", item.filename);
         continue;
       }
       await client.resumeDownload(id);
@@ -155,6 +156,7 @@ export async function startDownloads(
       const details = await resolveDownloadDetails(client, item);
       const allowed = await guardDownloadStartSize(client, item, details);
       if (!allowed) {
+        appLogger.gui.debug("Download start skipped", item.filename);
         continue;
       }
       await client.startDownload(id);
@@ -247,6 +249,7 @@ export async function redownloadDownloads(
     try {
       const url = await resolveUrl(item);
       if (!url) {
+        appLogger.gui.warn("Redownload skipped (no URL)", item.filename);
         failed.push(item.id);
         continue;
       }

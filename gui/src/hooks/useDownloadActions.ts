@@ -50,10 +50,12 @@ export function useDownloadActions() {
   const openFileVisible = useCanOpenDownloadFile();
 
   const withBusy = useCallback(
-    async (action: () => Promise<void>) => {
+    async (actionName: string, action: () => Promise<void>) => {
       if (!client) {
+        appLogger.gui.debug(`${actionName} skipped (no client)`);
         return;
       }
+      appLogger.gui.debug(actionName);
       setBusy(true);
       try {
         await action();
@@ -66,7 +68,7 @@ export function useDownloadActions() {
 
   const pause = useCallback(
     (ids: string[]) =>
-      withBusy(async () => {
+      withBusy("Download pause", async () => {
         if (!client) {
           return;
         }
@@ -77,7 +79,7 @@ export function useDownloadActions() {
 
   const resume = useCallback(
     (ids: string[]) =>
-      withBusy(async () => {
+      withBusy("Download resume", async () => {
         if (!client) {
           return;
         }
@@ -88,7 +90,7 @@ export function useDownloadActions() {
 
   const start = useCallback(
     (ids: string[]) =>
-      withBusy(async () => {
+      withBusy("Download start", async () => {
         if (!client) {
           return;
         }
@@ -99,7 +101,7 @@ export function useDownloadActions() {
 
   const stop = useCallback(
     (ids: string[]) =>
-      withBusy(async () => {
+      withBusy("Download stop", async () => {
         if (!client) {
           return;
         }
@@ -110,7 +112,7 @@ export function useDownloadActions() {
 
   const remove = useCallback(
     (ids: string[], purgeFiles = false) =>
-      withBusy(async () => {
+      withBusy("Download delete", async () => {
         if (!client) {
           return;
         }
@@ -137,6 +139,7 @@ export function useDownloadActions() {
         checkboxDefault: false,
       });
       if (!result.confirmed) {
+        appLogger.gui.debug("Download delete cancelled");
         return;
       }
       await remove(items.map((item) => item.id), result.checkboxChecked);
@@ -146,7 +149,7 @@ export function useDownloadActions() {
 
   const togglePause = useCallback(
     (download: DownloadInfo) =>
-      withBusy(async () => {
+      withBusy("Download pause/resume toggle", async () => {
         if (!client) {
           return;
         }
@@ -157,7 +160,7 @@ export function useDownloadActions() {
 
   const toggleStart = useCallback(
     (download: DownloadInfo) =>
-      withBusy(async () => {
+      withBusy("Download start/stop toggle", async () => {
         if (!client) {
           return;
         }
@@ -168,7 +171,7 @@ export function useDownloadActions() {
 
   const redownload = useCallback(
     (items: DownloadInfo[]) =>
-      withBusy(async () => {
+      withBusy("Download redownload", async () => {
         if (!client) {
           return;
         }
@@ -182,6 +185,7 @@ export function useDownloadActions() {
           cancelLabel: t("common.cancel"),
         });
         if (!result.confirmed) {
+          appLogger.gui.debug("Download redownload cancelled");
           return;
         }
         await redownloadDownloads(client, items, async (item) => {
@@ -194,8 +198,9 @@ export function useDownloadActions() {
 
   const copyToLocal = useCallback(
     (items: DownloadInfo[]) =>
-      withBusy(async () => {
+      withBusy("Copy download to local", async () => {
         if (!activeSession || !copyToLocalAvailable) {
+          appLogger.gui.debug("Copy to local skipped (unavailable)");
           return;
         }
         for (const item of items) {
@@ -211,8 +216,9 @@ export function useDownloadActions() {
 
   const openFile = useCallback(
     (items: DownloadInfo[]) =>
-      withBusy(async () => {
+      withBusy("Open download file", async () => {
         if (!client || !openFileVisible) {
+          appLogger.gui.debug("Open download file skipped (unavailable)");
           return;
         }
         for (const item of items) {
@@ -232,8 +238,9 @@ export function useDownloadActions() {
 
   const openContainingFolder = useCallback(
     (items: DownloadInfo[]) =>
-      withBusy(async () => {
+      withBusy("Open download containing folder", async () => {
         if (!client || !openFileVisible) {
+          appLogger.gui.debug("Open containing folder skipped (unavailable)");
           return;
         }
         for (const item of items) {

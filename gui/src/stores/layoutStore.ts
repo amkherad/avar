@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { GUI_CONFIG_KEY } from "@/config/defaults";
 import { clampSize } from "@/hooks/useResize";
+import { appLogger } from "@/lib/appLogger";
 
 export type DownloadViewMode = "grid" | "compact";
 
@@ -113,11 +114,22 @@ export const useLayoutStore = create<LayoutState>()(
         set({ detailPanelHeight: clampSize(next, DETAIL_HEIGHT_MIN, DETAIL_HEIGHT_MAX) });
       },
 
-      setDetailPanelOpen: (open) => set({ detailPanelOpen: open }),
+      setDetailPanelOpen: (open) => {
+        appLogger.gui.debug("Detail panel", open ? "opened" : "closed");
+        set({ detailPanelOpen: open });
+      },
 
-      toggleDetailPanel: () => set((s) => ({ detailPanelOpen: !s.detailPanelOpen })),
+      toggleDetailPanel: () =>
+        set((s) => {
+          const open = !s.detailPanelOpen;
+          appLogger.gui.debug("Detail panel", open ? "opened" : "closed");
+          return { detailPanelOpen: open };
+        }),
 
-      setDownloadViewMode: (mode) => set({ downloadViewMode: mode }),
+      setDownloadViewMode: (mode) => {
+        appLogger.gui.debug("Download view mode", mode);
+        set({ downloadViewMode: mode });
+      },
 
       setDownloadTableColumn: (key, width) =>
         set((s) => ({

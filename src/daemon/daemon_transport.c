@@ -90,8 +90,8 @@ static bool http_start(DaemonTransport *self, const DaemonConfig *cfg) {
         const DaemonHttpsChannel *tls = &cfg->server.https;
         if (tls->cert_file[0] != '\0' && tls->key_file[0] != '\0') {
             struct mg_tls_opts opts = {
-                .cert = tls->cert_file,
-                .key = tls->key_file,
+                .cert = mg_str(tls->cert_file),
+                .key = mg_str(tls->key_file),
             };
             mg_tls_init(listener, &opts);
         }

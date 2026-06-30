@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { activateWaitingServiceWorker, onServiceWorkerUpdate } from "@/lib/pwa";
+import { appLogger } from "@/lib/appLogger";
 
 export function useServiceWorkerUpdate(): {
   updateAvailable: boolean;
@@ -11,6 +12,9 @@ export function useServiceWorkerUpdate(): {
 
   return {
     updateAvailable,
-    reload: () => void activateWaitingServiceWorker(),
+    reload: () => {
+      appLogger.gui.debug("PWA reload for update");
+      void activateWaitingServiceWorker();
+    },
   };
 }

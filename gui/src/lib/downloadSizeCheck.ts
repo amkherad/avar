@@ -1,5 +1,6 @@
 import type { DaemonClient } from "@/api/daemon";
 import type { DownloadDetails, DownloadInfo } from "@/api/types";
+import { appLogger } from "@/lib/appLogger";
 import { fileSizesMismatch } from "@/lib/downloadLinkValidation";
 import {
   promptDownloadSizeMismatch,
@@ -59,6 +60,7 @@ export async function checkDownloadSizeCompatibility(
     referer: referer ?? details?.referer ?? details?.originalPage,
   });
   if (!probe) {
+    appLogger.gui.debug("Download size probe failed", download.id);
     return { ok: false, reason: "probe_failed" };
   }
   if (!fileSizesMismatch(download.totalBytes, probe.totalBytes)) {
@@ -69,6 +71,7 @@ export async function checkDownloadSizeCompatibility(
     persistedBytes: download.totalBytes,
     probedBytes: probe.totalBytes,
   });
+  appLogger.gui.debug("Download size mismatch choice", choice);
   return { ok: false, reason: "mismatch", choice };
 }
 
@@ -90,9 +93,11 @@ export async function guardDownloadStartSize(
   }
 
   if (check.choice === "restart") {
+    appLogger.gui.info("Download restarted after size mismatch", download.filename);
     await client.restartDownload(download.id);
     await useDataStore.getState().refresh();
   } else if (check.choice === "new" && details.url) {
+    appLogger.gui.info("New download added after size mismatch", download.filename);
     await client.addDownload({
       url: details.url,
       queue: download.queueId,
@@ -102,6 +107,8 @@ export async function guardDownloadStartSize(
       forceNew: true,
     });
     await useDataStore.getState().refresh();
+  } else if (check.choice === "cancel") {
+    appLogger.gui.debug("Download start cancelled after size mismatch", download.filename);
   }
 
   return false;

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { appLogger } from "@/lib/appLogger";
 import type { ShortcutActionId } from "./definitions";
 
 type ShortcutHandler = () => void | boolean | Promise<void>;
@@ -27,8 +28,11 @@ export const useShortcutRegistry = create<ShortcutRegistryState>()((set, get) =>
 
   invoke: (id) => {
     const handler = get().handlers[id];
-    if (handler) {
-      void handler();
+    if (!handler) {
+      appLogger.gui.debug("Shortcut unhandled", id);
+      return;
     }
+    appLogger.gui.debug("Shortcut triggered", id);
+    void handler();
   },
 }));

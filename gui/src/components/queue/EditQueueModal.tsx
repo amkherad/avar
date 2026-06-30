@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { appLogger } from "@/lib/appLogger";
 
 export interface EditQueueModalProps {
   queue: QueueInfo | null;
@@ -37,6 +38,7 @@ export function EditQueueModal({ queue, open, onClose, onSaved }: EditQueueModal
       await client.editQueue(queue.id, {
         description: description.trim() || undefined,
       });
+      appLogger.gui.info("Queue updated", queue.name);
       onSaved();
       onClose();
     } catch (err) {

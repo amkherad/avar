@@ -1,5 +1,6 @@
 import type { DaemonClient } from "@/api/daemon";
 import type { DownloadInfo } from "@/api/types";
+import { appLogger } from "@/lib/appLogger";
 import { isCompleted } from "@/lib/downloadStatus";
 import { resolveDownloadDestPath } from "@/lib/resolveDownloadDestPath";
 
@@ -32,4 +33,5 @@ export async function openDownloadContainingFolder(
   if (openError) {
     throw new Error(openError);
   }
+  appLogger.gui.debug("Opened download containing folder", download.filename);
 }

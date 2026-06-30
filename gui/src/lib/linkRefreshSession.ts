@@ -1,4 +1,5 @@
 import type { AddDownloadPrefill } from "@/lib/addDownloadPrefill";
+import { appLogger } from "@/lib/appLogger";
 import { getExtensionBridgeUrl } from "@/lib/browserExtensionBridge";
 
 export interface LinkRefreshCapturedPayload extends AddDownloadPrefill {
@@ -6,6 +7,7 @@ export interface LinkRefreshCapturedPayload extends AddDownloadPrefill {
 }
 
 export async function startLinkRefreshSession(downloadId: string): Promise<string> {
+  appLogger.gui.debug("Link refresh session starting", downloadId);
   const bridgeUrl = await getExtensionBridgeUrl();
   const response = await fetch(`${bridgeUrl}/extension/link-refresh/start`, {
     method: "POST",
@@ -19,10 +21,14 @@ export async function startLinkRefreshSession(downloadId: string): Promise<strin
   if (!body.ok || !body.sessionId) {
     throw new Error("Failed to start link refresh session");
   }
+  appLogger.gui.debug("Link refresh session started", body.sessionId);
   return body.sessionId;
 }
 
 export async function cancelLinkRefreshSession(sessionId?: string): Promise<void> {
+  if (sessionId) {
+    appLogger.gui.debug("Link refresh session cancelled", sessionId);
+  }
   try {
     const bridgeUrl = await getExtensionBridgeUrl();
     await fetch(`${bridgeUrl}/extension/link-refresh/cancel`, {
@@ -55,5 +61,6 @@ export async function pollLinkRefreshSession(
   if (!body.ok || !body.captured || !body.payload?.url) {
     return null;
   }
+  appLogger.gui.debug("Link refresh captured", sessionId);
   return body.payload;
 }

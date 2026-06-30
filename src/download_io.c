@@ -1,8 +1,10 @@
 #include <download_io.h>
 
 #include <avar.h>
+#include <utils.h>
 
 #include <stdatomic.h>
+#include <stdio.h>
 #include <string.h>
 
 static _Thread_local bool g_download_io_scope = false;

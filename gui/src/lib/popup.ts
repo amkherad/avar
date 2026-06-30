@@ -8,6 +8,7 @@ import {
   type AddDownloadPrefill,
 } from "@/lib/addDownloadPrefill";
 import { usePopupStore } from "@/stores/popupStore";
+import { appLogger } from "@/lib/appLogger";
 
 const POPUP_STORAGE_PREFIX = "avar.popup.download.";
 const CONFIRM_STORAGE_PREFIX = "avar.popup.confirm.";
@@ -127,6 +128,7 @@ export function openPopupWindow(
   const height = options.height ?? 640;
   const title = options.title ?? "Avar";
   const url = buildPopupUrl(hash);
+  appLogger.gui.debug("Popup opened", title);
 
   if (window.avar?.isElectron) {
     void window.avar.openPopup({
@@ -207,6 +209,15 @@ export function openDownloadPopup(
  * - Web: in-app confirm dialog (PopupHost)
  */
 export function showConfirmDialog(options: ConfirmDialogOptions): Promise<ConfirmDialogResult> {
+  appLogger.gui.debug("Confirm dialog opened", options.title);
+
+  function logConfirmResult(result: ConfirmDialogResult): void {
+    appLogger.gui.debug(
+      result.confirmed ? "Confirm dialog confirmed" : "Confirm dialog cancelled",
+      options.title,
+    );
+  }
+
   if (window.avar?.isElectron) {
     return new Promise((resolve) => {
       const id = nextPopupId();
@@ -219,8 +230,11 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<Confir
         }
         window.removeEventListener("storage", onStorage);
         try {
-          resolve(JSON.parse(event.newValue) as ConfirmDialogResult);
+          const result = JSON.parse(event.newValue) as ConfirmDialogResult;
+          logConfirmResult(result);
+          resolve(result);
         } catch {
+          logConfirmResult({ confirmed: false, checkboxChecked: false });
           resolve({ confirmed: false, checkboxChecked: false });
         }
         localStorage.removeItem(resultKey);
@@ -247,7 +261,10 @@ export function showConfirmDialog(options: ConfirmDialogOptions): Promise<Confir
       cancelLabel: options.cancelLabel ?? "Cancel",
       checkboxLabel: options.checkboxLabel,
       checkboxDefault: options.checkboxDefault ?? false,
-      resolve,
+      resolve: (result) => {
+        logConfirmResult(result);
+        resolve(result);
+      },
     });
   });
 }
@@ -264,6 +281,10 @@ export function closePopupWindow(id: string): void {
 export function resolveConfirm(confirmed: boolean, checkboxChecked = false): void {
   const { confirm, setConfirm } = usePopupStore.getState();
   if (confirm) {
+    appLogger.gui.debug(
+      confirmed ? "Confirm dialog confirmed" : "Confirm dialog cancelled",
+      confirm.title,
+    );
     setConfirm(null);
     confirm.resolve({ confirmed, checkboxChecked });
   }

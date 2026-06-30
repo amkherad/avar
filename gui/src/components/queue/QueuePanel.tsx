@@ -88,6 +88,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
   );
 
   function handleModify(id: string) {
+    appLogger.gui.debug("Queue modify", id);
     if (onModifyQueue) {
       onModifyQueue(id);
       return;
@@ -95,7 +96,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
     setEditQueueId(id);
   }
 
-  async function runQueueAction(id: string, action: () => Promise<void>) {
+  async function runQueueAction(id: string, actionName: string, action: () => Promise<void>) {
     if (!client || isDefaultQueue(id)) {
       return;
     }
@@ -103,6 +104,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
     if (!queue || queue.readonly) {
       return;
     }
+    appLogger.gui.debug(`Queue ${actionName}`, queue.name);
     setBusyId(id);
     setError(null);
     try {
@@ -118,7 +120,11 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
     }
   }
 
-  async function runBatchQueueAction(ids: string[], action: (id: string) => Promise<void>) {
+  async function runBatchQueueAction(
+    ids: string[],
+    actionName: string,
+    action: (id: string) => Promise<void>,
+  ) {
     if (!client) {
       return;
     }
@@ -129,6 +135,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
     if (targets.length === 0) {
       return;
     }
+    appLogger.gui.debug(`Queue batch ${actionName}`, targets.join(", "));
     setBatchBusy(true);
     setError(null);
     try {
@@ -163,10 +170,10 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
       return;
     }
     if (ids.length === 1) {
-      void runQueueAction(ids[0], () => client!.removeQueue(ids[0], false));
+      void runQueueAction(ids[0], "delete", () => client!.removeQueue(ids[0], false));
       return;
     }
-    void runBatchQueueAction(ids, (id) => client!.removeQueue(id, false));
+    void runBatchQueueAction(ids, "delete", (id) => client!.removeQueue(id, false));
   }
 
   function handleToggleSelect(queueId: string) {
@@ -210,7 +217,10 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
               variant="ghost"
               aria-label={t("queue.manage")}
               title={t("queue.manage")}
-              onClick={onManageQueues}
+              onClick={() => {
+                appLogger.gui.debug("Queue manage opened");
+                onManageQueues();
+              }}
             >
               <FontAwesomeIcon icon={faSliders} />
             </Button>
@@ -219,7 +229,10 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             size="sm"
             aria-label={t("queue.add")}
             title={t("queue.add")}
-            onClick={() => setModalOpen(true)}
+            onClick={() => {
+              appLogger.gui.debug("Queue add dialog opened");
+              setModalOpen(true);
+            }}
           >
             <FontAwesomeIcon icon={faPlus} />
           </Button>
@@ -236,9 +249,11 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             selectedQueues={selectedQueues}
             batchBusy={batchBusy}
             onBatchStart={(ids) =>
-              void runBatchQueueAction(ids, (id) => client!.startQueue(id))
+              void runBatchQueueAction(ids, "start", (id) => client!.startQueue(id))
             }
-            onBatchStop={(ids) => void runBatchQueueAction(ids, (id) => client!.stopQueue(id))}
+            onBatchStop={(ids) =>
+              void runBatchQueueAction(ids, "stop", (id) => client!.stopQueue(id))
+            }
             onBatchDelete={(ids) => void confirmDelete(ids)}
           />
           <QueueTable
@@ -248,8 +263,8 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             showCheckboxes={showCheckboxes}
             showDelete={showDelete}
             showModify={showModify}
-            onStart={(id) => void runQueueAction(id, () => client!.startQueue(id))}
-            onStop={(id) => void runQueueAction(id, () => client!.stopQueue(id))}
+            onStart={(id) => void runQueueAction(id, "start", () => client!.startQueue(id))}
+            onStop={(id) => void runQueueAction(id, "stop", () => client!.stopQueue(id))}
             onModify={handleModify}
             onDelete={(id) => void confirmDelete([id])}
             onToggleSelect={handleToggleSelect}
@@ -280,8 +295,8 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             selectable={selectable}
             showModify={mode === "select" && Boolean(onModifyQueue)}
             onSelect={setSelectedQueueId}
-            onStart={(id) => void runQueueAction(id, () => client!.startQueue(id))}
-            onStop={(id) => void runQueueAction(id, () => client!.stopQueue(id))}
+            onStart={(id) => void runQueueAction(id, "start", () => client!.startQueue(id))}
+            onStop={(id) => void runQueueAction(id, "stop", () => client!.stopQueue(id))}
             onModify={onModifyQueue}
             onDelete={(id) => void confirmDelete([id])}
             busyId={busyId}

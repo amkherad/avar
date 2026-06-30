@@ -146,6 +146,7 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
 }
 
 export function restartDataSync(): void {
+  appLogger.gui.debug("Data sync restart requested");
   stopActiveSync();
 
   const { config } = useConfigStore.getState();

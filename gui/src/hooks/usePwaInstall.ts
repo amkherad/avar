@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { isPwaSupported, isStandalonePwa } from "@/lib/pwa";
+import { appLogger } from "@/lib/appLogger";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -42,8 +43,10 @@ export function usePwaInstall() {
       return false;
     }
 
+    appLogger.gui.debug("PWA install prompted");
     await promptEvent.prompt();
     const choice = await promptEvent.userChoice;
+    appLogger.gui.debug("PWA install choice", choice.outcome);
     if (choice.outcome === "accepted") {
       setInstalled(true);
       setCanInstall(false);

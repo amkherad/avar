@@ -4,6 +4,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { parseUrlLinesToBatchItems } from "@/lib/batchAddDownloads";
 import { openBatchAddPopup } from "@/lib/popup";
+import { appLogger } from "@/lib/appLogger";
 import { useDataStore, selectEffectiveQueueId } from "@/stores/dataStore";
 
 export interface BatchAddDownloadModalProps {
@@ -39,6 +40,7 @@ export function BatchAddDownloadModal({ open, onClose }: BatchAddDownloadModalPr
       { items, defaultQueueId, queues },
       t("download.batchAdd.title"),
     );
+    appLogger.gui.debug("Batch add popup opened", `${items.length} items`);
     resetForm();
     onClose();
   }
