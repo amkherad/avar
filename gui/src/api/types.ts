@@ -55,6 +55,10 @@ export interface DownloadInfo {
 
   filenameInferred?: boolean;
 
+  url?: string;
+
+  referer?: string;
+
   status: DownloadStatus;
 
   queueId?: string;

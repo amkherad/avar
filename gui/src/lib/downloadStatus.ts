@@ -11,12 +11,7 @@ export function isError(status: string): boolean {
 }
 
 export function canStart(status: string): boolean {
-  return (
-    status === "queued" ||
-    status === "paused" ||
-    isError(status) ||
-    status === "stopped"
-  );
+  return status === "queued" || isError(status) || status === "stopped";
 }
 
 export function canStop(status: string): boolean {
@@ -37,4 +32,8 @@ export function isCompleted(status: string): boolean {
 
 export function canRedownload(status: string): boolean {
   return isCompleted(status);
+}
+
+export function canRefreshLink(status: string): boolean {
+  return !isCompleted(status);
 }

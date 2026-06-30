@@ -5,6 +5,7 @@ import {
   faDownload,
   faFolder,
   faFolderOpen,
+  faLink,
   faPause,
   faPlay,
   faRotateRight,
@@ -20,6 +21,7 @@ import {
   canStart,
   canStop,
   canRedownload,
+  canRefreshLink,
   isCompleted,
 } from "@/lib/downloadStatus";
 import { openDownloadPopup } from "@/lib/popup";
@@ -28,9 +30,15 @@ export interface DownloadContextMenuProps {
   download: DownloadInfo | null;
   position: { x: number; y: number } | null;
   onClose: () => void;
+  onRefreshLink?: (download: DownloadInfo) => void;
 }
 
-export function DownloadContextMenu({ download, position, onClose }: DownloadContextMenuProps) {
+export function DownloadContextMenu({
+  download,
+  position,
+  onClose,
+  onRefreshLink,
+}: DownloadContextMenuProps) {
   const { t } = useTranslation();
   const actions = useDownloadActions();
 
@@ -78,6 +86,16 @@ export function DownloadContextMenu({ download, position, onClose }: DownloadCon
         icon: faPlay,
         disabled: actions.busy,
         onClick: () => void actions.resume([download.id]),
+      });
+    }
+
+    if (canRefreshLink(download.status) && onRefreshLink) {
+      menuItems.push({
+        id: "refreshLink",
+        label: t("download.refreshLink"),
+        icon: faLink,
+        disabled: actions.busy,
+        onClick: () => onRefreshLink(download),
       });
     }
 
@@ -136,7 +154,7 @@ export function DownloadContextMenu({ download, position, onClose }: DownloadCon
     );
 
     return menuItems;
-  }, [actions, download, t]);
+  }, [actions, download, onRefreshLink, t]);
 
   if (!download || !position) {
     return null;

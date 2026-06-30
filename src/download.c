@@ -4006,6 +4006,82 @@ int download_set_url(const char *id, const char *new_url) {
     return EXIT_SUCCESS;
 }
 
+int download_set_source(const char *id, const char *new_url, const char *referer,
+                        const char *original_page) {
+    if (id == NULL || new_url == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    char *normalized = strdup(new_url);
+    if (normalized == NULL) {
+        return EXIT_FAILURE;
+    }
+    trim_whitespace_inplace(normalized);
+
+    if (!is_valid_http_url(normalized)) {
+        free(normalized);
+        LOG_ERROR("Invalid download URL");
+        return EXIT_FAILURE;
+    }
+
+    const int index = find_download_item_index(id, true);
+    if (index < 0) {
+        free(normalized);
+        LOG_ERROR("Download item not found: %s", id);
+        return EXIT_FAILURE;
+    }
+
+    if (download_item_is_active(id)) {
+        free(normalized);
+        LOG_ERROR("Cannot change URL while download %s is active", id);
+        return EXIT_FAILURE;
+    }
+
+    char *state_path = download_item_state_path(id);
+    DownloadState *state = state_path != NULL ? download_state_load(state_path) : NULL;
+    if (state == NULL) {
+        free(state_path);
+        free(normalized);
+        LOG_ERROR("Download state not found for item %s", id);
+        return EXIT_FAILURE;
+    }
+
+    free(state->url);
+    state->url = normalized;
+
+    if (referer != NULL && referer[0] != '\0') {
+        free(state->referer);
+        state->referer = strdup(referer);
+        if (state->referer == NULL) {
+            download_state_free(state);
+            free(state_path);
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (original_page != NULL && original_page[0] != '\0') {
+        free(state->original_page);
+        state->original_page = strdup(original_page);
+        if (state->original_page == NULL) {
+            download_state_free(state);
+            free(state_path);
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (download_state_save(state, state_path) != 0) {
+        download_state_free(state);
+        free(state_path);
+        return EXIT_FAILURE;
+    }
+
+    download_state_free(state);
+    free(state_path);
+    (void)download_item_strip_config_url(id);
+    LOG_INFO("Updated download source for %s", id);
+    return EXIT_SUCCESS;
+}
+
 char *download_lookup_url(const char *id) {
     return download_item_load_url(id);
 }

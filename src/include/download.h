@@ -51,6 +51,10 @@ char *download_lookup_url(const char *id);
 /** Updates the download URL in state.json and any active transfer. */
 int download_set_url(const char *id, const char *url);
 
+/** Updates URL and optional referer/original page in state.json. */
+int download_set_source(const char *id, const char *url, const char *referer,
+                        const char *original_page);
+
 /** True when a download worker is actively transferring item_id. */
 bool download_item_is_active(const char *id);
 

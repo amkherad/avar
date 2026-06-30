@@ -28,6 +28,11 @@ const batchStash = new Map();
 /** @type {Map<string, { createdAt: number, payload: Record<string, unknown> }>} */
 const addDownloadStash = new Map();
 
+/** @type {{ sessionId: string, downloadId: string, createdAt: number, captured: Record<string, unknown> | null } | null} */
+let activeLinkRefreshSession = null;
+
+const LINK_REFRESH_TTL_MS = 5 * 60 * 1000;
+
 /** @type {((batchId: string, title: string) => void) | null} */
 let batchPopupOpener = null;
 
@@ -126,6 +131,60 @@ function readAddDownloadPayload(addId) {
     return null;
   }
   return entry.payload;
+}
+
+function pruneLinkRefreshSession() {
+  if (activeLinkRefreshSession === null) {
+    return;
+  }
+  if (Date.now() - activeLinkRefreshSession.createdAt > LINK_REFRESH_TTL_MS) {
+    activeLinkRefreshSession = null;
+  }
+}
+
+function startLinkRefreshSession(downloadId) {
+  pruneLinkRefreshSession();
+  const sessionId = `refresh-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  activeLinkRefreshSession = {
+    sessionId,
+    downloadId,
+    createdAt: Date.now(),
+    captured: null,
+  };
+  return sessionId;
+}
+
+function cancelLinkRefreshSession(sessionId) {
+  if (activeLinkRefreshSession === null) {
+    return;
+  }
+  if (!sessionId || activeLinkRefreshSession.sessionId === sessionId) {
+    activeLinkRefreshSession = null;
+  }
+}
+
+function captureLinkRefreshPayload(payload, pageUrl) {
+  pruneLinkRefreshSession();
+  if (activeLinkRefreshSession === null || activeLinkRefreshSession.captured !== null) {
+    return false;
+  }
+
+  const normalized = normalizeAddDownloadPayload(payload, pageUrl);
+  if (!normalized) {
+    return false;
+  }
+
+  activeLinkRefreshSession.captured = normalized;
+  focusAvarApp();
+  return true;
+}
+
+function getLinkRefreshSession(sessionId) {
+  pruneLinkRefreshSession();
+  if (activeLinkRefreshSession === null || activeLinkRefreshSession.sessionId !== sessionId) {
+    return null;
+  }
+  return activeLinkRefreshSession;
 }
 
 function normalizeAddDownloadPayload(payload, pageUrl) {
@@ -613,6 +672,34 @@ async function handleProtocolMessage(message, origin, res) {
     return;
   }
 
+  if (type === "download.linkRefresh.capture") {
+    try {
+      const pageUrl = typeof payload.pageUrl === "string" ? payload.pageUrl : undefined;
+      if (!captureLinkRefreshPayload(payload, pageUrl)) {
+        sendJson(
+          res,
+          409,
+          createErrorResponse("download.linkRefresh.capture", id, "No active link refresh session"),
+          origin,
+        );
+        return;
+      }
+      sendJson(res, 200, createResponse("download.linkRefresh.capture", id, {}), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "download.linkRefresh.capture",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
   if (type === "download.add.open") {
     try {
       const pageUrl = typeof payload.pageUrl === "string" ? payload.pageUrl : undefined;
@@ -909,6 +996,101 @@ async function handleExtensionBridgeRequest(req, res) {
       return true;
     }
     sendJson(res, 200, { ok: true, payload }, origin);
+    return true;
+  }
+
+  if (req.method === "GET" && urlPath === "/extension/link-refresh/active") {
+    pruneLinkRefreshSession();
+    sendJson(
+      res,
+      200,
+      {
+        ok: true,
+        active: activeLinkRefreshSession !== null && activeLinkRefreshSession.captured === null,
+        sessionId: activeLinkRefreshSession?.sessionId ?? null,
+        downloadId: activeLinkRefreshSession?.downloadId ?? null,
+      },
+      origin,
+    );
+    return true;
+  }
+
+  if (req.method === "POST" && urlPath === "/extension/link-refresh/start") {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw || "{}");
+      const downloadId = typeof body.downloadId === "string" ? body.downloadId.trim() : "";
+      if (!downloadId) {
+        sendJson(res, 400, { ok: false, error: "Missing downloadId" }, origin);
+        return true;
+      }
+      const sessionId = startLinkRefreshSession(downloadId);
+      sendJson(res, 200, { ok: true, sessionId }, origin);
+    } catch (error) {
+      sendJson(
+        res,
+        400,
+        { ok: false, error: error instanceof Error ? error.message : "Invalid request" },
+        origin,
+      );
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && urlPath === "/extension/link-refresh/cancel") {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw || "{}");
+      cancelLinkRefreshSession(typeof body.sessionId === "string" ? body.sessionId : undefined);
+      sendJson(res, 200, { ok: true }, origin);
+    } catch {
+      cancelLinkRefreshSession();
+      sendJson(res, 200, { ok: true }, origin);
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && urlPath === "/extension/link-refresh/capture") {
+    try {
+      const raw = await readBody(req);
+      const body = JSON.parse(raw || "{}");
+      const pageUrl = typeof body.pageUrl === "string" ? body.pageUrl : undefined;
+      if (!captureLinkRefreshPayload(body, pageUrl)) {
+        sendJson(res, 409, { ok: false, error: "No active link refresh session" }, origin);
+        return true;
+      }
+      sendJson(res, 200, { ok: true }, origin);
+    } catch (error) {
+      sendJson(
+        res,
+        400,
+        { ok: false, error: error instanceof Error ? error.message : "Invalid request" },
+        origin,
+      );
+    }
+    return true;
+  }
+
+  if (req.method === "GET" && urlPath.startsWith("/extension/link-refresh/")) {
+    const sessionId = decodeURIComponent(urlPath.slice("/extension/link-refresh/".length));
+    if (sessionId === "active") {
+      return false;
+    }
+    const session = getLinkRefreshSession(sessionId);
+    if (!session) {
+      sendJson(res, 404, { ok: false, error: "Link refresh session not found" }, origin);
+      return true;
+    }
+    sendJson(
+      res,
+      200,
+      {
+        ok: true,
+        captured: session.captured !== null,
+        payload: session.captured,
+      },
+      origin,
+    );
     return true;
   }
 

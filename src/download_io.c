@@ -5,15 +5,8 @@
 #include <stdatomic.h>
 #include <string.h>
 
-#if defined(_WIN32)
-    #include <windows.h>
-static _declspec(thread) bool g_download_io_scope = false;
-static _declspec(thread) char g_download_io_item_id[AVAR_DL_ID_BUF_SIZE];
-#else
-    #include <threads.h>
 static _Thread_local bool g_download_io_scope = false;
 static _Thread_local char g_download_io_item_id[AVAR_DL_ID_BUF_SIZE];
-#endif
 
 static atomic_uint g_download_io_scope_count = 0;
 

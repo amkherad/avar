@@ -65,6 +65,10 @@ For **completed** downloads you can **Redownload** — the existing file is remo
 
 Use **Edit URL** in the detail panel to change the source URL for a download entry. The URL is loaded from the download’s on-disk state and is not shown in the list or card views.
 
+For incomplete downloads, use **Refresh link** in the detail panel or context menu. Avar opens the original page in your browser when a referer was saved, shows a waiting dialog, and accepts the next link grabbed through the browser extension. Use **Open original page again** or **Copy page link** in that dialog if you need to return to or share the source page. Avar checks whether the referer still matches, compares the remote file size with the saved total when known, then updates the download entry or offers **Restart download**, **New download**, or **Do nothing** if the size changed.
+
+When you **Start** or **Resume** a paused or stopped download, Avar probes the current URL and compares the reported file size with the saved total. If they differ, nothing is started until you choose how to proceed.
+
 If a server does not support resuming a partial download, Avar stops the item and asks whether to **Restart download** (clear progress and reuse the same entry) or **New download** (keep the partial entry and queue a separate fresh download).
 
 When connected to a **remote daemon**, **Copy to local folder** fetches the completed file from the remote server and saves it to the **Local download folder** configured under **Settings → General**. The remote daemon must have **`daemon.server.fileDownload.enabled`** set to `true` in `config.json` (off by default); enable it under **Settings → Daemon** when connected.

@@ -225,6 +225,25 @@
     return undefined;
   }
 
+  async function isLinkRefreshActive(baseUrl) {
+    const url = normalizeBridgeUrl(baseUrl);
+    const response = await fetchBridge(`${url}/extension/link-refresh/active`);
+    if (!response.ok) {
+      return false;
+    }
+    const body = await response.json();
+    return Boolean(body?.ok && body.active);
+  }
+
+  async function captureLinkRefreshLink(baseUrl, payload) {
+    const pageUrl = resolvePageReferer(payload.pageUrl, payload.referer);
+    await sendMessage(baseUrl, "download.linkRefresh.capture", {
+      ...payload,
+      pageUrl,
+      referer: pageUrl,
+    });
+  }
+
   if (typeof globalThis !== "undefined") {
     globalThis.AvarExtensionProtocol = {
       PROTOCOL,
@@ -241,6 +260,8 @@
       wakeAvarApp,
       ensureBridgeReachable,
       resolvePageReferer,
+      isLinkRefreshActive,
+      captureLinkRefreshLink,
     };
   }
 })();

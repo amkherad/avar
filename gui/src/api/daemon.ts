@@ -328,6 +328,36 @@ export class DaemonClient {
     }
   }
 
+  async setDownloadSource(
+    id: string,
+    source: { url: string; referer?: string; originalPage?: string },
+  ): Promise<void> {
+    const result = await this.rpc<{ exitCode: number }>("download.setSource", {
+      id,
+      url: source.url,
+      ...(source.referer ? { referer: source.referer } : {}),
+      ...(source.originalPage ? { originalPage: source.originalPage } : {}),
+    });
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to update download source", result.exitCode);
+    }
+  }
+
+  async probeDownloadUrl(options: {
+    url: string;
+    id?: string;
+    referer?: string;
+  }): Promise<{ exitCode: number; httpStatus: number; totalBytes: number }> {
+    return this.rpc<{ exitCode: number; httpStatus: number; totalBytes: number }>(
+      "download.probe",
+      {
+        url: options.url,
+        ...(options.id ? { id: options.id } : {}),
+        ...(options.referer ? { referer: options.referer } : {}),
+      },
+    );
+  }
+
   async getDownloadDetails(id: string, signal?: AbortSignal): Promise<DownloadDetails> {
     const result = await this.rpc<{
       exitCode: number;

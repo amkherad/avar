@@ -17,6 +17,8 @@ export type DownloadSearchExtractor = (download: DownloadInfo) => string[];
 export const DOWNLOAD_SEARCH_EXTRACTORS: DownloadSearchExtractor[] = [
   (d) => [d.id],
   (d) => [d.filename],
+  (d) => [d.url ?? ""],
+  (d) => [d.referer ?? ""],
   (d) => [d.status],
   (d) => [d.queueId ?? ""],
   (d) => [String(d.bytesDownloaded), String(d.totalBytes)],

@@ -32,6 +32,7 @@ import { openDownloadPopup } from "@/lib/popup";
 import { openAddDownloadDialog } from "@/lib/openAddDownloadDialog";
 import { appLogger } from "@/lib/appLogger";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
+import { useRefreshLinkModal } from "@/hooks/useRefreshLinkModal";
 import { useDownloadDoubleClickAction } from "@/hooks/useDownloadDoubleClickAction";
 import { useShortcutAction } from "@/shortcuts/useShortcutAction";
 import { canPause, canResume, isCompleted } from "@/lib/downloadStatus";
@@ -80,6 +81,7 @@ function DownloadPanel({
   const setDownloadViewMode = useLayoutStore((s) => s.setDownloadViewMode);
   const [batchAddOpen, setBatchAddOpen] = useState(false);
   const downloadActions = useDownloadActions();
+  const { openRefreshLink, refreshLinkModal } = useRefreshLinkModal();
   const doubleClickAction = useDownloadDoubleClickAction();
 
   const [contextMenu, setContextMenu] = useState<{
@@ -193,7 +195,12 @@ function DownloadPanel({
 
   useShortcutAction("download.start", () => {
     runOnSelection((items) => {
-      void downloadActions.start(items.map((item) => item.id));
+      const ids = items.map((item) => item.id);
+      if (items.some((item) => canResume(item.status))) {
+        void downloadActions.resume(ids);
+      } else {
+        void downloadActions.start(ids);
+      }
     });
   });
 
@@ -290,10 +297,15 @@ function DownloadPanel({
   return (
     <div className="avar-dashboard">
       <BatchAddDownloadModal open={batchAddOpen} onClose={() => setBatchAddOpen(false)} />
+      {refreshLinkModal}
       <DownloadContextMenu
         download={contextMenu?.download ?? null}
         position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
         onClose={() => setContextMenu(null)}
+        onRefreshLink={(download) => {
+          setContextMenu(null);
+          void openRefreshLink(download);
+        }}
       />
 
       <div className="avar-dashboard__workspace">

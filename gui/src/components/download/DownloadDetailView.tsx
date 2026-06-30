@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faCopy, faDownload, faFolder, faFolderOpen, faPen, faRotateRight } from "@fortawesome/free-solid-svg-icons";
+import { faCopy, faDownload, faFolder, faFolderOpen, faLink, faPen, faRotateRight } from "@fortawesome/free-solid-svg-icons";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { CopyButton } from "@/components/ui/CopyButton";
 import type { DownloadInfo } from "@/api/types";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
-import { canRedownload, isCompleted } from "@/lib/downloadStatus";
+import { canRedownload, canRefreshLink, isCompleted } from "@/lib/downloadStatus";
 import { buildDownloadCurl, copyTextToClipboard } from "@/lib/curlCommand";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useConnectionStore } from "@/stores/connectionStore";
@@ -19,6 +19,7 @@ import { useUnitFormat } from "@/hooks/useUnitFormat";
 import { progressPercent } from "./format";
 import { DownloadProgressBar } from "./DownloadProgressBar";
 import { DownloadChecksumTools } from "./DownloadChecksumTools";
+import { useRefreshLinkModal } from "@/hooks/useRefreshLinkModal";
 
 export interface DownloadDetailViewProps {
   download: DownloadInfo;
@@ -56,10 +57,12 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
   const [urlDraft, setUrlDraft] = useState("");
   const [urlSaving, setUrlSaving] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const { openRefreshLink, refreshLinkModal, refreshLinkLoading } = useRefreshLinkModal();
 
-  const url = details?.url;
-  const referer = details?.referer ?? details?.originalPage;
+  const url = details?.url ?? download.url;
+  const referer = details?.referer ?? details?.originalPage ?? download.referer;
   const errorMessage = details?.description ?? download.description;
+  const urlLoadFailed = Boolean(detailsError) && !url;
 
   useEffect(() => {
     if (!editingUrl) {
@@ -114,6 +117,7 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
 
   return (
     <div className={`avar-download-detail ${compact ? "avar-download-detail--compact" : ""}`}>
+      {refreshLinkModal}
       <div className="avar-download-detail__header">
         <div className="avar-download-detail__filename-row">
           <h3 className="avar-download-detail__filename">{download.filename}</h3>
@@ -144,12 +148,12 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
           </div>
         ) : null}
 
-        {detailsLoading ? (
+        {detailsLoading && !url ? (
           <div className="avar-download-detail__field">
             <dt>{t("download.url")}</dt>
             <dd className="avar-list__meta">{t("common.loading")}</dd>
           </div>
-        ) : detailsError ? (
+        ) : urlLoadFailed ? (
           <div className="avar-download-detail__field">
             <dt>{t("download.url")}</dt>
             <dd className="avar-download-detail__error">{detailsError}</dd>
@@ -254,6 +258,17 @@ export function DownloadDetailView({ download, onOpenPopup, compact }: DownloadD
       </dl>
 
       <div className="avar-download-detail__actions">
+        {canRefreshLink(download.status) ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={busy || refreshLinkLoading}
+            onClick={() => void openRefreshLink(download)}
+          >
+            <FontAwesomeIcon icon={faLink} />
+            {t("download.refreshLink")}
+          </Button>
+        ) : null}
         {canRedownload(download.status) && url ? (
           <Button
             size="sm"

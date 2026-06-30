@@ -62,6 +62,18 @@ function registerIpcHandlers() {
     shell.showItemInFolder(filePath);
     return "";
   });
+
+  ipcMain.handle("shell:openExternal", async (_event, url) => {
+    if (typeof url !== "string") {
+      return false;
+    }
+    const trimmed = url.trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return false;
+    }
+    await shell.openExternal(trimmed);
+    return true;
+  });
 }
 
 registerIpcHandlers();

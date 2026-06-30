@@ -44,7 +44,7 @@ export function DownloadControls({ downloads, className = "" }: DownloadControls
 
   const anyPausable = downloads.some((item) => canPause(item.status));
   const anyResumable = downloads.some((item) => canResume(item.status));
-  const anyStartable = downloads.some((item) => canStart(item.status));
+  const anyStartable = downloads.some((item) => canStart(item.status) && !canResume(item.status));
   const anyStoppable = downloads.some((item) => canStop(item.status));
   const anyRedownloadable = downloads.some((item) => canRedownload(item.status));
   const anyCopyToLocal =
@@ -96,8 +96,9 @@ export function DownloadControls({ downloads, className = "" }: DownloadControls
           size="sm"
           variant="secondary"
           loading={busy}
-          shortcut="download.pause"
+          shortcut="download.start"
           registerShortcut={false}
+          title={t("download.resume")}
           aria-label={t("download.resume")}
           onClick={() => void resume(ids)}
         >

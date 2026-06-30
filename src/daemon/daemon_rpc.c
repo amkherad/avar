@@ -7,6 +7,7 @@
 #include <daemon/daemon_session.h>
 #include <daemon/daemon_transport.h>
 #include <download.h>
+#include <download_probe.h>
 #include <file_checksum.h>
 #include <file-system.h>
 #include <http_proxy.h>
@@ -698,13 +699,10 @@ static void strip_download_list_only_fields(cJSON *entry) {
         return;
     }
 
-    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_URL);
     cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_PROXY);
     cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_QUEUED_AT);
     cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_LAST_TRY_AT);
     cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_DESCRIPTION);
-    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_ORIGINAL_PAGE);
-    cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_REFERER);
     cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_STREAM_KIND);
     cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_ADDED_THROUGH);
 }
@@ -1116,6 +1114,72 @@ static cJSON *handle_download_get_details(cJSON *params) {
     json_add_optional_string(result, AVAR_FIELD_LAST_TRY_AT, state->last_try_at);
     json_add_optional_string(result, AVAR_FIELD_ADDED_THROUGH, state->added_through);
     download_state_free(state);
+    return result;
+}
+
+static cJSON *handle_download_probe(cJSON *params) {
+    const cJSON *url = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_URL);
+    if (!cJSON_IsString(url) || url->valuestring == NULL || url->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    const cJSON *referer = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_REFERER);
+    const cJSON *proxy = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_PROXY);
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+
+    char *proxy_url = NULL;
+    if (cJSON_IsString(proxy) && proxy->valuestring != NULL && proxy->valuestring[0] != '\0') {
+        proxy_url = strdup(proxy->valuestring);
+    } else if (proxy != NULL && cJSON_IsObject(proxy)) {
+        proxy_url = proxy_url_from_json(proxy);
+    }
+
+    const char *referer_str =
+            cJSON_IsString(referer) && referer->valuestring != NULL ? referer->valuestring : NULL;
+    const char *download_id =
+            cJSON_IsString(id) && id->valuestring != NULL ? id->valuestring : NULL;
+
+    DownloadProbeResult probe = {0};
+    const int rc = download_probe_url(url->valuestring, referer_str, proxy_url, download_id, &probe);
+    free(proxy_url);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", rc);
+    cJSON_AddNumberToObject(result, "httpStatus", probe.http_status);
+    cJSON_AddNumberToObject(result, "totalBytes", (double)probe.total_bytes);
+    return result;
+}
+
+static cJSON *handle_download_set_source(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    const cJSON *url = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_URL);
+    if (!cJSON_IsString(id) || id->valuestring == NULL || id->valuestring[0] == '\0'
+        || !cJSON_IsString(url) || url->valuestring == NULL || url->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    const cJSON *referer = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_REFERER);
+    const cJSON *original_page =
+            cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ORIGINAL_PAGE);
+
+    const char *referer_str =
+            cJSON_IsString(referer) && referer->valuestring != NULL ? referer->valuestring : NULL;
+    const char *page_str = cJSON_IsString(original_page) && original_page->valuestring != NULL
+                                   ? original_page->valuestring
+                                   : referer_str;
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(
+            result, "exitCode",
+            download_set_source(id->valuestring, url->valuestring, referer_str, page_str));
     return result;
 }
 
@@ -1565,6 +1629,12 @@ static cJSON *dispatch_method(const char *method, cJSON *params, cJSON *id) {
     }
     if (strcmp(method, "download.setUrl") == 0) {
         return handle_download_set_url(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "download.setSource") == 0) {
+        return handle_download_set_source(params != NULL ? params : cJSON_CreateObject());
+    }
+    if (strcmp(method, "download.probe") == 0) {
+        return handle_download_probe(params != NULL ? params : cJSON_CreateObject());
     }
     if (strcmp(method, "download.getDetails") == 0) {
         return handle_download_get_details(params != NULL ? params : cJSON_CreateObject());

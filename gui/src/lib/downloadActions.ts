@@ -1,5 +1,5 @@
 import type { DaemonClient } from "@/api/daemon";
-import type { DownloadInfo } from "@/api/types";
+import type { DownloadDetails, DownloadInfo } from "@/api/types";
 import { appLogger } from "@/lib/appLogger";
 import {
   canPause,
@@ -11,12 +11,35 @@ import {
 } from "@/lib/downloadStatus";
 import { useDataStore } from "@/stores/dataStore";
 import { useConnectionStore } from "@/stores/connectionStore";
+import { guardDownloadStartSize } from "@/lib/downloadSizeCheck";
 
 export type DownloadActionKind = "pause" | "resume" | "start" | "stop" | "delete";
 
 export interface DownloadActionResult {
   succeeded: string[];
   failed: string[];
+}
+
+function detailsFromDownload(download: DownloadInfo): DownloadDetails | undefined {
+  if (!download.url) {
+    return undefined;
+  }
+  return {
+    url: download.url,
+    referer: download.referer,
+  };
+}
+
+async function resolveDownloadDetails(
+  client: DaemonClient,
+  download: DownloadInfo,
+): Promise<DownloadDetails | undefined> {
+  const fallback = detailsFromDownload(download);
+  try {
+    return await client.getDownloadDetails(download.id);
+  } catch {
+    return fallback;
+  }
 }
 
 async function runForIds(
@@ -78,12 +101,37 @@ export async function resumeDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canResume(item.status);
   });
-  return runForIds(
-    eligible,
-    "resume",
-    (id) => client.resumeDownload(id),
-    (id) => downloads.find((d) => d.id === id)?.filename,
-  );
+  const succeeded: string[] = [];
+  const failed: string[] = [];
+
+  for (const id of eligible) {
+    const item = downloads.find((d) => d.id === id);
+    if (!item) {
+      continue;
+    }
+    try {
+      const details = await resolveDownloadDetails(client, item);
+      const allowed = await guardDownloadStartSize(client, item, details);
+      if (!allowed) {
+        continue;
+      }
+      await client.resumeDownload(id);
+      succeeded.push(id);
+      appLogger.gui.info("Download resume", item.filename);
+    } catch (err) {
+      failed.push(id);
+      appLogger.gui.error(
+        "resume",
+        err instanceof Error ? err.message : undefined,
+      );
+    }
+  }
+
+  if (succeeded.length > 0) {
+    await useDataStore.getState().refresh();
+  }
+
+  return { succeeded, failed };
 }
 
 export async function startDownloads(
@@ -95,12 +143,37 @@ export async function startDownloads(
     const item = downloads.find((d) => d.id === id);
     return item && canStart(item.status);
   });
-  return runForIds(
-    eligible,
-    "start",
-    (id) => client.startDownload(id),
-    (id) => downloads.find((d) => d.id === id)?.filename,
-  );
+  const succeeded: string[] = [];
+  const failed: string[] = [];
+
+  for (const id of eligible) {
+    const item = downloads.find((d) => d.id === id);
+    if (!item) {
+      continue;
+    }
+    try {
+      const details = await resolveDownloadDetails(client, item);
+      const allowed = await guardDownloadStartSize(client, item, details);
+      if (!allowed) {
+        continue;
+      }
+      await client.startDownload(id);
+      succeeded.push(id);
+      appLogger.gui.info("Download start", item.filename);
+    } catch (err) {
+      failed.push(id);
+      appLogger.gui.error(
+        "start",
+        err instanceof Error ? err.message : undefined,
+      );
+    }
+  }
+
+  if (succeeded.length > 0) {
+    await useDataStore.getState().refresh();
+  }
+
+  return { succeeded, failed };
 }
 
 export async function stopDownloads(

@@ -2,7 +2,7 @@ importScripts("media.js", "capture.js", "protocol.js", "hls.js", "context-menu.j
 
 const EXTENSION_VERSION = "0.1.0";
 const { IDS: MENU_IDS } = globalThis.AvarContextMenu;
-const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE, ensureBridgeReachable, resolvePageReferer } =
+const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE, ensureBridgeReachable, resolvePageReferer, isLinkRefreshActive, captureLinkRefreshLink } =
   globalThis.AvarExtensionProtocol;
 
 async function collectFromTab(tabId, { forContextMenu = false } = {}) {
@@ -106,6 +106,14 @@ async function openBatchAdd(payload) {
 async function openSingleAdd(payload) {
   await ensureBridgeReachable(chrome, pingBridgeEndpoint);
   const bridgeUrl = await resolveBridgeUrl();
+  try {
+    if (await isLinkRefreshActive(bridgeUrl)) {
+      await captureLinkRefreshLink(bridgeUrl, payload);
+      return;
+    }
+  } catch {
+    // Fall through to the normal add-download flow.
+  }
   const pageUrl = resolvePageReferer(payload.pageUrl, payload.referer);
   return sendMessage(bridgeUrl, "download.add.open", {
     url: payload.url,

@@ -141,6 +141,29 @@ AVAR_TEST(daemon_rpc_download_resolve_path) {
     free(response);
 }
 
+AVAR_TEST(daemon_rpc_download_get_details_and_list_url) {
+    setup_rpc_config();
+
+    const char *item_json =
+        "{\"" AVAR_FIELD_ID "\":\"rpc-dl-1\",\""
+        AVAR_FIELD_URL "\":\"https://example.com/file.bin\",\""
+        AVAR_FIELD_FILENAME "\":\"file.bin\",\""
+        AVAR_FIELD_STATUS "\":\"" AVAR_DL_STATUS_QUEUED "\"}";
+    AVAR_ASSERT_EQ(append_config_array_item(AVAR_CFG_DM_ITEMS, item_json), 0);
+
+    char *response = NULL;
+    AVAR_ASSERT(rpc_call("downloads.list", NULL, &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "https://example.com/file.bin") != NULL);
+    free(response);
+
+    AVAR_ASSERT(rpc_call("download.getDetails", "{\"id\":\"rpc-dl-1\"}", &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "Method not found") == NULL);
+    AVAR_ASSERT(strstr(response, "exitCode") != NULL);
+    free(response);
+}
+
 AVAR_TEST(daemon_rpc_invalid_request) {
     setup_rpc_config();
 
