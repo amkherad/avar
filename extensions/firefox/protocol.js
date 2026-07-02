@@ -49,6 +49,31 @@
     }
   }
 
+  /**
+   * @param {unknown} error
+   */
+  function formatError(error) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    if (typeof error === "string") {
+      return error.replace(/^Error:\s*/u, "");
+    }
+    return String(error).replace(/^Error:\s*/u, "");
+  }
+
+  async function readBridgeHttpError(response) {
+    try {
+      const body = await response.json();
+      if (typeof body?.error === "string" && body.error.trim()) {
+        return body.error;
+      }
+    } catch {
+      // Fall back to the HTTP status below.
+    }
+    return `Bridge HTTP ${response.status}`;
+  }
+
   async function sendMessage(baseUrl, type, payload) {
     const url = normalizeBridgeUrl(baseUrl);
     const response = await fetchBridge(`${url}/v1`, {
@@ -57,7 +82,7 @@
       body: JSON.stringify(createMessage(type, payload)),
     });
     if (!response.ok) {
-      throw new Error(`Bridge HTTP ${response.status}`);
+      throw new Error(await readBridgeHttpError(response));
     }
     const body = await response.json();
     if (!body?.ok) {
@@ -73,7 +98,7 @@
     const url = normalizeBridgeUrl(baseUrl);
     const response = await fetchBridge(`${url}/v1/ping`);
     if (!response.ok) {
-      throw new Error(`Bridge HTTP ${response.status}`);
+      throw new Error(await readBridgeHttpError(response));
     }
     const body = await response.json();
     if (!body?.ok) {
@@ -274,6 +299,7 @@
       ELECTRON_BRIDGE_PORT,
       AVAR_FOCUS_URL,
       BRIDGE_UNREACHABLE,
+      formatError,
       createMessage,
       sendMessage,
       pingBridge,

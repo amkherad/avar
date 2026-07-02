@@ -593,7 +593,8 @@
       }
 
       .media-scroll--tabbed #selectedSection.media-panel--hidden,
-      .media-scroll--tabbed #mediaList.media-panel--hidden {
+      .media-scroll--tabbed #mediaList.media-panel--hidden,
+      .media-scroll--tabbed #bookmarkSection.media-panel--hidden {
         display: none;
       }
 
@@ -609,6 +610,51 @@
       #downloadSelected {
         margin-top: 4px;
         margin-bottom: 8px;
+      }
+
+      .bookmark-section {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 8px;
+        flex-shrink: 0;
+      }
+
+      .bookmark-section[hidden] {
+        display: none;
+      }
+
+      .bookmark-section__title {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .bookmark-section__url {
+        margin: 0;
+        font-size: 0.68rem;
+        color: #64748b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .bookmark-section__meta {
+        margin: 0;
+        font-size: 0.72rem;
+        color: #94a3b8;
+      }
+
+      #bookmarkToggleBtn {
+        margin-top: 4px;
+      }
+
+      #bookmarkToggleBtn.bookmark-toggle--active {
+        background: #334155;
+        color: #e2e8f0;
       }
 
       .settings-checkbox {
@@ -776,6 +822,16 @@
               Media
               <span id="viewTabMediaCount" class="view-tabs__count">0</span>
             </button>
+            <button
+              id="viewTabBookmark"
+              class="view-tabs__tab"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              aria-controls="bookmarkSection"
+            >
+              Bookmark
+            </button>
           </div>
         </div>
 
@@ -787,6 +843,13 @@
             <hr class="list-separator" aria-hidden="true" />
           </section>
           <ul id="mediaList"></ul>
+          <section id="bookmarkSection" class="bookmark-section">
+            <p class="section-label">Bookmark</p>
+            <p id="bookmarkPageTitle" class="bookmark-section__title"></p>
+            <p id="bookmarkPageUrl" class="bookmark-section__url"></p>
+            <p id="bookmarkLinkCount" class="bookmark-section__meta"></p>
+            <button id="bookmarkToggleBtn" class="primary" type="button">Bookmark this page</button>
+          </section>
         </div>
         <button id="downloadAll" class="secondary" type="button" hidden>Download all on page</button>
       </div>

@@ -70,6 +70,12 @@ const viewTabSelected = document.getElementById("viewTabSelected");
 const viewTabMedia = document.getElementById("viewTabMedia");
 const viewTabSelectedCount = document.getElementById("viewTabSelectedCount");
 const viewTabMediaCount = document.getElementById("viewTabMediaCount");
+const viewTabBookmark = document.getElementById("viewTabBookmark");
+const bookmarkSection = document.getElementById("bookmarkSection");
+const bookmarkPageTitle = document.getElementById("bookmarkPageTitle");
+const bookmarkPageUrl = document.getElementById("bookmarkPageUrl");
+const bookmarkLinkCount = document.getElementById("bookmarkLinkCount");
+const bookmarkToggleBtn = document.getElementById("bookmarkToggleBtn");
 
 let selectedLinksInSeparateTab = true;
 let activeListTab = "media";
@@ -79,6 +85,8 @@ let lastSelectedItems = [];
 let knownQueues = [];
 let pageReferer = null;
 let pageTitle = "";
+let pageLinkCount = 0;
+let pageBookmarked = false;
 let bridgeConnected = false;
 let hlsExpandGeneration = 0;
 const probedSizes = new Map();
@@ -224,9 +232,11 @@ function setActiveListTab(tab, { userInitiated = false } = {}) {
   if (!selectedLinksInSeparateTab) {
     return;
   }
-  activeListTab = tab === "selected" ? "selected" : "media";
+  activeListTab =
+    tab === "selected" ? "selected" : tab === "bookmark" ? "bookmark" : "media";
   viewTabSelected.setAttribute("aria-selected", activeListTab === "selected" ? "true" : "false");
   viewTabMedia.setAttribute("aria-selected", activeListTab === "media" ? "true" : "false");
+  viewTabBookmark.setAttribute("aria-selected", activeListTab === "bookmark" ? "true" : "false");
 
   if (selectedLinksInSeparateTab) {
     selectedSection.removeAttribute("hidden");
@@ -240,12 +250,17 @@ function setActiveListTab(tab, { userInitiated = false } = {}) {
   }
 
   mediaList.classList.toggle("media-panel--hidden", selectedLinksInSeparateTab && activeListTab !== "media");
+  bookmarkSection.classList.toggle(
+    "media-panel--hidden",
+    selectedLinksInSeparateTab && activeListTab !== "bookmark",
+  );
   downloadSelectedBtn.hidden = lastSelectedItems.length === 0 || activeListTab !== "selected";
   downloadAllBtn.hidden = getVisibleMediaCount() === 0 || activeListTab !== "media";
 
   if (userInitiated) {
     void api.storage.local.set({ activeListTab });
   }
+  renderBookmarkPanel();
 }
 
 function applyListViewLayout({ preferSelectedTabOnOpen = false } = {}) {
@@ -269,6 +284,88 @@ function applyListViewLayout({ preferSelectedTabOnOpen = false } = {}) {
   mediaScroll.classList.remove("media-scroll--tabbed");
   selectedSection.classList.remove("media-panel--hidden");
   mediaList.classList.remove("media-panel--hidden");
+  bookmarkSection.classList.remove("media-panel--hidden");
+  bookmarkSection.removeAttribute("hidden");
+}
+
+function renderBookmarkPanel() {
+  const pageUrl = pageReferer || "";
+  const hasPage = Boolean(pageUrl && /^https?:\/\//i.test(pageUrl));
+
+  if (!hasPage) {
+    bookmarkSection.setAttribute("hidden", "");
+    return;
+  }
+
+  bookmarkSection.removeAttribute("hidden");
+  bookmarkPageTitle.textContent = pageTitle || pageUrl;
+  bookmarkPageUrl.textContent = pageUrl;
+  bookmarkLinkCount.textContent = `${pageLinkCount} link${pageLinkCount === 1 ? "" : "s"} on this page`;
+
+  bookmarkToggleBtn.textContent = pageBookmarked ? "Remove bookmark" : "Bookmark this page";
+  bookmarkToggleBtn.classList.toggle("bookmark-toggle--active", pageBookmarked);
+  bookmarkToggleBtn.disabled = !bridgeConnected;
+  bookmarkToggleBtn.title = bridgeConnected ? "" : AVAR_NOT_FOUND_TITLE;
+}
+
+async function refreshBookmarkState() {
+  const pageUrl = pageReferer || "";
+  if (!pageUrl || !/^https?:\/\//i.test(pageUrl)) {
+    pageBookmarked = false;
+    renderBookmarkPanel();
+    return;
+  }
+
+  if (!bridgeConnected) {
+    pageBookmarked = false;
+    renderBookmarkPanel();
+    return;
+  }
+
+  const response = await api.runtime.sendMessage({ type: "avar-bookmark-has", url: pageUrl });
+  pageBookmarked = Boolean(response?.ok && response.bookmarked);
+  renderBookmarkPanel();
+}
+
+async function toggleBookmark() {
+  const pageUrl = pageReferer || "";
+  if (!pageUrl || !bridgeConnected) {
+    return;
+  }
+
+  bookmarkToggleBtn.disabled = true;
+  try {
+    if (pageBookmarked) {
+      const response = await api.runtime.sendMessage({
+        type: "avar-bookmark-remove",
+        url: pageUrl,
+      });
+      if (!response?.ok) {
+        setStatus(response?.error || "Remove failed");
+        return;
+      }
+      pageBookmarked = false;
+      setStatus("Bookmark removed.");
+    } else {
+      const response = await api.runtime.sendMessage({
+        type: "avar-bookmark-add",
+        url: pageUrl,
+        title: pageTitle || pageUrl,
+        linkCount: pageLinkCount,
+      });
+      if (!response?.ok) {
+        setStatus(response?.error || "Bookmark failed");
+        return;
+      }
+      pageBookmarked = true;
+      setStatus("Page bookmarked.");
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(message.replace(/^Error:\s*/u, ""));
+  } finally {
+    renderBookmarkPanel();
+  }
 }
 
 function updateScanStatus(totalCount) {
@@ -927,6 +1024,7 @@ async function refreshBridgeStatus() {
     } else {
       updateAllDownloadButtons();
     }
+    void refreshBookmarkState();
     if (bridgeConnected && isSettingsOpen()) {
       void loadQueues();
     }
@@ -975,7 +1073,12 @@ async function loadConfig() {
   grabAllDownloadsInput.checked = stored.grabAllDownloads !== false;
   blockBrowserDownloadsInput.checked = stored.blockBrowserDownloads !== false;
   updateGrabDownloadsUi();
-  activeListTab = stored.activeListTab === "selected" ? "selected" : "media";
+  activeListTab =
+    stored.activeListTab === "selected"
+      ? "selected"
+      : stored.activeListTab === "bookmark"
+        ? "bookmark"
+        : "media";
 
   applyPopupSize(stored.popupWidth, stored.popupHeight);
   installPopupResizePersistence();
@@ -1066,6 +1169,7 @@ async function scanPage() {
 
   pageReferer = response.pageUrl || null;
   pageTitle = response.pageTitle || "";
+  pageLinkCount = Number(response.linkCount) || 0;
   const selectedItems = response.selectedItems || [];
   const items = response.items || (response.urls || []).map((url) => ({
     url,
@@ -1075,6 +1179,7 @@ async function scanPage() {
   renderSelectedLinksList(selectedItems);
   renderMediaList(items);
   applyListViewLayout({ preferSelectedTabOnOpen: true });
+  void refreshBookmarkState();
 
   const hlsCount = items.filter((item) => item.kind === "hls").length;
   if (hlsCount > 0 && bridgeConnected) {
@@ -1114,6 +1219,14 @@ viewTabSelected.addEventListener("click", () => {
 
 viewTabMedia.addEventListener("click", () => {
   setActiveListTab("media", { userInitiated: true });
+});
+
+viewTabBookmark.addEventListener("click", () => {
+  setActiveListTab("bookmark", { userInitiated: true });
+});
+
+bookmarkToggleBtn.addEventListener("click", () => {
+  void toggleBookmark();
 });
 
 function updateGrabDownloadsUi() {

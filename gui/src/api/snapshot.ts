@@ -1,4 +1,23 @@
-import type { DownloadInfo, HealthInfo, QueueInfo, SystemStatsInfo, SnapshotPayload } from "./types";
+import type {
+  BookmarkInfo,
+  DownloadInfo,
+  HealthInfo,
+  QueueInfo,
+  SystemStatsInfo,
+  SnapshotPayload,
+} from "./types";
+
+function parseBookmarkRecord(item: unknown): BookmarkInfo {
+  const record = (item ?? {}) as Record<string, unknown>;
+  return {
+    id: String(record.id ?? ""),
+    url: String(record.url ?? ""),
+    title: String(record.title ?? ""),
+    linkCount: Number(record.linkCount ?? 0),
+    createdAt: record.createdAt !== undefined ? Number(record.createdAt) : undefined,
+    updatedAt: record.updatedAt !== undefined ? Number(record.updatedAt) : undefined,
+  };
+}
 
 function parseQueueRecord(item: unknown): QueueInfo {
   const record = (item ?? {}) as Record<string, unknown>;
@@ -132,4 +151,4 @@ export function parseStreamStatsPayload(raw: unknown): SystemStatsInfo | null {
   return parseSystemStats(record) ?? null;
 }
 
-export { parseDownloadItem, parseQueueRecord };
+export { parseBookmarkRecord, parseDownloadItem, parseQueueRecord };

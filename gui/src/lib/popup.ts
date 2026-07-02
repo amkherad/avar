@@ -7,6 +7,11 @@ import {
   stashAddDownloadPrefill,
   type AddDownloadPrefill,
 } from "@/lib/addDownloadPrefill";
+import {
+  releaseAddDownloadPopupSlot,
+  tryOpenAddDownloadPopup,
+  type OpenAddDownloadPopupOptions,
+} from "@/lib/addDownloadWindowControl";
 import { usePopupStore } from "@/stores/popupStore";
 import { appLogger } from "@/lib/appLogger";
 
@@ -19,6 +24,8 @@ export interface PopupWindowOptions {
   minWidth?: number;
   minHeight?: number;
   title?: string;
+  /** Keep the popup above other application windows (desktop shells). */
+  alwaysOnTop?: boolean;
 }
 
 export interface ConfirmDialogOptions {
@@ -138,6 +145,7 @@ export function openPopupWindow(
       height,
       minWidth: options.minWidth,
       minHeight: options.minHeight,
+      alwaysOnTop: options.alwaysOnTop,
     });
     return Promise.resolve();
   }
@@ -150,6 +158,7 @@ export function openPopupWindow(
       url,
       width,
       height,
+      alwaysOnTop: options.alwaysOnTop,
       resolve,
     });
   });
@@ -168,6 +177,7 @@ export function openBatchAddPopup(
     height: 960,
     minWidth: 600,
     minHeight: 400,
+    alwaysOnTop: true,
     ...options,
     title,
   });
@@ -176,15 +186,22 @@ export function openBatchAddPopup(
 export function openAddDownloadPopup(
   payload: AddDownloadPrefill,
   title: string,
-  options: PopupWindowOptions = {},
+  options: PopupWindowOptions & OpenAddDownloadPopupOptions = {},
 ): Promise<void> {
+  const { fromExtensionGrab, ...popupOptions } = options;
+
+  if (!window.avar?.isElectron && !tryOpenAddDownloadPopup({ fromExtensionGrab })) {
+    return Promise.resolve();
+  }
+
   const id = nextPopupId();
   stashAddDownloadPrefill(id, payload);
   const hash = `#/popup/add-download/${encodeURIComponent(id)}`;
   return openPopupWindow(hash, {
     width: 560,
     height: 720,
-    ...options,
+    alwaysOnTop: true,
+    ...popupOptions,
     title,
   });
 }
@@ -273,6 +290,7 @@ export function closePopupWindow(id: string): void {
   const { windows, removeWindow } = usePopupStore.getState();
   const win = windows.find((w) => w.id === id);
   if (win) {
+    releaseAddDownloadPopupSlot(win.url);
     removeWindow(id);
     win.resolve();
   }

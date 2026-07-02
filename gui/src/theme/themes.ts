@@ -1,4 +1,4 @@
-export type ThemeVariantId = "light-soft" | "light-bright" | "dark";
+export type ThemeVariantId = "light-soft" | "light-bright" | "queen-mode" | "dark";
 
 export interface ThemeTokens {
   id: ThemeVariantId;
@@ -59,6 +59,26 @@ export const brightLightTheme: ThemeTokens = {
   font: "'Segoe UI', system-ui, -apple-system, sans-serif",
 };
 
+/** Pink and rose palette — playful light theme. */
+export const queenModeTheme: ThemeTokens = {
+  id: "queen-mode",
+  bg: "#fde8f0",
+  bgElevated: "#fff9fb",
+  bgMuted: "#f5d0e0",
+  border: "#e8b4cb",
+  text: "#3d1f35",
+  textMuted: "#7a5570",
+  primary: "#d946a0",
+  primaryHover: "#c0267a",
+  primaryText: "#ffffff",
+  success: "#059669",
+  warning: "#d97706",
+  danger: "#e11d48",
+  shadow: "0 8px 24px rgba(217, 70, 160, 0.14)",
+  radius: "10px",
+  font: "'Segoe UI', system-ui, -apple-system, sans-serif",
+};
+
 export const darkTheme: ThemeTokens = {
   id: "dark",
   bg: "#0f1419",
@@ -88,7 +108,7 @@ export function resolveSystemTheme(): "light" | "dark" {
 }
 
 export function resolveThemeTokens(
-  themeSetting: "light" | "light-bright" | "dark" | "system",
+  themeSetting: "light" | "light-bright" | "queen-mode" | "dark" | "system",
   systemMode: "light" | "dark",
 ): ThemeTokens {
   if (themeSetting === "dark") {
@@ -96,6 +116,9 @@ export function resolveThemeTokens(
   }
   if (themeSetting === "light-bright") {
     return brightLightTheme;
+  }
+  if (themeSetting === "queen-mode") {
+    return queenModeTheme;
   }
   if (themeSetting === "system") {
     return systemMode === "dark" ? darkTheme : softLightTheme;

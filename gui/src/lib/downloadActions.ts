@@ -1,5 +1,5 @@
 import type { DaemonClient } from "@/api/daemon";
-import type { DownloadDetails, DownloadInfo } from "@/api/types";
+import type { DownloadDetails, DownloadInfo, QueueInfo } from "@/api/types";
 import { appLogger } from "@/lib/appLogger";
 import {
   canPause,
@@ -12,6 +12,7 @@ import {
 import { useDataStore } from "@/stores/dataStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { guardDownloadStartSize } from "@/lib/downloadSizeCheck";
+import { isDefaultQueue } from "@/queue/defaultQueue";
 
 export type DownloadActionKind = "pause" | "resume" | "start" | "stop" | "delete";
 
@@ -276,6 +277,23 @@ export async function redownloadDownloads(
   }
 
   return { succeeded, failed };
+}
+
+export async function moveDownloadsToQueue(
+  client: DaemonClient,
+  ids: string[],
+  queue: QueueInfo,
+): Promise<DownloadActionResult> {
+  return runForIds(ids, "move to queue", async (id) => {
+    const argv = ["avar", "dl", "set-queue", id];
+    if (!isDefaultQueue(queue.id)) {
+      argv.push(`--queue=${queue.name}`);
+    }
+    const result = await client.cliExec(argv);
+    if (result.exitCode !== 0) {
+      throw new Error(`Failed to move download ${id}`);
+    }
+  });
 }
 
 export function togglePauseResume(

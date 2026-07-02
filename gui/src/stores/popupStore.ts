@@ -7,6 +7,7 @@ export interface PopupWindowState {
   url: string;
   width: number;
   height: number;
+  alwaysOnTop?: boolean;
   resolve: () => void;
 }
 

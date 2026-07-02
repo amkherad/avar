@@ -10,6 +10,7 @@ export const HELP_TOPICS: HelpTopic[] = [
   { id: "index", titleKey: "help.topics.index", file: "index.md" },
   { id: "downloads", titleKey: "help.topics.downloads", file: "downloads.md" },
   { id: "queues", titleKey: "help.topics.queues", file: "queues.md" },
+  { id: "bookmarks", titleKey: "help.topics.bookmarks", file: "bookmarks.md" },
   { id: "sessions", titleKey: "help.topics.sessions", file: "sessions.md" },
   { id: "settings", titleKey: "help.topics.settings", file: "settings.md" },
   { id: "shortcuts", titleKey: "help.topics.shortcuts", file: "shortcuts.md" },

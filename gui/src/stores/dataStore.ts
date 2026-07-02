@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { DownloadInfo, HealthInfo, QueueInfo, SystemStatsInfo } from "@/api/types";
 import { DEFAULT_QUEUE_ID, isDefaultQueue } from "@/queue/defaultQueue";
+import { isBookmarksView } from "@/bookmarks/bookmarksView";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { appLogger } from "@/lib/appLogger";
 
@@ -236,6 +237,9 @@ export function selectDownloadsForQueue(
   downloads: DownloadInfo[],
   queueId: string | null,
 ): DownloadInfo[] {
+  if (isBookmarksView(queueId)) {
+    return [];
+  }
   if (isDefaultQueue(queueId)) {
     return downloads.filter((item) => !item.queueId);
   }

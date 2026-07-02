@@ -47,6 +47,7 @@ export function GeneralSettings() {
       >
         <option value="light">{t("settings.themeLight")}</option>
         <option value="light-bright">{t("settings.themeLightBright")}</option>
+        <option value="queen-mode">{t("settings.themeQueenMode")}</option>
         <option value="dark">{t("settings.themeDark")}</option>
         <option value="system">{t("settings.themeSystem")}</option>
       </Select>

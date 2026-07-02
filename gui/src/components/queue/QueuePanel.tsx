@@ -16,6 +16,8 @@ import {
   queueIsEditable,
   withDefaultQueue,
 } from "@/queue/defaultQueue";
+import { BOOKMARKS_VIEW_ID, isBookmarksView } from "@/bookmarks/bookmarksView";
+import { BookmarksSidebarItem } from "@/components/bookmarks/BookmarksPanel";
 import { startDownloads, stopDownloads } from "@/lib/downloadActions";
 import { showConfirmDialog } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
@@ -321,7 +323,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
           ) : null}
           <QueueList
             queues={displayQueues}
-            selectedId={selectable ? effectiveQueueId : null}
+            selectedId={selectable && !isBookmarksView(effectiveQueueId) ? effectiveQueueId : null}
             downloadCounts={downloadCounts}
             compact
             showDelete={showDelete}
@@ -334,6 +336,12 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             onDelete={(id) => void confirmDelete([id])}
             busyId={busyId}
           />
+          {!isManage ? (
+            <BookmarksSidebarItem
+              selected={isBookmarksView(effectiveQueueId)}
+              onSelect={() => setSelectedQueueId(BOOKMARKS_VIEW_ID)}
+            />
+          ) : null}
         </>
       )}
 

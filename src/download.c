@@ -5053,6 +5053,102 @@ int download_remove(const char *target, const bool by_id, const bool purge_files
     return EXIT_SUCCESS;
 }
 
+int download_set_queue(const char *id, const char *queue) {
+    if (id == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    const int index = find_download_item_index(id, true);
+    if (index < 0) {
+        LOG_ERROR("Download item not found: %s", id);
+        return EXIT_FAILURE;
+    }
+
+    char *resolved_queue = NULL;
+    if (queue != NULL && queue[0] != '\0') {
+        resolved_queue = queue_resolve_id(queue, true);
+        if (resolved_queue == NULL) {
+            resolved_queue = queue_resolve_id(queue, false);
+        }
+        if (resolved_queue == NULL) {
+            LOG_ERROR("Queue not found: %s", queue);
+            return EXIT_FAILURE;
+        }
+    }
+
+    char *old_queue =
+            get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_QUEUE_ID);
+
+    const bool old_is_default = old_queue == NULL || old_queue[0] == '\0';
+    const bool new_is_default = resolved_queue == NULL;
+    if (old_is_default && new_is_default) {
+        free(old_queue);
+        return EXIT_SUCCESS;
+    }
+    if (!old_is_default && !new_is_default && strcmp(old_queue, resolved_queue) == 0) {
+        free(old_queue);
+        free(resolved_queue);
+        return EXIT_SUCCESS;
+    }
+
+    char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, (size_t)index);
+    if (json == NULL) {
+        free(old_queue);
+        free(resolved_queue);
+        return EXIT_FAILURE;
+    }
+
+    cJSON *obj = cJSON_Parse(json);
+    free(json);
+    if (obj == NULL || !cJSON_IsObject(obj)) {
+        cJSON_Delete(obj);
+        free(old_queue);
+        free(resolved_queue);
+        return EXIT_FAILURE;
+    }
+
+    cJSON_ReplaceItemInObjectCaseSensitive(
+            obj, AVAR_FIELD_QUEUE_ID,
+            resolved_queue != NULL ? cJSON_CreateString(resolved_queue) : cJSON_CreateNull());
+
+    char *updated = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    if (updated == NULL) {
+        free(old_queue);
+        free(resolved_queue);
+        return EXIT_FAILURE;
+    }
+
+    if (replace_config_array_item_at(AVAR_CFG_DM_ITEMS, (size_t)index, updated) != 0) {
+        cJSON_free(updated);
+        free(old_queue);
+        free(resolved_queue);
+        return EXIT_FAILURE;
+    }
+    cJSON_free(updated);
+
+    char *state_path = download_item_state_path(id);
+    DownloadState *state = state_path != NULL ? download_state_load(state_path) : NULL;
+    if (state != NULL) {
+        free(state->queue_id);
+        state->queue_id = resolved_queue != NULL ? strdup(resolved_queue) : NULL;
+        (void)download_state_save(state, state_path);
+        download_state_free(state);
+    }
+    free(state_path);
+
+    if (!old_is_default) {
+        queue_sync_started_state(old_queue);
+    }
+    if (!new_is_default) {
+        queue_sync_started_state(resolved_queue);
+    }
+
+    free(old_queue);
+    free(resolved_queue);
+    return EXIT_SUCCESS;
+}
+
 #if defined(AVAR_TESTING)
 char *download_test_choose_filename(const char *url, const char *header_value,
                                      const size_t header_len) {

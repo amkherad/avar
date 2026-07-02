@@ -1,11 +1,12 @@
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { DownloadInfo } from "@/api/types";
+import type { DownloadInfo, QueueInfo } from "@/api/types";
 import {
   deleteDownloads,
   pauseDownloads,
   resumeDownloads,
   redownloadDownloads,
+  moveDownloadsToQueue,
   startDownloads,
   stopDownloads,
   togglePauseResume,
@@ -258,6 +259,17 @@ export function useDownloadActions() {
     [client, openFileVisible, withBusy],
   );
 
+  const moveToQueue = useCallback(
+    (ids: string[], queue: QueueInfo) =>
+      withBusy("Move downloads to queue", async () => {
+        if (!client) {
+          return;
+        }
+        await moveDownloadsToQueue(client, ids, queue);
+      }),
+    [client, withBusy],
+  );
+
   return {
     busy,
     pause,
@@ -270,6 +282,7 @@ export function useDownloadActions() {
     copyToLocal,
     openFile,
     openContainingFolder,
+    moveToQueue,
     remoteSessionActive,
     fileDownloadEnabled,
     localCopyReady,

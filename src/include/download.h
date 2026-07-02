@@ -101,6 +101,9 @@ int download_resume(const char *id);
 int download_start(const char *id);
 int download_stop(const char *id);
 
+/** Assigns a download item to a queue by id or name. Pass NULL queue for the default queue. */
+int download_set_queue(const char *id, const char *queue);
+
 /** Resumes downloads left in the downloading state and restarts started queues. */
 void download_resume_interrupted(void);
 

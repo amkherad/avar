@@ -11,6 +11,11 @@ Click **Add download** in the downloads panel header (or press **Ctrl+N**) to op
 
 Use **Batch add** (beside **Add download** in the downloads panel header) to paste multiple URLs (one per line), review them in the batch dialog, then queue or start them together.
 
+Use the **actions** menu (⋮) beside **Batch add** to export or import download links as plain text:
+
+- **Export to text** — saves one URL per line to a `.txt` file. If any downloads are selected, only those links are exported; otherwise every download in the current filtered list is included.
+- **Import from text** — opens the same batch URL dialog so you can paste links (one per line) and queue them.
+
 In the batch review window you can filter the list, use **Shift+click** for range selection, **Ctrl+click** (or **Cmd+click** on macOS) to add or remove individual rows, invert the selection, or remove unselected items before queuing.
 
 The dialog closes after either action succeeds.
@@ -39,6 +44,8 @@ In **table view**, use the status dropdown in the **Status** column header. Clic
 | Range select | **Shift+click** from the last selected item |
 
 When one or more downloads are selected, batch action buttons appear on the left side of the toolbar: pause/resume, start/stop, and delete.
+
+**Right-click** with multiple items selected opens a batch context menu with the same lifecycle actions plus a **Move to queue** submenu listing every queue except the one you are viewing. The first target queue is marked as the default choice.
 
 **Double-click** a download to open the completed file with your default app (local Electron session, when configured under **Settings → General**) or open the detail popup window. A single click only selects the row.
 

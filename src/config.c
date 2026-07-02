@@ -405,6 +405,14 @@ char *get_config(stringa key) {
     return value;
 }
 
+char *config_get_directory(void) {
+    ensure_initialized();
+    if (_config.dir == NULL) {
+        return NULL;
+    }
+    return strdup(_config.dir);
+}
+
 char *get_config_or_default(stringa key, stringa default_value) {
     char *value = get_config(key);
     if (value != NULL) {

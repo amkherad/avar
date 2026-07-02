@@ -1,5 +1,6 @@
 #include <cJSON.h>
 
+#include <bookmark.h>
 #include <cli.h>
 #include <config.h>
 #include <daemon/daemon.h>
@@ -600,6 +601,10 @@ static cJSON *handle_logs_get(cJSON *params) {
 
 static int queue_error_exit_code(const QueueError error) {
     return error == QueueErrorNone ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
+static int bookmark_error_exit_code(const BookmarkError error) {
+    return error == BookmarkErrorNone ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 
 static cJSON *queue_object_from_index(const size_t index) {
@@ -1247,6 +1252,99 @@ static cJSON *handle_queue_stop(cJSON *params) {
     return result;
 }
 
+static cJSON *handle_bookmark_list(void) {
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        return NULL;
+    }
+
+    char *json = bookmark_list_json();
+    cJSON *bookmarks = json != NULL ? cJSON_Parse(json) : cJSON_CreateArray();
+    free(json);
+
+    if (bookmarks == NULL) {
+        cJSON_Delete(result);
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
+    cJSON_AddItemToObject(result, "bookmarks", bookmarks);
+    return result;
+}
+
+static cJSON *handle_bookmark_add(cJSON *params) {
+    const cJSON *url = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_URL);
+    if (!cJSON_IsString(url) || url->valuestring == NULL || url->valuestring[0] == '\0') {
+        return NULL;
+    }
+
+    const cJSON *title = cJSON_GetObjectItemCaseSensitive(params, AVAR_BOOKMARK_FIELD_TITLE);
+    const cJSON *link_count =
+        cJSON_GetObjectItemCaseSensitive(params, AVAR_BOOKMARK_FIELD_LINK_COUNT);
+
+    uint32_t count = 0U;
+    if (cJSON_IsNumber(link_count)) {
+        const double value = link_count->valuedouble;
+        if (value >= 0.0) {
+            count = (uint32_t)value;
+        }
+    }
+
+    char *id = NULL;
+    const BookmarkError rc = bookmark_add(url->valuestring,
+                                          cJSON_IsString(title) ? title->valuestring : "",
+                                          count, &id);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        free(id);
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", bookmark_error_exit_code(rc));
+    if (id != NULL) {
+        cJSON_AddStringToObject(result, "id", id);
+        free(id);
+    }
+    return result;
+}
+
+static cJSON *handle_bookmark_remove(cJSON *params) {
+    const cJSON *id = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_ID);
+    const cJSON *url = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_URL);
+    const bool by_url = cJSON_IsString(url) && url->valuestring != NULL;
+    const char *target = by_url ? url->valuestring
+                                  : (cJSON_IsString(id) && id->valuestring != NULL ? id->valuestring
+                                                                                   : NULL);
+    if (target == NULL) {
+        return NULL;
+    }
+
+    const BookmarkError rc = bookmark_remove(target, by_url);
+
+    cJSON *result = cJSON_CreateObject();
+    if (result != NULL) {
+        cJSON_AddNumberToObject(result, "exitCode", bookmark_error_exit_code(rc));
+    }
+    return result;
+}
+
+static cJSON *handle_bookmark_has(cJSON *params) {
+    const cJSON *url = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_URL);
+    if (!cJSON_IsString(url) || url->valuestring == NULL) {
+        return NULL;
+    }
+
+    cJSON *result = cJSON_CreateObject();
+    if (result == NULL) {
+        return NULL;
+    }
+
+    cJSON_AddNumberToObject(result, "exitCode", EXIT_SUCCESS);
+    cJSON_AddBoolToObject(result, "bookmarked", bookmark_has_url(url->valuestring));
+    return result;
+}
+
 #define AVAR_STREAM_KIND_NONE 0
 #define AVAR_STREAM_KIND_SSE 1
 #define AVAR_STREAM_KIND_WS 2
@@ -1649,6 +1747,18 @@ static cJSON *dispatch_method(const char *method, const cJSON *params, const cJS
     }
     if (strcmp(method, "queue.stop") == 0) {
         return handle_queue_stop(mutable_params);
+    }
+    if (strcmp(method, "bookmark.list") == 0) {
+        return handle_bookmark_list();
+    }
+    if (strcmp(method, "bookmark.add") == 0) {
+        return handle_bookmark_add(mutable_params);
+    }
+    if (strcmp(method, "bookmark.remove") == 0) {
+        return handle_bookmark_remove(mutable_params);
+    }
+    if (strcmp(method, "bookmark.has") == 0) {
+        return handle_bookmark_has(mutable_params);
     }
     if (strcmp(method, "downloads.list") == 0) {
         return handle_downloads_list();

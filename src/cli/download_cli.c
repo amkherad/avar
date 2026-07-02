@@ -11,6 +11,7 @@ static int handle_download_add(int argc, char *argv[]);
 static int handle_download_rm(int argc, char *argv[]);
 static int handle_download_ls(int argc, char *argv[]);
 static int handle_download_set_url(int argc, char *argv[]);
+static int handle_download_set_queue(int argc, char *argv[]);
 static int handle_download_control(int argc, char *argv[], int (*action)(const char *));
 
 static void print_download_command_help(void) {
@@ -31,6 +32,7 @@ static void print_download_command_help(void) {
     puts("  avar dl resume <id>");
     puts("  avar dl restart <id>");
     puts("  avar dl set-url <id> <url>");
+    puts("  avar dl set-queue <id> [--queue=<queue>]");
     puts("  avar dl dismiss-resume <id>");
     puts("  avar dl start <id>");
     puts("  avar dl stop <id>");
@@ -80,6 +82,9 @@ int handle_download(int argc, char *argv[]) {
     }
     if (strcmp(sub, "set-url") == 0) {
         return handle_download_set_url(argc, argv);
+    }
+    if (strcmp(sub, "set-queue") == 0) {
+        return handle_download_set_queue(argc, argv);
     }
     if (strcmp(sub, "dismiss-resume") == 0) {
         return handle_download_control(argc, argv, download_dismiss_resume_prompt);
@@ -239,6 +244,34 @@ static int handle_download_set_url(int argc, char *argv[]) {
     }
 
     const int rc = download_set_url(id->sval[0], url->sval[0]);
+    arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+    return rc;
+}
+
+static int handle_download_set_queue(int argc, char *argv[]) {
+    int sub_argc = 0;
+    char **sub_argv = NULL;
+    if (cli_make_subargv(argc, argv, 3, "avar dl set-queue", &sub_argc, &sub_argv) != EXIT_SUCCESS) {
+        return EXIT_FAILURE;
+    }
+
+    arg_str_t *id = arg_str1(NULL, NULL, "ID", "download id");
+    arg_str_t *queue = arg_str0(NULL, "queue", "QUEUE", "target queue name or id");
+    arg_lit_t *help = arg_lit0("h", "help", "show help");
+    arg_end_t *end = arg_end(20);
+    void *argtable[] = {id, queue, help, end};
+
+    bool help_requested = false;
+    const int parse_rc = cli_run_argtable(sub_argv[0], argtable, end, sub_argc, sub_argv, &help_requested);
+    cli_free_subargv(sub_argv);
+
+    if (parse_rc != EXIT_SUCCESS || help_requested) {
+        arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
+        return parse_rc;
+    }
+
+    const char *queue_name = queue->count > 0 ? queue->sval[0] : NULL;
+    const int rc = download_set_queue(id->sval[0], queue_name);
     arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
     return rc;
 }

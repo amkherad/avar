@@ -23,7 +23,7 @@ export function Modal({
   wide = false,
   draggable = true,
 }: ModalProps) {
-  const { dragHandleProps, dialogStyle } = useDraggable({
+  const { dialogRef, dragHandleProps, dialogStyle } = useDraggable({
     enabled: draggable,
     resetKey: open,
   });
@@ -39,6 +39,7 @@ export function Modal({
   return (
     <div className="avar-modal-backdrop" role="presentation" onClick={onClose}>
       <div
+        ref={dialogRef}
         className={`avar-modal ${wide ? "avar-modal--wide" : ""}`.trim()}
         role="dialog"
         aria-modal="true"

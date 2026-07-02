@@ -2,7 +2,7 @@ const EXTENSION_VERSION = "0.1.0";
 const api = typeof browser !== "undefined" ? browser : chrome;
 const { IDS: MENU_IDS } = globalThis.AvarContextMenu;
 
-const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE, ensureBridgeReachable, resolvePageReferer, isLinkRefreshActive, captureLinkRefreshLink } =
+const { discoverBridgeUrl, sendMessage, pingBridge, normalizeBridgeUrl, DEFAULT_ELECTRON_BRIDGE, BRIDGE_UNREACHABLE, ensureBridgeReachable, resolvePageReferer, isLinkRefreshActive, captureLinkRefreshLink, formatError } =
   globalThis.AvarExtensionProtocol;
 
 async function collectFromTab(tabId, { forContextMenu = false } = {}) {
@@ -30,6 +30,7 @@ async function collectFromTab(tabId, { forContextMenu = false } = {}) {
       selectedItems: response?.selectedItems || [],
       pageUrl: resolvePageReferer(pageUrl, response?.pageUrl) ?? pageUrl,
       pageTitle: response?.pageTitle || null,
+      linkCount: Number(response?.linkCount) || 0,
     };
   } catch {
     const capturedItems = networkCapture.getForTab(tabId);
@@ -40,6 +41,7 @@ async function collectFromTab(tabId, { forContextMenu = false } = {}) {
       selectedItems: [],
       pageUrl,
       pageTitle: null,
+      linkCount: 0,
     };
   }
 }
@@ -81,7 +83,7 @@ async function pingBridgeEndpoint() {
     await pingBridge(normalized);
     return { ok: true, bridgeUrl: normalized };
   } catch (error) {
-    return { ok: false, bridgeUrl: normalized, error: String(error) };
+    return { ok: false, bridgeUrl: normalized, error: formatError(error) };
   }
 }
 
@@ -212,6 +214,28 @@ async function listQueues() {
 async function controlQueue(action, queueId) {
   const bridgeUrl = await resolveBridgeUrl();
   await sendMessage(bridgeUrl, action, { id: queueId });
+}
+
+async function listBookmarks() {
+  const bridgeUrl = await resolveBridgeUrl();
+  const payload = await sendMessage(bridgeUrl, "bookmark.list", {});
+  return Array.isArray(payload.bookmarks) ? payload.bookmarks : [];
+}
+
+async function addBookmark(payload) {
+  const bridgeUrl = await resolveBridgeUrl();
+  return sendMessage(bridgeUrl, "bookmark.add", payload);
+}
+
+async function removeBookmark(payload) {
+  const bridgeUrl = await resolveBridgeUrl();
+  return sendMessage(bridgeUrl, "bookmark.remove", payload);
+}
+
+async function hasBookmark(url) {
+  const bridgeUrl = await resolveBridgeUrl();
+  const payload = await sendMessage(bridgeUrl, "bookmark.has", { url });
+  return Boolean(payload.bookmarked);
 }
 
 async function listMediaFromActiveTab() {
@@ -368,7 +392,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     lastSelectionCount = count;
     refreshContextMenus(count > 0)
       .then(() => sendResponse({ ok: true }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
@@ -387,7 +411,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       defaultQueueId: message.defaultQueueId,
     })
       .then(() => sendResponse({ ok: true }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
@@ -399,7 +423,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       defaultQueueId: message.defaultQueueId,
     })
       .then(() => sendResponse({ ok: true }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
@@ -411,7 +435,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       defaultQueueId: message.defaultQueueId,
     })
       .then(() => sendResponse({ ok: true }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
@@ -427,7 +451,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       defaultQueueId: message.defaultQueueId,
     })
       .then(() => sendResponse({ ok: true }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
@@ -440,35 +464,67 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
           filename: payload.filename ?? null,
         }),
       )
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
   if (message?.type === "avar-expand-hls-items" && Array.isArray(message.items)) {
     expandHlsItems(message.items, message.referer)
       .then((items) => sendResponse({ ok: true, items }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
   if (message?.type === "avar-list-queues") {
     listQueues()
       .then((queues) => sendResponse({ ok: true, queues }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
+    return true;
+  }
+
+  if (message?.type === "avar-bookmark-list") {
+    listBookmarks()
+      .then((bookmarks) => sendResponse({ ok: true, bookmarks }))
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
+    return true;
+  }
+
+  if (message?.type === "avar-bookmark-has" && message.url) {
+    hasBookmark(message.url)
+      .then((bookmarked) => sendResponse({ ok: true, bookmarked }))
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
+    return true;
+  }
+
+  if (message?.type === "avar-bookmark-add") {
+    addBookmark({
+      url: message.url,
+      title: message.title,
+      linkCount: message.linkCount,
+    })
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
+    return true;
+  }
+
+  if (message?.type === "avar-bookmark-remove" && message.url) {
+    removeBookmark({ url: message.url })
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
   if (message?.type === "avar-queue-start" && message.queueId) {
     controlQueue("queue.start", message.queueId)
       .then(() => sendResponse({ ok: true }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
   if (message?.type === "avar-queue-stop" && message.queueId) {
     controlQueue("queue.stop", message.queueId)
       .then(() => sendResponse({ ok: true }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
@@ -482,16 +538,17 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
           selectedItems: result.selectedItems,
           pageUrl: result.pageUrl,
           pageTitle: result.pageTitle,
+          linkCount: result.linkCount ?? 0,
         }),
       )
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
   if (message?.type === "avar-ping-bridge") {
     pingBridgeEndpoint()
       .then((result) => sendResponse(result))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 
@@ -546,7 +603,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     api.storage.local
       .set(storageUpdate)
       .then(() => sendResponse({ ok: true }))
-      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+      .catch((error) => sendResponse({ ok: false, error: formatError(error) }));
     return true;
   }
 

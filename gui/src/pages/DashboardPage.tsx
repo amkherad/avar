@@ -14,6 +14,7 @@ import { DownloadToolbar } from "@/components/download/DownloadToolbar";
 import { DownloadDetailPanel } from "@/components/download/DownloadDetailPanel";
 import { DownloadContextMenu } from "@/components/download/DownloadContextMenu";
 import { BatchAddDownloadModal } from "@/components/download/BatchAddDownloadModal";
+import { DownloadListActionsMenu } from "@/components/download/DownloadListActionsMenu";
 import { Footer } from "@/components/layout/Footer";
 import { ConsolePanel } from "@/components/console/ConsolePanel";
 import { useConnectionStore } from "@/stores/connectionStore";
@@ -44,6 +45,8 @@ import {
   selectSelectedQueue,
   useDataStore,
 } from "@/stores/dataStore";
+import { isBookmarksView } from "@/bookmarks/bookmarksView";
+import { BookmarksPage } from "@/components/bookmarks/BookmarksPanel";
 import { restartDataSync } from "@/sync/syncManager";
 import type { DownloadInfo } from "@/api/types";
 
@@ -83,7 +86,7 @@ function DownloadPanel({
   const doubleClickAction = useDownloadDoubleClickAction();
 
   const [contextMenu, setContextMenu] = useState<{
-    download: DownloadInfo;
+    downloads: DownloadInfo[];
     x: number;
     y: number;
   } | null>(null);
@@ -110,6 +113,10 @@ function DownloadPanel({
   const selectedDownloads = useMemo(
     () => selectSelectedDownloads(queueDownloads, selectedDownloadIds),
     [queueDownloads, selectedDownloadIds],
+  );
+  const contextMenuTargetQueues = useMemo(
+    () => displayQueues.filter((queue) => queue.id !== queueId),
+    [displayQueues, queueId],
   );
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -251,8 +258,26 @@ function DownloadPanel({
     if (!download) {
       return;
     }
-    handleSelect(downloadId, event);
-    setContextMenu({ download, x: event.clientX, y: event.clientY });
+
+    const additive = event.ctrlKey || event.metaKey;
+    const range = event.shiftKey;
+    const keepSelection =
+      !additive &&
+      !range &&
+      selectedDownloadIds.includes(downloadId) &&
+      selectedDownloadIds.length > 1;
+
+    if (!keepSelection) {
+      handleSelect(downloadId, event);
+    }
+
+    const { selectedDownloadIds: ids } = useDataStore.getState();
+    const menuDownloads = selectSelectedDownloads(queueDownloads, ids);
+    if (menuDownloads.length === 0) {
+      return;
+    }
+
+    setContextMenu({ downloads: menuDownloads, x: event.clientX, y: event.clientY });
   }
 
   const showPinnedPanel =
@@ -285,7 +310,8 @@ function DownloadPanel({
       <BatchAddDownloadModal open={batchAddOpen} onClose={() => setBatchAddOpen(false)} />
       {refreshLinkModal}
       <DownloadContextMenu
-        download={contextMenu?.download ?? null}
+        downloads={contextMenu?.downloads ?? []}
+        targetQueues={contextMenuTargetQueues}
         position={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
         onClose={() => setContextMenu(null)}
         onRefreshLink={(download) => {
@@ -304,6 +330,11 @@ function DownloadPanel({
             }
             actions={
               <>
+                <DownloadListActionsMenu
+                  downloads={filteredDownloads}
+                  selectedDownloads={selectedDownloads}
+                  onImportFromText={() => setBatchAddOpen(true)}
+                />
                 <Button size="sm" variant="secondary" onClick={() => {
                   appLogger.gui.debug("Batch add dialog opened");
                   setBatchAddOpen(true);
@@ -440,6 +471,7 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const connection = useConnectionStore((s) => s.connection);
   const error = useDataStore((s) => s.error);
+  const queueId = useDataStore(selectEffectiveQueueId);
   const hasData = useDataStore(
     (s) => s.queues.length > 0 || s.downloads.length > 0 || s.health !== null,
   );
@@ -459,6 +491,10 @@ export function DashboardPage() {
       </Button>
     </div>
   ) : null;
+
+  if (isBookmarksView(queueId)) {
+    return <BookmarksPage staleBanner={staleBanner} errorBanner={errorBanner} />;
+  }
 
   return (
     <ErrorBoundary name={t("download.title")} resetLabel={t("common.tryAgain")}>

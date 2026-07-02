@@ -8,6 +8,9 @@ export interface AvarPopupOptions {
   height?: number;
   minWidth?: number;
   minHeight?: number;
+  alwaysOnTop?: boolean;
+  /** Browser extension capture — counts toward grab burst limit. */
+  fromExtensionGrab?: boolean;
 }
 
 export interface AvarNotificationOptions {

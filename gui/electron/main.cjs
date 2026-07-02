@@ -36,6 +36,12 @@ const {
   extractHashFromUrl,
   loadElectronWindowContent,
 } = require("../desktop/resolve-gui-url.cjs");
+const {
+  tryAcquireAddDownloadSlot,
+  releaseAddDownloadSlot,
+  isAddDownloadPopupHash,
+  addDownloadWindowBlockedMessage,
+} = require("./add-download-window-guard.cjs");
 
 const isDev = !app.isPackaged;
 
@@ -457,12 +463,57 @@ function createWindow() {
   loadElectronWindowContent(win, { isDev, isPackaged: app.isPackaged });
 }
 
+function shouldPopupStayOnTop(hash) {
+  return (
+    typeof hash === "string" &&
+    (hash.includes("/popup/add-download/") || hash.includes("/popup/batch-add/"))
+  );
+}
+
+function focusPopupWindow(popup) {
+  if (!popup || popup.isDestroyed()) {
+    return;
+  }
+  popup.show();
+  popup.focus();
+  if (process.platform === "win32") {
+    popup.moveTop();
+    app.focus({ steal: true });
+  }
+}
+
+function showAddDownloadWindowBlockedNotification(reason) {
+  if (!Notification.isSupported()) {
+    return;
+  }
+  const notification = new Notification({
+    title: "Add download",
+    body: addDownloadWindowBlockedMessage(reason),
+    tag: `avar-add-download-blocked-${reason}`,
+  });
+  notification.show();
+}
+
 function createPopupWindow(options) {
-  const popupId = ++popupCounter;
   const width = options.width ?? 520;
   const height = options.height ?? 640;
   const minWidth = options.minWidth ?? 400;
   const minHeight = options.minHeight ?? 320;
+  const hash = options.hash ?? extractHashFromUrl(options.url);
+  const alwaysOnTop = options.alwaysOnTop ?? shouldPopupStayOnTop(hash);
+  const isAddDownloadPopup = isAddDownloadPopupHash(hash);
+
+  if (isAddDownloadPopup) {
+    const guardResult = tryAcquireAddDownloadSlot({
+      fromExtensionGrab: Boolean(options.fromExtensionGrab),
+    });
+    if (!guardResult.allowed) {
+      showAddDownloadWindowBlockedNotification(guardResult.reason);
+      return null;
+    }
+  }
+
+  const popupId = ++popupCounter;
 
   const popup = new BrowserWindow({
     width,
@@ -474,6 +525,7 @@ function createPopupWindow(options) {
     parent: mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined,
     modal: false,
     show: false,
+    alwaysOnTop,
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
@@ -487,14 +539,15 @@ function createPopupWindow(options) {
 
   popup.on("closed", () => {
     popupWindows.delete(popupId);
+    if (isAddDownloadPopup) {
+      releaseAddDownloadSlot();
+    }
   });
 
   popup.once("ready-to-show", () => {
-    popup.show();
-    popup.focus();
+    focusPopupWindow(popup);
   });
 
-  const hash = options.hash ?? extractHashFromUrl(options.url);
   loadElectronWindowContent(popup, {
     hash,
     isDev,
@@ -531,12 +584,13 @@ setBatchPopupOpener((batchId, title) => {
   });
 });
 
-setAddDownloadPopupOpener((addId, title) => {
-  createPopupWindow({
+setAddDownloadPopupOpener((addId, title, options) => {
+  return createPopupWindow({
     hash: `#/popup/add-download/${encodeURIComponent(addId)}`,
     title,
     width: 560,
     height: 720,
+    fromExtensionGrab: Boolean(options?.fromExtensionGrab),
   });
 });
 

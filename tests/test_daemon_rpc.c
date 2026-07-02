@@ -100,6 +100,49 @@ AVAR_TEST(daemon_rpc_queue_mutations) {
     free(response);
 }
 
+AVAR_TEST(daemon_rpc_bookmark_mutations) {
+    setup_rpc_config();
+
+    char *response = NULL;
+    AVAR_ASSERT(rpc_call("bookmark.add",
+                          "{\"url\":\"https://example.com/page\",\"title\":\"Example\","
+                          "\"linkCount\":12}",
+                          &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "\"exitCode\":0") != NULL);
+    free(response);
+
+    AVAR_ASSERT(rpc_call("bookmark.add",
+                          "{\"url\":\"https://example.com/other\",\"title\":\"Other\","
+                          "\"linkCount\":3}",
+                          &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "\"exitCode\":0") != NULL);
+    free(response);
+
+    AVAR_ASSERT(rpc_call("bookmark.add",
+                          "{\"url\":\"https://example.com/page\",\"title\":\"Example updated\","
+                          "\"linkCount\":15}",
+                          &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "\"exitCode\":0") != NULL);
+    free(response);
+
+    AVAR_ASSERT(rpc_call("bookmark.has", "{\"url\":\"https://example.com/page\"}", &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "bookmarked") != NULL);
+    free(response);
+
+    AVAR_ASSERT(rpc_call("bookmark.list", NULL, &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    AVAR_ASSERT(strstr(response, "example.com") != NULL);
+    free(response);
+
+    AVAR_ASSERT(rpc_call("bookmark.remove", "{\"url\":\"https://example.com/page\"}", &response));
+    AVAR_ASSERT_NOT_NULL(response);
+    free(response);
+}
+
 AVAR_TEST(daemon_rpc_cli_exec_and_logs) {
     setup_rpc_config();
 
@@ -254,6 +297,7 @@ AVAR_TEST_MAIN(
         run_daemon_rpc_ping_and_health();
         run_daemon_rpc_system_stats_and_lists();
         run_daemon_rpc_queue_mutations();
+        run_daemon_rpc_bookmark_mutations();
         run_daemon_rpc_cli_exec_and_logs();
         run_daemon_rpc_fs_browse();
         run_daemon_rpc_invalid_request();

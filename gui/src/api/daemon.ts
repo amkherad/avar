@@ -1,7 +1,9 @@
 import { proxySettingsToRpcParams, type ProxySettings } from "@/lib/proxySettings";
-import { parseDownloadItem, parseQueueRecord, parseSnapshotPayload } from "./snapshot";
+import { parseBookmarkRecord, parseDownloadItem, parseQueueRecord, parseSnapshotPayload } from "./snapshot";
 import type { DownloadChecksumResult } from "./checksumTypes";
 import type {
+  BookmarkInfo,
+  BookmarkRpcResult,
   CliExecResult,
   DirectoryBrowseResult,
   DownloadDetails,
@@ -231,6 +233,41 @@ export class DaemonClient {
     if (result.exitCode !== 0) {
       throw new DaemonApiError("Failed to stop queue", result.exitCode ?? -1);
     }
+  }
+
+  async listBookmarks(): Promise<BookmarkInfo[]> {
+    const result = await this.rpc<{ exitCode: number; bookmarks?: unknown[] }>("bookmark.list");
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to list bookmarks", result.exitCode);
+    }
+    return (result.bookmarks ?? []).map((item) => parseBookmarkRecord(item));
+  }
+
+  async addBookmark(params: {
+    url: string;
+    title?: string;
+    linkCount?: number;
+  }): Promise<string | undefined> {
+    const result = await this.rpc<BookmarkRpcResult>("bookmark.add", params);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to add bookmark", result.exitCode ?? -1);
+    }
+    return result.id;
+  }
+
+  async removeBookmark(params: { id?: string; url?: string }): Promise<void> {
+    const result = await this.rpc<BookmarkRpcResult>("bookmark.remove", params);
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to remove bookmark", result.exitCode ?? -1);
+    }
+  }
+
+  async hasBookmark(url: string): Promise<boolean> {
+    const result = await this.rpc<BookmarkRpcResult>("bookmark.has", { url });
+    if (result.exitCode !== 0) {
+      throw new DaemonApiError("Failed to check bookmark", result.exitCode ?? -1);
+    }
+    return Boolean(result.bookmarked);
   }
 
   async getLogs(maxLines = 100, since = 0): Promise<{ logs: string; nextOffset: number }> {

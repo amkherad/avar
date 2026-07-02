@@ -19,7 +19,7 @@ import { initDesktopShellSettings } from "@/lib/desktopShellSettings";
 import { toggleDetailPanelWithSelection } from "@/lib/detailPanel";
 import { useElectronTrayLabels } from "@/hooks/useElectronTrayLabels";
 import { useElectronTrayDownloads } from "@/hooks/useElectronTrayDownloads";
-import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
+import { ensureAppConnectionReady, useConnectionStore } from "@/stores/connectionStore";
 import { parsePopupHash } from "@/lib/popup";
 import { appLogger } from "@/lib/appLogger";
 import { ShortcutProvider } from "@/shortcuts/ShortcutProvider";
@@ -53,7 +53,7 @@ function AppContent() {
       if (window.avar.platform === "darwin") {
         document.documentElement.classList.add("avar-electron-darwin");
       }
-      void ensureElectronSession().then(() => {
+      void ensureAppConnectionReady().then(() => {
         useConnectionStore.getState().reconnectClient();
         useConnectionStore.getState().startPingMonitor();
       });

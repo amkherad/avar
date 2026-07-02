@@ -901,6 +901,23 @@ function scheduleSelectionWidgetUpdate() {
   }, SELECTION_WIDGET_DEBOUNCE_MS);
 }
 
+function countPageLinks() {
+  const seen = new Set();
+  let count = 0;
+  for (const anchor of document.querySelectorAll("a[href]")) {
+    const href = anchor.href;
+    if (!href || !/^https?:/i.test(href)) {
+      continue;
+    }
+    if (seen.has(href)) {
+      continue;
+    }
+    seen.add(href);
+    count += 1;
+  }
+  return count;
+}
+
 api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!ensureExtensionContext()) {
     return false;
@@ -923,6 +940,7 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     items,
     selectedItems,
     pageTitle: document.title || "",
+    linkCount: countPageLinks(),
   });
   return true;
 });

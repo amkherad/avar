@@ -47,6 +47,36 @@ export interface QueueRpcResult {
 
 
 
+export interface BookmarkInfo {
+
+  id: string;
+
+  url: string;
+
+  title: string;
+
+  linkCount: number;
+
+  createdAt?: number;
+
+  updatedAt?: number;
+
+}
+
+
+
+export interface BookmarkRpcResult {
+
+  exitCode: number;
+
+  id?: string;
+
+  bookmarked?: boolean;
+
+}
+
+
+
 export interface DownloadInfo {
 
   id: string;

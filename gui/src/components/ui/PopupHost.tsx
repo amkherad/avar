@@ -13,19 +13,22 @@ function DraggablePopupWindow({
   url,
   width,
   height,
+  alwaysOnTop,
 }: {
   id: string;
   title: string;
   url: string;
   width: number;
   height: number;
+  alwaysOnTop?: boolean;
 }) {
   const { t } = useTranslation();
-  const { dragHandleProps, dialogStyle } = useDraggable({ resetKey: id });
+  const { dialogRef, dragHandleProps, dialogStyle } = useDraggable({ resetKey: id });
 
   return (
     <div
-      className="avar-popup-window"
+      ref={dialogRef}
+      className={`avar-popup-window${alwaysOnTop ? " avar-popup-window--always-on-top" : ""}`}
       style={{ width, height, ...dialogStyle }}
       role="dialog"
       aria-label={title}
@@ -53,7 +56,7 @@ export function PopupHost() {
   const windows = usePopupStore((s) => s.windows);
   const confirm = usePopupStore((s) => s.confirm);
   const [checkboxChecked, setCheckboxChecked] = useState(false);
-  const { dragHandleProps, dialogStyle } = useDraggable({ resetKey: confirm?.id });
+  const { dialogRef, dragHandleProps, dialogStyle } = useDraggable({ resetKey: confirm?.id });
 
   useEffect(() => {
     setCheckboxChecked(confirm?.checkboxDefault ?? false);
@@ -69,12 +72,14 @@ export function PopupHost() {
           url={win.url}
           width={win.width}
           height={win.height}
+          alwaysOnTop={win.alwaysOnTop}
         />
       ))}
 
       {confirm ? (
         <div className="avar-modal-backdrop" role="presentation">
           <div
+            ref={dialogRef}
             className="avar-modal"
             role="alertdialog"
             aria-modal="true"

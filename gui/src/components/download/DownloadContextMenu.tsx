@@ -8,11 +8,12 @@ import {
   faLink,
   faPause,
   faPlay,
+  faRightLeft,
   faRotateRight,
   faStop,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
-import type { DownloadInfo } from "@/api/types";
+import type { DownloadInfo, QueueInfo } from "@/api/types";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import {
@@ -27,26 +28,133 @@ import {
 import { openDownloadPopup } from "@/lib/popup";
 
 export interface DownloadContextMenuProps {
-  download: DownloadInfo | null;
+  downloads: DownloadInfo[];
+  targetQueues: QueueInfo[];
   position: { x: number; y: number } | null;
   onClose: () => void;
   onRefreshLink?: (download: DownloadInfo) => void;
 }
 
 export function DownloadContextMenu({
-  download,
+  downloads,
+  targetQueues,
   position,
   onClose,
   onRefreshLink,
 }: DownloadContextMenuProps) {
   const { t } = useTranslation();
   const actions = useDownloadActions();
+  const batchMode = downloads.length > 1;
+  const ids = downloads.map((item) => item.id);
 
   const items = useMemo((): ContextMenuItem[] => {
-    if (!download) {
+    if (downloads.length === 0) {
       return [];
     }
 
+    if (batchMode) {
+      const menuItems: ContextMenuItem[] = [];
+
+      const anyStartable = downloads.some(
+        (item) => canStart(item.status) && !canResume(item.status),
+      );
+      const anyStoppable = downloads.some((item) => canStop(item.status));
+      const anyPausable = downloads.some((item) => canPause(item.status));
+      const anyResumable = downloads.some((item) => canResume(item.status));
+      const anyRedownloadable = downloads.some((item) => canRedownload(item.status));
+      const anyCopyToLocal =
+        actions.copyToLocalVisible && downloads.some((item) => isCompleted(item.status));
+
+      if (anyStartable) {
+        menuItems.push({
+          id: "start",
+          label: t("download.start"),
+          icon: faPlay,
+          disabled: actions.busy,
+          onClick: () => void actions.start(ids),
+        });
+      }
+
+      if (anyStoppable) {
+        menuItems.push({
+          id: "stop",
+          label: t("download.stop"),
+          icon: faStop,
+          disabled: actions.busy,
+          onClick: () => void actions.stop(ids),
+        });
+      }
+
+      if (anyPausable) {
+        menuItems.push({
+          id: "pause",
+          label: t("download.pause"),
+          icon: faPause,
+          disabled: actions.busy,
+          onClick: () => void actions.pause(ids),
+        });
+      }
+
+      if (anyResumable) {
+        menuItems.push({
+          id: "resume",
+          label: t("download.resume"),
+          icon: faPlay,
+          disabled: actions.busy,
+          onClick: () => void actions.resume(ids),
+        });
+      }
+
+      if (anyRedownloadable) {
+        menuItems.push({
+          id: "redownload",
+          label: t("download.redownload"),
+          icon: faRotateRight,
+          disabled: actions.busy,
+          onClick: () => void actions.redownload(downloads),
+        });
+      }
+
+      if (anyCopyToLocal) {
+        menuItems.push({
+          id: "copyToLocal",
+          label: t("download.copyToLocal"),
+          icon: faDownload,
+          disabled: !actions.copyToLocalAvailable || actions.busy,
+          onClick: () =>
+            void actions.copyToLocal(downloads.filter((item) => isCompleted(item.status))),
+        });
+      }
+
+      if (targetQueues.length > 0) {
+        menuItems.push({
+          id: "moveToQueue",
+          label: t("download.moveToQueue"),
+          icon: faRightLeft,
+          disabled: actions.busy,
+          children: targetQueues.map((queue, index) => ({
+            id: `moveToQueue-${queue.id}`,
+            label: queue.name,
+            checked: index === 0,
+            disabled: actions.busy,
+            onClick: () => void actions.moveToQueue(ids, queue),
+          })),
+        });
+      }
+
+      menuItems.push({
+        id: "delete",
+        label: t("download.delete"),
+        icon: faTrash,
+        disabled: actions.busy,
+        danger: true,
+        onClick: () => void actions.removeWithConfirm(downloads),
+      });
+
+      return menuItems;
+    }
+
+    const download = downloads[0];
     const menuItems: ContextMenuItem[] = [];
 
     if (canStart(download.status)) {
@@ -154,9 +262,17 @@ export function DownloadContextMenu({
     );
 
     return menuItems;
-  }, [actions, download, onRefreshLink, t]);
+  }, [
+    actions,
+    batchMode,
+    downloads,
+    ids,
+    onRefreshLink,
+    t,
+    targetQueues,
+  ]);
 
-  if (!download || !position) {
+  if (downloads.length === 0 || !position) {
     return null;
   }
 

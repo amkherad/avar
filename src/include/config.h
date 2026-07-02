@@ -16,6 +16,9 @@ char *get_config(stringa key);
 /* Returns a newly allocated string, or NULL if missing and no default. Caller must free(). */
 char *get_config_or_default(stringa key, stringa default_value);
 
+/* Returns a newly allocated config directory path, or NULL. Caller must free(). */
+char *config_get_directory(void);
+
 /* Returns 0 on success, -1 on failure. Persists to the default config file. */
 int set_config(stringa key, stringa value);
 

@@ -12,10 +12,13 @@ import { useConfigStore, waitForConfigHydration } from "@/stores/configStore";
 import { useConsoleStore } from "@/stores/consoleStore";
 import { useDataStore } from "@/stores/dataStore";
 import { appLogger } from "@/lib/appLogger";
+import { requestPushStreamReconnect } from "@/lib/pushStreamReconnect";
 
 export type ConnectionState = "disconnected" | "connecting" | "connected";
 
 const PING_TIMEOUT_MS = 4000;
+
+let lastPushStreamRestartAt = 0;
 
 interface ConnectionStoreState {
   connection: ConnectionState;
@@ -91,12 +94,15 @@ async function pingWithTimeout(client: DaemonClient): Promise<boolean> {
   }
 }
 
+export async function ensureAppConnectionReady(): Promise<void> {
+  await waitForConfigHydration();
+  await ensureElectronSession();
+}
+
 export async function ensureElectronSession(): Promise<void> {
   if (!window.avar?.isElectron) {
     return;
   }
-
-  await waitForConfigHydration();
 
   const proxyUrl = await resolveElectronProxyUrl();
   if (!proxyUrl) {
@@ -192,6 +198,16 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
         }
         set({ connection: nextConnection });
       }
+
+      if (!fresh) {
+        const now = Date.now();
+        if (now - lastPushStreamRestartAt >= intervalMs) {
+          lastPushStreamRestartAt = now;
+          appLogger.gui.debug("Push stream stale — requesting reconnect");
+          requestPushStreamReconnect();
+        }
+      }
+
       return fresh;
     }
 

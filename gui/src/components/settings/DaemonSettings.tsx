@@ -14,6 +14,7 @@ const CONFIG_DEFAULTS = {
   autoShutdownIdleSeconds: "60",
   logEnabled: "false",
   logPath: "",
+  bookmarksFilePath: "",
   fileDownloadEnabled: "false",
   fsBrowseEnabled: "false",
 } as const;
@@ -27,6 +28,7 @@ export function DaemonSettings() {
   );
   const [logEnabled, setLogEnabled] = useState(false);
   const [logPath, setLogPath] = useState("");
+  const [bookmarksFilePath, setBookmarksFilePath] = useState("");
   const [fileDownloadEnabled, setFileDownloadEnabled] = useState(false);
   const [fsBrowseEnabled, setFsBrowseEnabled] = useState(false);
   const directoryPathMode = useDaemonDirectoryPathMode();
@@ -57,6 +59,10 @@ export function DaemonSettings() {
       setLogPath(
         (await client.getConfig("log.file.path", CONFIG_DEFAULTS.logPath)) ??
           CONFIG_DEFAULTS.logPath,
+      );
+      setBookmarksFilePath(
+        (await client.getConfig("bookmarks.file.path", CONFIG_DEFAULTS.bookmarksFilePath)) ??
+          CONFIG_DEFAULTS.bookmarksFilePath,
       );
       setFileDownloadEnabled(
         (await client.getConfig(
@@ -96,6 +102,11 @@ export function DaemonSettings() {
       );
       await client.setConfig("log.file.enabled", logEnabled ? "true" : "false");
       await client.setConfig("log.file.path", logPath);
+      if (bookmarksFilePath.trim()) {
+        await client.setConfig("bookmarks.file.path", bookmarksFilePath.trim());
+      } else {
+        await client.setConfig("bookmarks.file.path", "");
+      }
       await client.setConfig(
         "daemon.server.fileDownload.enabled",
         fileDownloadEnabled ? "true" : "false",
@@ -152,6 +163,17 @@ export function DaemonSettings() {
           value={logPath}
           onChange={setLogPath}
           disabled={!logEnabled}
+        />
+      </section>
+
+      <section className="avar-settings-group">
+        <h3 className="avar-settings-group__heading">{t("settings.daemon.bookmarksFile")}</h3>
+        <p className="avar-settings-hint">{t("settings.daemon.bookmarksFilePathHint")}</p>
+        <DirectoryPathInput
+          mode={directoryPathMode}
+          label={t("settings.daemon.bookmarksFilePath")}
+          value={bookmarksFilePath}
+          onChange={setBookmarksFilePath}
         />
       </section>
 

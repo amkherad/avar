@@ -12,6 +12,7 @@ const {
   createErrorResponse,
 } = require("./extension-protocol.cjs");
 const { EXTENSION_GUI_URL } = require("./ports.cjs");
+const { addDownloadWindowBlockedMessage, evaluateAddDownloadSlot } = require("./add-download-window-guard.cjs");
 
 const EXTENSION_PING_TTL_MS = 30_000;
 const BATCH_STASH_TTL_MS = 10 * 60 * 1000;
@@ -36,7 +37,7 @@ const LINK_REFRESH_TTL_MS = 5 * 60 * 1000;
 /** @type {((batchId: string, title: string) => void) | null} */
 let batchPopupOpener = null;
 
-/** @type {((addId: string, title: string) => void) | null} */
+/** @type {((addId: string, title: string, options?: { fromExtensionGrab?: boolean }) => number | null) | null} */
 let addDownloadPopupOpener = null;
 
 /** @type {(() => void) | null} */
@@ -666,6 +667,42 @@ async function handleQueueControl(action, queueId) {
   }
 }
 
+async function handleBookmarkList() {
+  const result = await daemonRpc("bookmark.list", {});
+  const exitCode = result?.exitCode;
+  if (exitCode !== undefined && exitCode !== 0) {
+    throw new Error("bookmark.list failed");
+  }
+  return Array.isArray(result?.bookmarks) ? result.bookmarks : [];
+}
+
+async function handleBookmarkHas(url) {
+  const result = await daemonRpc("bookmark.has", { url });
+  const exitCode = result?.exitCode;
+  if (exitCode !== undefined && exitCode !== 0) {
+    throw new Error("bookmark.has failed");
+  }
+  return Boolean(result?.bookmarked);
+}
+
+async function handleBookmarkAdd(payload) {
+  const result = await daemonRpc("bookmark.add", payload);
+  const exitCode = result?.exitCode;
+  if (exitCode !== undefined && exitCode !== 0) {
+    throw new Error("Failed to save bookmark");
+  }
+  return result;
+}
+
+async function handleBookmarkRemove(payload) {
+  const result = await daemonRpc("bookmark.remove", payload);
+  const exitCode = result?.exitCode;
+  if (exitCode !== undefined && exitCode !== 0) {
+    throw new Error("bookmark.remove failed");
+  }
+  return result;
+}
+
 async function handleProtocolMessage(message, origin, res) {
   const { type, id, payload } = message;
 
@@ -768,7 +805,22 @@ async function handleProtocolMessage(message, origin, res) {
 
       focusAvarApp();
       if (addDownloadPopupOpener) {
-        addDownloadPopupOpener(addId, title);
+        const popupId = addDownloadPopupOpener(addId, title, { fromExtensionGrab: true });
+        if (popupId === null) {
+          addDownloadStash.delete(addId);
+          const blocked = evaluateAddDownloadSlot({ fromExtensionGrab: true });
+          sendJson(
+            res,
+            429,
+            createErrorResponse(
+              "download.add.open",
+              id,
+              addDownloadWindowBlockedMessage(blocked.reason ?? "tooManyOpen"),
+            ),
+            origin,
+          );
+          return;
+        }
       }
 
       sendJson(
@@ -933,6 +985,102 @@ async function handleProtocolMessage(message, origin, res) {
         res,
         502,
         createErrorResponse(type, id, error instanceof Error ? error.message : "Request failed"),
+        origin,
+      );
+    }
+    return;
+  }
+
+  if (type === "bookmark.list") {
+    try {
+      const bookmarks = await handleBookmarkList();
+      sendJson(res, 200, createResponse("bookmark.list", id, { bookmarks }), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "bookmark.list",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
+  if (type === "bookmark.has") {
+    try {
+      const url = typeof payload.url === "string" ? payload.url : "";
+      if (!url.trim()) {
+        sendJson(res, 400, createErrorResponse("bookmark.has", id, "Missing url"), origin);
+        return;
+      }
+      const bookmarked = await handleBookmarkHas(url.trim());
+      sendJson(res, 200, createResponse("bookmark.has", id, { bookmarked }), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "bookmark.has",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
+  if (type === "bookmark.add") {
+    try {
+      const url = typeof payload.url === "string" ? payload.url : "";
+      if (!url.trim()) {
+        sendJson(res, 400, createErrorResponse("bookmark.add", id, "Missing url"), origin);
+        return;
+      }
+      const result = await handleBookmarkAdd({
+        url: url.trim(),
+        title: typeof payload.title === "string" ? payload.title : "",
+        linkCount: Number(payload.linkCount) || 0,
+      });
+      sendJson(res, 200, createResponse("bookmark.add", id, result ?? {}), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "bookmark.add",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
+        origin,
+      );
+    }
+    return;
+  }
+
+  if (type === "bookmark.remove") {
+    try {
+      const url = typeof payload.url === "string" ? payload.url : undefined;
+      const bookmarkId = typeof payload.id === "string" ? payload.id : undefined;
+      if (!url && !bookmarkId) {
+        sendJson(res, 400, createErrorResponse("bookmark.remove", id, "Missing id or url"), origin);
+        return;
+      }
+      await handleBookmarkRemove(url ? { url } : { id: bookmarkId });
+      sendJson(res, 200, createResponse("bookmark.remove", id, {}), origin);
+    } catch (error) {
+      sendJson(
+        res,
+        502,
+        createErrorResponse(
+          "bookmark.remove",
+          id,
+          error instanceof Error ? error.message : "Request failed",
+        ),
         origin,
       );
     }

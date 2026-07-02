@@ -4,8 +4,9 @@ import type { DaemonClient } from "@/api/daemon";
 import { isPushSyncChannel, resolveSyncChannel } from "@/lib/syncChannel";
 import { footerMonitorsEnabled } from "@/lib/footerMonitors";
 import { appLogger } from "@/lib/appLogger";
+import { setPushStreamReconnectHandler } from "@/lib/pushStreamReconnect";
 import { useConfigStore } from "@/stores/configStore";
-import { ensureElectronSession, useConnectionStore } from "@/stores/connectionStore";
+import { ensureAppConnectionReady, useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore } from "@/stores/dataStore";
 
 type SyncStopFn = () => void;
@@ -95,7 +96,7 @@ function startSseSync(client: DaemonClient): SyncStopFn {
   return () => source.close();
 }
 
-function startWebSocketSync(client: DaemonClient): SyncStopFn {
+function startWebSocketSync(client: DaemonClient, reconnectDelayMs: number): SyncStopFn {
   let ws: WebSocket | null = null;
   let reconnectTimer: number | null = null;
   let closed = false;
@@ -121,7 +122,7 @@ function startWebSocketSync(client: DaemonClient): SyncStopFn {
     ws.onclose = () => {
       appLogger.gui.debug("WebSocket closed");
       if (!closed) {
-        reconnectTimer = window.setTimeout(connect, 2000);
+        reconnectTimer = window.setTimeout(connect, reconnectDelayMs);
       }
     };
 
@@ -177,9 +178,13 @@ export function restartDataSync(): void {
     return;
   }
 
+  const reconnectDelayMs = Math.max(config.pingIntervalMs, 500);
+
   appLogger.gui.info(`Starting data sync (${channel})`);
   activeStop =
-    channel === "websocket" ? startWebSocketSync(client) : startSseSync(client);
+    channel === "websocket"
+      ? startWebSocketSync(client, reconnectDelayMs)
+      : startSseSync(client);
 }
 
 export function stopDataSync(): void {
@@ -227,6 +232,8 @@ export function initSyncCoordinator(): () => void {
     const channelChanged = state.config.syncChannel !== prev.config.syncChannel;
     const intervalChanged =
       state.config.refreshIntervalMs !== prev.config.refreshIntervalMs;
+    const pingIntervalChanged =
+      state.config.pingIntervalMs !== prev.config.pingIntervalMs;
     const statsInterestChanged =
       footerMonitorsEnabled(state.config.footerMonitors) !==
       footerMonitorsEnabled(prev.config.footerMonitors);
@@ -235,13 +242,17 @@ export function initSyncCoordinator(): () => void {
       useDataStore.getState().setStats(null);
     }
 
-    if (channelChanged || intervalChanged || statsInterestChanged) {
+    if (channelChanged || intervalChanged || pingIntervalChanged || statsInterestChanged) {
       appLogger.gui.info("Sync config changed — restarting sync");
       restartDataSync();
     }
   });
 
-  void ensureElectronSession().then(() => {
+  setPushStreamReconnectHandler(() => {
+    restartDataSync();
+  });
+
+  void ensureAppConnectionReady().then(() => {
     useConnectionStore.getState().reconnectClient();
     useConnectionStore.getState().startPingMonitor();
     restartDataSync();
@@ -251,6 +262,7 @@ export function initSyncCoordinator(): () => void {
     unsubConnection();
     unsubConfig();
     stopDataSync();
+    setPushStreamReconnectHandler(null);
     useConnectionStore.getState().stopPingMonitor();
   };
 }

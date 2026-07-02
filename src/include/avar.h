@@ -77,6 +77,7 @@
 #endif
 
 #define AVAR_CONFIG_FILENAME "config.json"
+#define AVAR_BOOKMARKS_FILENAME "bookmarks.json"
 #define AVAR_CONFIG_TMP_SUFFIX ".tmp"
 #define AVAR_CONFIG_PATH_MAX 256U
 
@@ -138,6 +139,9 @@
 #define AVAR_CFG_LOG_FILE "log.file"
 #define AVAR_CFG_LOG_FILE_ENABLED "log.file.enabled"
 #define AVAR_CFG_LOG_FILE_PATH "log.file.path"
+
+#define AVAR_CFG_BOOKMARKS_FILE "bookmarks.file"
+#define AVAR_CFG_BOOKMARKS_FILE_PATH "bookmarks.file.path"
 
 #define AVAR_SEGMENT_STRATEGY_BALANCED "balanced"
 #define AVAR_SEGMENT_STRATEGY_LEFT_HEAVY "left-heavy"
@@ -234,6 +238,11 @@
 #define AVAR_QUEUE_FIELD_TEMP_PATH "tempPath"
 #define AVAR_QUEUE_FIELD_DOWNLOAD_PATH "downloadPath"
 #define AVAR_QUEUE_FIELD_STARTED "started"
+
+#define AVAR_BOOKMARK_FIELD_TITLE "title"
+#define AVAR_BOOKMARK_FIELD_LINK_COUNT "linkCount"
+#define AVAR_BOOKMARK_FIELD_CREATED_AT "createdAt"
+#define AVAR_BOOKMARK_FIELD_UPDATED_AT "updatedAt"
 #define AVAR_FIELD_ETAG "etag"
 #define AVAR_FIELD_LAST_MODIFIED "lastModified"
 #define AVAR_FIELD_CHUNK_SIZE "chunkSize"

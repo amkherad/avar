@@ -11,6 +11,8 @@ export type AvarPopupOptions = {
   height?: number;
   minWidth?: number;
   minHeight?: number;
+  alwaysOnTop?: boolean;
+  fromExtensionGrab?: boolean;
 };
 
 export type AvarSelectDirectoryOptions = {
