@@ -56,7 +56,7 @@ static char *item_id_from_state_path(const char *path) {
         return NULL;
     }
 
-    return strndup(dir_start, (size_t)(dir_end - dir_start));
+    return avar_strndup(dir_start, (size_t)(dir_end - dir_start));
 }
 
 bool download_io_state_write_allowed(const char *path) {

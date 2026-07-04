@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "avar.h"
 #include "config.h"
@@ -117,6 +118,25 @@ static char *find_item_field(const char *item_id, const char *field) {
     }
 
     return NULL;
+}
+
+static bool wait_for_item_field_value(const char *item_id, const char *field,
+                                      const char *expected, const unsigned timeout_ms) {
+    const unsigned step_ms = 50U;
+    for (unsigned elapsed = 0U; elapsed < timeout_ms; elapsed += step_ms) {
+        char *value = find_item_field(item_id, field);
+        if (value != NULL && strcmp(value, expected) == 0) {
+            free(value);
+            return true;
+        }
+        free(value);
+#if defined(_WIN32)
+        Sleep(step_ms);
+#else
+        usleep((useconds_t)step_ms * 1000U);
+#endif
+    }
+    return false;
 }
 
 static bool wait_for_item_status(const char *item_id, const char *expected,
@@ -341,28 +361,34 @@ AVAR_TEST(download_lifecycle_resume_unsupported_restart) {
     thread_pool_reset_global();
 
     char url[256];
-    build_url("noresume.bin", url, sizeof url);
+    /* slow=1 trickles the body so the stop below reliably lands mid-transfer. */
+    build_url("noresume.bin?slow=1", url, sizeof url);
 
     char *item_id = NULL;
     AVAR_ASSERT_EQ(download_start_background(url, NULL, "noresume-test", &item_id), EXIT_SUCCESS);
     AVAR_ASSERT_NOT_NULL(item_id);
 
-    bool stopped_mid = false;
-    for (unsigned attempt = 0; attempt < 200U; attempt++) {
-        char *bytes_str = find_item_field(item_id, AVAR_FIELD_BYTES_DOWNLOADED);
-        const uint64_t bytes =
-                bytes_str != NULL ? strtoull(bytes_str, NULL, 10) : 0U;
-        free(bytes_str);
+    /* Poll the on-disk temp file rather than the published bytesDownloaded
+     * counter: config refreshes are throttled, so the counter can stay 0 for
+     * the whole (short) transfer and the stop would land after completion. */
+    char temp_file[600];
+    snprintf(temp_file, sizeof temp_file, "%s%c%s%c%s", g_temp_dir, PATH_SEPARATOR, item_id,
+             PATH_SEPARATOR, "noresume-test");
 
-        if (bytes > 0U && download_stop(item_id) == EXIT_SUCCESS) {
+    bool stopped_mid = false;
+    for (unsigned attempt = 0; attempt < 400U; attempt++) {
+        struct stat st;
+        const bool has_bytes = stat(temp_file, &st) == 0 && st.st_size > 0;
+        if (has_bytes && download_item_is_active(item_id)
+            && download_stop(item_id) == EXIT_SUCCESS) {
             stopped_mid = true;
             break;
         }
 
 #if defined(_WIN32)
-        Sleep(20);
+        Sleep(10);
 #else
-        usleep(20000);
+        usleep(10000);
 #endif
     }
 
@@ -370,12 +396,13 @@ AVAR_TEST(download_lifecycle_resume_unsupported_restart) {
     AVAR_ASSERT(download_wait_idle(60000U));
 
     AVAR_ASSERT_EQ(download_start(item_id), EXIT_SUCCESS);
+    /* The item is already "stopped" from the phase above, so waiting on status
+     * alone would pass before the background resume attempt even starts. Wait
+     * for the resume-unsupported description the new attempt must publish. */
+    AVAR_ASSERT(wait_for_item_field_value(item_id, AVAR_FIELD_DESCRIPTION,
+                                          AVAR_DL_DESC_RESUME_UNSUPPORTED, 60000U));
     AVAR_ASSERT(wait_for_item_status(item_id, AVAR_DL_STATUS_STOPPED, 60000U));
-
-    char *description = find_item_field(item_id, AVAR_FIELD_DESCRIPTION);
-    AVAR_ASSERT_NOT_NULL(description);
-    AVAR_ASSERT_STR_EQ(description, AVAR_DL_DESC_RESUME_UNSUPPORTED);
-    free(description);
+    AVAR_ASSERT(download_wait_idle(60000U));
 
     AVAR_ASSERT_EQ(download_restart(item_id), EXIT_SUCCESS);
     AVAR_ASSERT(wait_for_item_status(item_id, AVAR_DL_STATUS_COMPLETED, 60000U));

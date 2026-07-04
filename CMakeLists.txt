@@ -79,6 +79,7 @@ function(avar_configure_core_library target_name testing)
     target_compile_definitions(${target_name} PUBLIC
             MG_ENABLE_CUSTOM_LOG=1
             MG_TLS=MG_TLS_MBED
+            MG_IO_SIZE=262144
     )
     if(testing)
         target_compile_definitions(${target_name} PUBLIC AVAR_TESTING=1)
@@ -111,6 +112,7 @@ function(avar_configure_cli_library target_name testing)
     target_compile_definitions(${target_name} PUBLIC
             MG_ENABLE_CUSTOM_LOG=1
             MG_TLS=MG_TLS_MBED
+            MG_IO_SIZE=262144
     )
     if(testing)
         target_compile_definitions(${target_name} PUBLIC AVAR_TESTING=1)
@@ -145,6 +147,7 @@ if(AVAR_ENABLE_COVERAGE)
     target_compile_definitions(avar_core INTERFACE
             MG_ENABLE_CUSTOM_LOG=1
             MG_TLS=MG_TLS_MBED
+            MG_IO_SIZE=262144
             AVAR_TESTING=1
     )
     if(WIN32)

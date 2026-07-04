@@ -203,14 +203,11 @@ static int persist_config(const char *path) {
 
     const size_t json_len = strlen(json);
     const size_t written = fwrite(json, 1, json_len, file);
-    const int flush_rc = fflush(file);
-#if !defined(_WIN32)
-    fsync(fileno(file));
-#endif
+    const int sync_rc = file_sync_to_disk(file);
     fclose(file);
     cJSON_free(json);
 
-    if (written != json_len || flush_rc != 0) {
+    if (written != json_len || sync_rc != 0) {
         remove(tmp_path);
         free(tmp_path);
         LOG_ERROR("Failed to write config file: %s", tmp_path);
@@ -914,7 +911,7 @@ int config_open_at(const char *config_file) {
 
     const char *last_sep = strrchr(config_file, PATH_SEPARATOR);
     if (last_sep != NULL) {
-        _config.dir = strndup(config_file, (size_t)(last_sep - config_file));
+        _config.dir = avar_strndup(config_file, (size_t)(last_sep - config_file));
     } else {
         _config.dir = strdup(".");
     }

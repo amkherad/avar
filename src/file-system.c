@@ -11,6 +11,7 @@
 
 #if defined(_WIN32)
     #include <direct.h>      /* _mkdir()   */
+    #include <io.h>          /* _commit()  */
     #include <sys/stat.h>
     #include <windows.h>
     #define MKDIR(path) _mkdir(path)
@@ -287,7 +288,7 @@ char *resolve_unique_dest_path(const char *dest_path) {
     const char *filename = last_sep != NULL ? last_sep + 1 : dest_path;
     char *dir = NULL;
     if (last_sep != NULL) {
-        dir = strndup(dest_path, (size_t)(last_sep - dest_path));
+        dir = avar_strndup(dest_path, (size_t)(last_sep - dest_path));
         if (dir == NULL) {
             return NULL;
         }
@@ -323,6 +324,20 @@ char *resolve_unique_dest_path(const char *dest_path) {
 
     free(dir);
     return NULL;
+}
+
+int file_sync_to_disk(FILE *fp) {
+    if (fp == NULL) {
+        return -1;
+    }
+    if (fflush(fp) != 0) {
+        return -1;
+    }
+#if defined(_WIN32)
+    return _commit(_fileno(fp)) == 0 ? 0 : -1;
+#else
+    return fsync(fileno(fp)) == 0 ? 0 : -1;
+#endif
 }
 
 int move_file_atomic(const char *src, const char *dest) {
@@ -371,7 +386,9 @@ int move_file_atomic(const char *src, const char *dest) {
         }
 
         fclose(in);
-        if (fflush(out) != 0) {
+        /* The copy replaces the only durable copy of the data; sync it before
+         * deleting src or a power loss could lose both. */
+        if (file_sync_to_disk(out) != 0) {
             fclose(out);
             remove(dest);
             return -1;

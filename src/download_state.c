@@ -1,6 +1,7 @@
 #include <cJSON.h>
 #include <download_state.h>
 #include <download_io.h>
+#include <file-system.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -556,11 +557,14 @@ int download_state_save(const DownloadState *state, const char *path) {
 
     const size_t json_len = strlen(json);
     const size_t written = fwrite(json, 1, json_len, file);
-    fflush(file);
+    /* Sync before rename: promoting a temp file that only reached the OS cache
+     * could replace the previous valid state with a truncated one on power
+     * loss. Saves are throttled, so this is off the per-write hot path. */
+    const int sync_rc = file_sync_to_disk(file);
     fclose(file);
     cJSON_free(json);
 
-    if (written != json_len) {
+    if (written != json_len || sync_rc != 0) {
         remove(tmp_path);
         free(tmp_path);
         return -1;

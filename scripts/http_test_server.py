@@ -166,6 +166,10 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_no_resume()
             return
 
+        if self.path.startswith("/chunked"):
+            self._serve_chunked()
+            return
+
         if self.path.startswith("/segmented"):
             self._serve_segmented()
             return
@@ -239,9 +243,36 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(SEGMENTED_BODY)
 
+    def _serve_chunked(self) -> None:
+        """Serves the segmented body with Transfer-Encoding: chunked framing.
+
+        Exercises the client's incremental chunked decoder in stream mode; the
+        framing (size lines, CRLFs, chunk extensions, trailer) must not leak
+        into the saved file.
+        """
+        filename = self.path.split("?", 1)[0].lstrip("/") or "chunked.bin"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/octet-stream")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.end_headers()
+        chunk = 48 * 1024 + 13  # deliberately unaligned chunk size
+        for offset in range(0, SEGMENTED_SIZE, chunk):
+            piece = SEGMENTED_BODY[offset : offset + chunk]
+            self.wfile.write(f"{len(piece):x};ext=ignored\r\n".encode("ascii"))
+            self.wfile.write(piece)
+            self.wfile.write(b"\r\n")
+        self.wfile.write(b"0\r\nX-Trailer: ignored\r\n\r\n")
+
     def _serve_no_resume(self) -> None:
-        """Accepts an initial full download but rejects resume range requests."""
-        filename = self.path.split("?", 1)[0].lstrip("/") or "noresume.bin"
+        """Accepts an initial full download but rejects resume range requests.
+
+        With ``?slow=1`` the body is trickled out in small chunks so tests can
+        reliably stop the transfer mid-download even on fast localhost links.
+        """
+        path, _, query = self.path.partition("?")
+        filename = path.lstrip("/") or "noresume.bin"
+        slow = "slow" in query
         range_header = self.headers.get("Range")
         if range_header is not None:
             parsed = _parse_range_header(range_header, SEGMENTED_SIZE)
@@ -257,7 +288,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.end_headers()
-        self.wfile.write(SEGMENTED_BODY)
+        if not slow:
+            self.wfile.write(SEGMENTED_BODY)
+            return
+
+        chunk = 32 * 1024
+        try:
+            for offset in range(0, SEGMENTED_SIZE, chunk):
+                self.wfile.write(SEGMENTED_BODY[offset : offset + chunk])
+                self.wfile.flush()
+                time.sleep(0.05)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # the client stopping mid-transfer is the expected test flow
 
     def _serve_flaky_segmented(self) -> None:
         """Like /segmented, but drops the connection mid-body on the first attempt

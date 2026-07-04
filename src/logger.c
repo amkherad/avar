@@ -75,7 +75,7 @@ void logger_apply_config(void) {
 
     char *parent_sep = strrchr(path, PATH_SEPARATOR);
     if (parent_sep != NULL) {
-        char *parent = strndup(path, (size_t)(parent_sep - path));
+        char *parent = avar_strndup(path, (size_t)(parent_sep - path));
         if (parent != NULL) {
             (void)make_dirs_in_path(parent);
             free(parent);

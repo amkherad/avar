@@ -308,6 +308,24 @@ AVAR_TEST(download_integration_segment_retry_recovers_from_drop) {
     free(dest);
 }
 
+/* A chunked response must be de-framed: the saved file has to contain exactly
+ * the payload bytes, with no size lines, extensions, or trailers leaked in. */
+AVAR_TEST(download_integration_chunked_stream_completes) {
+    AVAR_ASSERT(setup_isolated_paths());
+    remove_named_artifacts("chunked.bin");
+
+    char url[256];
+    build_url("chunked.bin", url, sizeof url);
+    const int rc = transient_download(url, NULL, NULL, NULL, true);
+
+    AVAR_ASSERT_EQ(rc, EXIT_SUCCESS);
+
+    char *dest = path_join(g_download_dir, "chunked.bin");
+    AVAR_ASSERT_NOT_NULL(dest);
+    AVAR_ASSERT(verify_segmented_file_contents(dest));
+    free(dest);
+}
+
 AVAR_TEST(download_integration_range_refused_falls_back_to_stream) {
     AVAR_ASSERT(setup_isolated_paths());
     configure_segmentation("1024", "65536", "4", "true");
@@ -368,6 +386,7 @@ AVAR_TEST_MAIN(
         run_download_integration_segmented_parallel_completes();
         run_download_integration_segmented_disabled_uses_stream();
         run_download_integration_segment_retry_recovers_from_drop();
+        run_download_integration_chunked_stream_completes();
         run_download_integration_range_refused_falls_back_to_stream();
         run_download_integration_background_downloads_use_thread_pool();
         test_guard_http_server_stop(&g_http_server);)

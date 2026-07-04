@@ -444,6 +444,14 @@ typedef struct DownloadJob {
     uint64_t stream_expected;
     uint64_t stream_persisted;
     uint64_t chunk_persisted;
+    /* Incremental Transfer-Encoding: chunked decoder for the stream path (the
+     * body is written straight from the socket, so framing must be stripped). */
+    bool chunked_encoding;
+    bool chunked_complete;
+    unsigned chunked_state;
+    uint64_t chunked_remaining;
+    char chunked_line[20];
+    size_t chunked_line_len;
     bool streaming;
     bool pending_schedule;
     bool schedule_deferred;
@@ -459,6 +467,7 @@ typedef struct DownloadJob {
     uint64_t last_activity_ms;
     uint64_t last_progress_ms;
     uint64_t last_persist_ms;
+    uint64_t last_upsert_ms;
     uint64_t bytes_since_persist;
     uint64_t last_speed_sample_ms;
     uint64_t last_speed_bytes;
@@ -540,6 +549,8 @@ static char *build_item_json(const DownloadJob *job, const char *status);
 
 static int dm_item_upsert(DownloadJob *job, const char *status);
 
+static int dm_item_upsert_throttled(DownloadJob *job, const char *status);
+
 static void print_progress(DownloadJob *job);
 
 static void report_cli(const DownloadJob *job);
@@ -557,7 +568,7 @@ static void slot_reset_for_request(ChunkSlot *slot, struct mg_connection *c, uin
                                    uint64_t range_end);
 
 static void slot_collect_in_flight(const DownloadJob *job, const ChunkSlot *exclude,
-                                   ByteRange *out, size_t *count);
+                                   ByteRange *out, size_t max_count, size_t *count);
 
 static bool slot_try_extend_reservation(DownloadJob *job, ChunkSlot *slot);
 
@@ -797,7 +808,8 @@ static bool persist_buffered_progress(DownloadJob *job, const bool force) {
         return false;
     }
 
-    sync_temp_file(job);
+    /* Data is fflush()ed to the OS on every write; a full disk sync here would
+     * stall the transfer loop, so it only happens when the file is closed. */
 
     if (job->mutex != NULL) {
         avar_mutex_lock(job->mutex);
@@ -894,7 +906,7 @@ static void remove_job_work_dir(const char *state_path) {
         return;
     }
 
-    char *job_dir = strndup(state_path, (size_t)(last_sep - state_path));
+    char *job_dir = avar_strndup(state_path, (size_t)(last_sep - state_path));
     if (job_dir == NULL) {
         remove(state_path);
         return;
@@ -1167,6 +1179,12 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         cJSON_AddNullToObject(obj, AVAR_FIELD_QUEUE_ID);
     }
 
+    if (job->state != NULL && job->state->description != NULL) {
+        cJSON_AddStringToObject(obj, AVAR_FIELD_DESCRIPTION, job->state->description);
+    } else {
+        cJSON_AddNullToObject(obj, AVAR_FIELD_DESCRIPTION);
+    }
+
     if (strcmp(status, AVAR_DL_STATUS_COMPLETED) == 0) {
         const char *dest = NULL;
         char *resolved = NULL;
@@ -1212,11 +1230,24 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
 
     cJSON_free(json);
     if (rc == 0) {
+        job->last_upsert_ms = mg_millis();
         log_job_status(job, status);
         (void)download_item_strip_config_url(job->item_id);
         sync_queue_started_for_job(job);
     }
     return rc;
+}
+
+/* Refreshes the dm.items entry at most once per DL_UI_REFRESH_INTERVAL_MS. Use
+ * for steady-transfer progress updates; status transitions call dm_item_upsert()
+ * directly. The upsert rewrites the whole config file, so calling it from the
+ * per-read path would stall the transfer loop. */
+static int dm_item_upsert_throttled(DownloadJob *job, const char *status) {
+    if (job != NULL && job->last_upsert_ms != 0U
+        && mg_millis() - job->last_upsert_ms < DL_UI_REFRESH_INTERVAL_MS) {
+        return 0;
+    }
+    return dm_item_upsert(job, status);
 }
 
 static void clear_progress_line(DownloadJob *job) {
@@ -1332,13 +1363,16 @@ static void print_progress(DownloadJob *job) {
     const uint64_t done_bytes = job_bytes_done(job);
     const uint64_t now = mg_millis();
 
-    if (job->last_speed_sample_ms == 0) {
+    if (job->last_speed_sample_ms == 0 || done_bytes < job->last_speed_bytes) {
         job->last_speed_sample_ms = now;
         job->last_speed_bytes = done_bytes;
     } else if (now > job->last_speed_sample_ms) {
-        const double elapsed = (now - job->last_speed_sample_ms) / 1000.0;
-        if (elapsed >= 0.2) {
-            job->last_speed_bps = (double) (done_bytes - job->last_speed_bytes) / elapsed;
+        const uint64_t elapsed_ms = now - job->last_speed_sample_ms;
+        if (elapsed_ms >= 200U) {
+            const double sample =
+                    (double)(done_bytes - job->last_speed_bytes) * 1000.0 / (double)elapsed_ms;
+            job->last_speed_bps =
+                    avar_speed_ema(job->last_speed_bps, sample, elapsed_ms, DL_SPEED_EMA_TAU_MS);
             job->last_speed_bytes = done_bytes;
             job->last_speed_sample_ms = now;
         }
@@ -1725,7 +1759,7 @@ static bool range_in_flight_predicate(const void *ctx, const uint64_t start, con
 }
 
 static void slot_collect_in_flight(const DownloadJob *job, const ChunkSlot *exclude,
-                                   ByteRange *out, size_t *count) {
+                                   ByteRange *out, const size_t max_count, size_t *count) {
     if (job == NULL || out == NULL || count == NULL) {
         return;
     }
@@ -1735,7 +1769,7 @@ static void slot_collect_in_flight(const DownloadJob *job, const ChunkSlot *excl
         return;
     }
 
-    for (size_t i = 0; i < job->slot_capacity; i++) {
+    for (size_t i = 0; i < job->slot_capacity && *count < max_count; i++) {
         const ChunkSlot *slot = &job->slots[i];
         if (!slot->in_use || slot == exclude) {
             continue;
@@ -1752,9 +1786,9 @@ static bool slot_try_extend_reservation(DownloadJob *job, ChunkSlot *slot) {
         return false;
     }
 
-    ByteRange in_flight[32];
+    ByteRange in_flight[DL_MAX_SEGMENT_CONCURRENCY];
     size_t in_flight_count = 0U;
-    slot_collect_in_flight(job, slot, in_flight, &in_flight_count);
+    slot_collect_in_flight(job, slot, in_flight, DL_MAX_SEGMENT_CONCURRENCY, &in_flight_count);
 
     const uint64_t extended =
             segment_next_reserve_end(job->state, in_flight, in_flight_count, slot->reserved_end);
@@ -2025,7 +2059,7 @@ static bool ensure_temp_dir(const char *temp_path) {
         return true;
     }
 
-    char *dir = strndup(temp_path, (size_t) (last_sep - temp_path));
+    char *dir = avar_strndup(temp_path, (size_t) (last_sep - temp_path));
     if (dir == NULL) {
         return false;
     }
@@ -2130,6 +2164,80 @@ static bool append_stream(DownloadJob *job, const void *data, const size_t len) 
     return true;
 }
 
+enum {
+    DL_CHUNKED_STATE_SIZE, /* reading the hex size line (leading CRLFs skipped) */
+    DL_CHUNKED_STATE_DATA, /* copying chunk payload bytes */
+    DL_CHUNKED_STATE_DONE, /* final 0-size chunk seen; trailers are ignored */
+};
+
+/* Feeds raw socket bytes through an RFC 9112 chunked decoder, appending only
+ * the de-framed payload via append_stream(). Returns false on I/O or framing
+ * errors. Sets job->chunked_complete once the terminating 0-size chunk is seen. */
+static bool append_stream_chunked(DownloadJob *job, const unsigned char *data, size_t len) {
+    while (len > 0U) {
+        switch (job->chunked_state) {
+        case DL_CHUNKED_STATE_SIZE: {
+            const unsigned char ch = *data;
+            data++;
+            len--;
+            if (ch == '\n') {
+                if (job->chunked_line_len == 0U) {
+                    break; /* CRLF terminating the previous chunk's data */
+                }
+                job->chunked_line[job->chunked_line_len] = '\0';
+                char *end = NULL;
+                const unsigned long long size = strtoull(job->chunked_line, &end, 16);
+                job->chunked_line_len = 0U;
+                if (end == job->chunked_line) {
+                    set_error(job, "Invalid chunked encoding");
+                    return false;
+                }
+                if (size == 0U) {
+                    job->chunked_complete = true;
+                    job->chunked_state = DL_CHUNKED_STATE_DONE;
+                    return true;
+                }
+                job->chunked_remaining = (uint64_t)size;
+                job->chunked_state = DL_CHUNKED_STATE_DATA;
+            } else if (ch != '\r' && job->chunked_line_len + 1U < sizeof job->chunked_line) {
+                job->chunked_line[job->chunked_line_len++] = (char)ch;
+            }
+            /* Bytes past the line buffer (chunk extensions) are dropped; the
+             * hex size prefix always fits. */
+            break;
+        }
+        case DL_CHUNKED_STATE_DATA: {
+            size_t take = len;
+            if ((uint64_t)take > job->chunked_remaining) {
+                take = (size_t)job->chunked_remaining;
+            }
+            if (!append_stream(job, data, take)) {
+                return false;
+            }
+            data += take;
+            len -= take;
+            job->chunked_remaining -= take;
+            if (job->chunked_remaining == 0U) {
+                job->chunked_state = DL_CHUNKED_STATE_SIZE;
+            }
+            break;
+        }
+        default:
+            return true; /* trailers after the final chunk are ignored */
+        }
+    }
+    return true;
+}
+
+/* Appends stream body bytes, stripping chunked framing when the response uses
+ * Transfer-Encoding: chunked. */
+static bool append_stream_decoded(DownloadJob *job, const void *data, const size_t len) {
+    if (job->chunked_encoding) {
+        return append_stream_chunked(job, (const unsigned char *)data, len);
+    }
+    return append_stream(job, data, len);
+}
+
 static size_t buffered_http_body(const struct mg_connection *c, const struct mg_http_message *hm) {
     if (c == NULL || hm == NULL || hm->body.len == 0 || c->recv.len <= hm->head.len) {
         return 0;
@@ -2146,7 +2254,7 @@ static void begin_stream_body(DownloadJob *job, struct mg_connection *c,
 
     const size_t to_write = buffered_http_body(c, hm);
     if (to_write > 0) {
-        if (!append_stream(job, hm->body.buf, to_write)) {
+        if (!append_stream_decoded(job, hm->body.buf, to_write)) {
             c->is_draining = 1;
             return;
         }
@@ -2268,8 +2376,6 @@ static bool slot_mark_segment_done(DownloadJob *job, ChunkSlot *slot, struct mg_
         return false;
     }
 
-    sync_temp_file(job);
-
     if (job->mutex != NULL) {
         avar_mutex_lock(job->mutex);
     }
@@ -2314,7 +2420,7 @@ static void slot_finish_continuous(DownloadJob *job, ChunkSlot *slot, struct mg_
     slot->draining = false;
     slot->response_remaining = 0U;
     print_progress(job);
-    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+    (void)dm_item_upsert_throttled(job, AVAR_DL_STATUS_DOWNLOADING);
 
     if (download_state_all_chunks_done(job->state)) {
         chunk_slot_release(job, slot);
@@ -2357,7 +2463,7 @@ static void slot_finish_segment(DownloadJob *job, ChunkSlot *slot, struct mg_con
     slot->chunk_received = 0U;
     slot->chunk_expected = 0U;
     print_progress(job);
-    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+    (void)dm_item_upsert_throttled(job, AVAR_DL_STATUS_DOWNLOADING);
 
     if (download_state_all_chunks_done(job->state)) {
         chunk_slot_release(job, slot);
@@ -2402,7 +2508,7 @@ static bool complete_chunk_slot(DownloadJob *job, ChunkSlot *slot, struct mg_con
     slot->chunk_received = 0U;
     slot->chunk_expected = 0U;
     chunk_slot_release(job, slot);
-    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+    (void)dm_item_upsert_throttled(job, AVAR_DL_STATUS_DOWNLOADING);
     print_progress(job);
     return true;
 }
@@ -2486,7 +2592,7 @@ static bool apply_filename_from_headers(DownloadJob *job, struct mg_http_message
     if (job->state_path != NULL) {
         const char *last_sep = strrchr(job->state_path, PATH_SEPARATOR);
         if (last_sep != NULL) {
-            job_dir = strndup(job->state_path, (size_t) (last_sep - job->state_path));
+            job_dir = avar_strndup(job->state_path, (size_t) (last_sep - job->state_path));
         }
     }
 
@@ -2536,7 +2642,7 @@ static bool finalize_download(DownloadJob *job) {
 
     const char *last_sep = strrchr(job->dest_path, PATH_SEPARATOR);
     if (last_sep != NULL) {
-        char *dir = strndup(job->dest_path, (size_t) (last_sep - job->dest_path));
+        char *dir = avar_strndup(job->dest_path, (size_t) (last_sep - job->dest_path));
         if (dir != NULL) {
             (void) make_dirs_in_path(dir);
             free(dir);
@@ -2622,7 +2728,7 @@ static void flush_recv_body(DownloadJob *job, ChunkSlot *slot, struct mg_connect
         }
         job->chunk_received += len;
         job->bytes_since_persist += len;
-    } else if (!append_stream(job, c->recv.buf, c->recv.len)) {
+    } else if (!append_stream_decoded(job, c->recv.buf, c->recv.len)) {
         return;
     }
 
@@ -2722,7 +2828,6 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
                 dl_conn_ctx_free(c);
                 return;
             }
-            sync_temp_file(job);
             if (job->mutex != NULL) {
                 avar_mutex_lock(job->mutex);
             }
@@ -2739,7 +2844,7 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
             job->streaming = false;
             job->chunk_received = 0;
             job->chunk_expected = 0;
-            (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+            (void)dm_item_upsert_throttled(job, AVAR_DL_STATUS_DOWNLOADING);
             print_progress(job);
         }
 
@@ -2753,7 +2858,12 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
     }
 
     if (job->step == DL_STEP_STREAM && (streaming || job->stream_received > 0)) {
-        if (job->stream_expected == 0 || job->stream_received >= job->stream_expected) {
+        if (job->chunked_encoding && !job->chunked_complete) {
+            set_error(job, "Connection closed mid-transfer (%llu bytes, chunked body incomplete)",
+                      (unsigned long long)job->stream_received);
+            (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+        } else if (job->chunked_encoding || job->stream_expected == 0
+                   || job->stream_received >= job->stream_expected) {
             (void)finalize_download(job);
         } else {
             set_error(job, "Connection closed before download completed (%llu / %llu bytes)",
@@ -2825,7 +2935,7 @@ static void schedule_pending_chunks(DownloadJob *job) {
     }
 
     const size_t capacity = job->seg_cfg.concurrency - active;
-    ByteRange ranges[32];
+    ByteRange ranges[DL_MAX_SEGMENT_CONCURRENCY];
     const size_t max_select = capacity < (sizeof ranges / sizeof ranges[0]) ? capacity
                                                                             : (sizeof ranges / sizeof ranges[0]);
     const RangeInFlightCtx ctx = {.job = job, .exclude = NULL};
@@ -3023,6 +3133,31 @@ static void handle_response_headers(DownloadJob *job, ChunkSlot *slot, struct mg
         job->use_ranges = mg_strcasecmp(*accept_ranges, mg_str("none")) != 0;
     }
 
+    struct mg_str *transfer_encoding = mg_http_get_header(hm, "Transfer-Encoding");
+    const bool chunked_response =
+            transfer_encoding != NULL
+            && mg_strcasecmp(*transfer_encoding, mg_str("chunked")) == 0;
+    if (chunked_response && job->step == DL_STEP_CHUNK) {
+        /* Range replies must carry Content-Length; a chunked reply cannot
+         * drive the segment bookkeeping, so fall back to streaming. */
+        LOG_DEBUG("Range response uses chunked encoding; falling back to stream mode");
+        disable_segment_mode(job);
+        if (slot != NULL) {
+            chunk_slot_release(job, slot);
+        }
+        job->schedule_deferred = true;
+        request_close(job, c, false);
+        return;
+    }
+
+    if (job->step == DL_STEP_STREAM) {
+        job->chunked_encoding = chunked_response;
+        job->chunked_complete = false;
+        job->chunked_state = DL_CHUNKED_STATE_SIZE;
+        job->chunked_remaining = 0U;
+        job->chunked_line_len = 0U;
+    }
+
     struct mg_str *content_range = mg_http_get_header(hm, "Content-Range");
     if (content_range != NULL && job->state->total_size == 0) {
         (void)parse_content_range_total(*content_range, &job->state->total_size);
@@ -3172,27 +3307,37 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             return;
         }
 
-        if (!write_at_offset(job, hm->body.buf, hm->body.len, range_start)) {
+        /* Never write past the requested range: a misbehaving server that sends
+         * more than asked for must not overwrite bytes owned by other segments. */
+        size_t body_len = hm->body.len;
+        if (range_end >= range_start) {
+            const uint64_t range_span = range_end - range_start + 1U;
+            if ((uint64_t)body_len > range_span) {
+                body_len = (size_t)range_span;
+            }
+        }
+
+        if (!write_at_offset(job, hm->body.buf, body_len, range_start)) {
             request_close(job, c, false);
             return;
         }
 
         if (slot != NULL) {
-            slot->chunk_received = hm->body.len;
-            slot->chunk_expected = hm->body.len;
+            slot->chunk_received = body_len;
+            slot->chunk_expected = body_len;
             slot_finish_segment(job, slot, c);
             return;
         }
 
-        sync_temp_file(job);
         if (job->mutex != NULL) {
             avar_mutex_lock(job->mutex);
         }
-        (void)download_state_mark_range_done(job->state, range_start, range_end);
+        (void)download_state_mark_range_done(job->state, range_start,
+                                             range_start + (uint64_t)body_len - 1U);
         if (job->mutex != NULL) {
             avar_mutex_unlock(job->mutex);
         }
-        (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+        (void)dm_item_upsert_throttled(job, AVAR_DL_STATUS_DOWNLOADING);
         print_progress(job);
 
         if (download_state_all_chunks_done(job->state)) {
@@ -3288,6 +3433,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
                     slot->response_remaining = 0U;
                 }
                 c->recv.len = 0;
+                touch_slot_activity(slot);
 
                 if (slot->response_remaining == 0U) {
                     slot_finish_continuous(job, slot, c);
@@ -3305,6 +3451,14 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
                     const uint64_t done_end = slot->range_start + slot->chunk_received;
                     if (done_end == slot->reserved_end + 1U
                         && !slot_try_extend_reservation(job, slot)) {
+                        if (slot->response_remaining > DL_DRAIN_MAX_BYTES) {
+                            /* The rest of this open-ended response belongs to other
+                             * slots; consuming it just to keep the connection alive
+                             * would download those bytes twice. Reconnect instead. */
+                            slot->keep_alive = false;
+                            slot_finish_continuous(job, slot, c);
+                            return;
+                        }
                         slot_begin_draining(slot);
                     }
                 }
@@ -3319,7 +3473,12 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
                 job->bytes_since_persist += len;
             } else {
                 const size_t len = c->recv.len;
-                if (!append_stream(job, c->recv.buf, len)) {
+                if (!append_stream_decoded(job, c->recv.buf, len)) {
+                    request_close(job, c, false);
+                    return;
+                }
+                if (job->chunked_encoding && job->chunked_complete) {
+                    c->recv.len = 0;
                     request_close(job, c, false);
                     return;
                 }
@@ -3345,7 +3504,7 @@ static void dl_handler(struct mg_connection *c, int ev, void *ev_data) {
             if (mg_millis() - job->last_progress_ms >= 200) {
                 print_progress(job);
                 (void)persist_buffered_progress(job, false);
-                (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+                (void)dm_item_upsert_throttled(job, AVAR_DL_STATUS_DOWNLOADING);
             }
         }
     } else if (ev == MG_EV_CLOSE) {

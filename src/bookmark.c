@@ -146,14 +146,11 @@ static int persist_json_file(const char *path, cJSON *root) {
 
     const size_t json_len = strlen(json);
     const size_t written = fwrite(json, 1, json_len, file);
-    const int flush_rc = fflush(file);
-#if !defined(_WIN32)
-    fsync(fileno(file));
-#endif
+    const int sync_rc = file_sync_to_disk(file);
     fclose(file);
     cJSON_free(json);
 
-    if (written != json_len || flush_rc != 0) {
+    if (written != json_len || sync_rc != 0) {
         remove(tmp_path);
         free(tmp_path);
         LOG_ERROR("Failed to write bookmark file: %s", tmp_path);

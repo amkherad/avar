@@ -14,7 +14,7 @@ void trim_whitespace_inplace(char *value);
 int print_help(int help_message_n, const char* help_message[]);
 
 /* Duplicates at most n bytes. Caller must free(). Not available on all platforms. */
-char *strndup(stringa s, size_t n);
+char *avar_strndup(stringa s, size_t n);
 
 typedef enum {
     AVAR_SIZE_BYTES,
@@ -79,6 +79,12 @@ int avar_data_size_number_width(uint64_t bytes, AvarSizeUnit unit);
 /* Like format_data_size(), but right-aligns the numeric part in number_width columns. */
 char *format_data_size_padded(uint64_t bytes, AvarSizeUnit unit, int number_width, char *buf,
                               size_t buflen);
+
+/* Time-weighted exponential moving average for transfer rates. Blends an
+ * instantaneous sample into the previous smoothed rate; a larger tau_ms gives a
+ * smoother (slower-reacting) result. Returns the sample unchanged when there is
+ * no history yet (prev_bps <= 0) or the inputs are degenerate. */
+double avar_speed_ema(double prev_bps, double sample_bps, uint64_t elapsed_ms, double tau_ms);
 
 /* Formats a transfer rate (bytes/s) using the requested speed unit. Returns buf. */
 char *format_transfer_rate(double bytes_per_sec, AvarSpeedUnit unit, char *buf, size_t buflen);

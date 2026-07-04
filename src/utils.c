@@ -102,7 +102,7 @@ bool is_valid_url(stringa url, stringa validSchemes[]) {
     return true;
 }
 
-char *strndup(const char *s, size_t n) {
+char *avar_strndup(const char *s, size_t n) {
     if (s == NULL) {
         return NULL;
     }
@@ -373,6 +373,20 @@ char *format_transfer_rate_padded(const double bytes_per_sec, const AvarSpeedUni
     }
 
     return buf;
+}
+
+double avar_speed_ema(const double prev_bps, const double sample_bps, const uint64_t elapsed_ms,
+                      const double tau_ms) {
+    if (sample_bps < 0.0 || elapsed_ms == 0U) {
+        return prev_bps;
+    }
+
+    if (prev_bps <= 0.0 || tau_ms <= 0.0) {
+        return sample_bps;
+    }
+
+    const double alpha = 1.0 - exp(-((double)elapsed_ms) / tau_ms);
+    return prev_bps + alpha * (sample_bps - prev_bps);
 }
 
 char *format_transfer_rate(const double bytes_per_sec, const AvarSpeedUnit unit, char *buf,

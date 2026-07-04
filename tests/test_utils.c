@@ -318,18 +318,40 @@ AVAR_TEST(utils_print_help_handles_single_line) {
 }
 
 AVAR_TEST(utils_strndup_truncates) {
-    char *copy = strndup("hello world", 5U);
+    char *copy = avar_strndup("hello world", 5U);
     AVAR_ASSERT_NOT_NULL(copy);
     AVAR_ASSERT_STR_EQ(copy, "hello");
     free(copy);
 
-    AVAR_ASSERT_NULL(strndup(NULL, 4U));
+    AVAR_ASSERT_NULL(avar_strndup(NULL, 4U));
 }
 
 AVAR_TEST(utils_stderr_is_tty_is_boolean) {
     (void)avar_stderr_is_tty();
     (void)avar_terminal_columns();
     (void)avar_progress_bar_width(10);
+}
+
+AVAR_TEST(utils_speed_ema_seeds_from_first_sample) {
+    AVAR_ASSERT_EQ(avar_speed_ema(0.0, 1000.0, 500U, 1500.0), 1000.0);
+    AVAR_ASSERT_EQ(avar_speed_ema(-5.0, 1000.0, 500U, 1500.0), 1000.0);
+}
+
+AVAR_TEST(utils_speed_ema_smooths_towards_sample) {
+    const double smoothed = avar_speed_ema(1000.0, 2000.0, 500U, 1500.0);
+    AVAR_ASSERT(smoothed > 1000.0);
+    AVAR_ASSERT(smoothed < 2000.0);
+
+    /* A longer window moves further towards the sample than a shorter one. */
+    const double slow = avar_speed_ema(1000.0, 2000.0, 200U, 1500.0);
+    const double fast = avar_speed_ema(1000.0, 2000.0, 1500U, 1500.0);
+    AVAR_ASSERT(fast > slow);
+}
+
+AVAR_TEST(utils_speed_ema_ignores_degenerate_input) {
+    AVAR_ASSERT_EQ(avar_speed_ema(1000.0, -1.0, 500U, 1500.0), 1000.0);
+    AVAR_ASSERT_EQ(avar_speed_ema(1000.0, 2000.0, 0U, 1500.0), 1000.0);
+    AVAR_ASSERT_EQ(avar_speed_ema(1000.0, 2000.0, 500U, 0.0), 2000.0);
 }
 
 AVAR_TEST_MAIN(
@@ -363,4 +385,7 @@ AVAR_TEST_MAIN(
         run_utils_size_unit_rejects_kibibits();
         run_utils_print_help_handles_single_line();
         run_utils_strndup_truncates();
-        run_utils_stderr_is_tty_is_boolean();)
+        run_utils_stderr_is_tty_is_boolean();
+        run_utils_speed_ema_seeds_from_first_sample();
+        run_utils_speed_ema_smooths_towards_sample();
+        run_utils_speed_ema_ignores_degenerate_input();)

@@ -135,5 +135,10 @@ DownloadSegmentConfig download_config_load(const char *queue_id) {
         cfg.concurrency = 1U;
     }
 
+    /* Slot bookkeeping (in-flight range arrays) is sized for this cap. */
+    if (cfg.concurrency > DL_MAX_SEGMENT_CONCURRENCY) {
+        cfg.concurrency = DL_MAX_SEGMENT_CONCURRENCY;
+    }
+
     return cfg;
 }

@@ -59,6 +59,15 @@ AVAR_TEST(download_config_queue_connection_clamp) {
     AVAR_ASSERT_EQ(cfg.concurrency, 3U);
 }
 
+AVAR_TEST(download_config_concurrency_clamped_to_slot_cap) {
+    setup_config();
+
+    AVAR_ASSERT_EQ(set_config(AVAR_CFG_DM_SEGMENTATION_CONCURRENCY, "512"), 0);
+
+    const DownloadSegmentConfig cfg = download_config_load(NULL);
+    AVAR_ASSERT_EQ(cfg.concurrency, DL_MAX_SEGMENT_CONCURRENCY);
+}
+
 AVAR_TEST(download_config_invalid_values_fall_back) {
     setup_config();
 
@@ -74,4 +83,5 @@ AVAR_TEST_MAIN(
         run_download_config_defaults();
         run_download_config_strategy_and_sizes();
         run_download_config_queue_connection_clamp();
+        run_download_config_concurrency_clamped_to_slot_cap();
         run_download_config_invalid_values_fall_back();)

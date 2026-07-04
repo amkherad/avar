@@ -179,8 +179,17 @@
 #define DL_PROGRESS_LINE_BUF_SIZE 512U
 #define DL_PROGRESS_PERCENT_MAX 100
 #define DL_POLL_MS 50U
-#define DL_PROGRESS_PERSIST_INTERVAL_MS 200U
-#define DL_PROGRESS_PERSIST_MIN_BYTES (64U * AVAR_KIB)
+#define DL_PROGRESS_PERSIST_INTERVAL_MS 500U
+#define DL_PROGRESS_PERSIST_MIN_BYTES (8U * AVAR_MIB)
+/* dm.items refresh cadence while a transfer is running (status changes bypass it). */
+#define DL_UI_REFRESH_INTERVAL_MS 1000U
+/* Hard cap on segment connections per download; keeps in-flight bookkeeping bounded. */
+#define DL_MAX_SEGMENT_CONCURRENCY 32U
+/* Largest response tail worth consuming to keep a connection alive; beyond this,
+ * reconnecting is cheaper than downloading (and discarding) the rest of the body. */
+#define DL_DRAIN_MAX_BYTES ((uint64_t)DL_CHUNK_SIZE)
+/* Time constant for the transfer-rate moving average (larger = smoother). */
+#define DL_SPEED_EMA_TAU_MS 1500.0
 
 #define AVAR_QUEUE_ID_PREFIX "queue-"
 #define AVAR_QUEUE_ID_BUF_SIZE 64U

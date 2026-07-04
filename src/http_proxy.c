@@ -44,7 +44,7 @@ static char *url_encode_credentials(const char *value) {
     if (n == 0) {
         return strdup(value);
     }
-    return strndup(buf, n);
+    return avar_strndup(buf, n);
 }
 
 static const char *env_get_any(const char *const *names) {

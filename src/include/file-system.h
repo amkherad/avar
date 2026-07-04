@@ -4,6 +4,7 @@
 #include "avar.h"
 
 #include <stdbool.h>
+#include <stdio.h>
 
 const char *get_user_home(void);
 
@@ -25,6 +26,12 @@ char *sanitize_filename(const char *name);
 
 /* Atomically moves src to dest (replace if dest exists). Returns 0 on success. */
 int move_file_atomic(const char *src, const char *dest);
+
+/* Flushes stream buffers and forces the file to physical storage (fsync /
+ * _commit). Required before rename() in write-temp-then-rename replaces so a
+ * power loss cannot promote a truncated temp file over the previous good copy.
+ * Returns 0 on success. */
+int file_sync_to_disk(FILE *fp);
 
 /* Returns dest_path, or a variant with " (n)" before the extension when dest exists. Caller must free(). */
 char *resolve_unique_dest_path(const char *dest_path);
