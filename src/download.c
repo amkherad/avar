@@ -11,6 +11,7 @@
 #include <download_io.h>
 #include <thread_pool.h>
 #include <file-system.h>
+#include <file_async.h>
 #include <http_proxy.h>
 #include <queue.h>
 #include <http.h>
@@ -58,23 +59,6 @@ static void platform_gmtime(const time_t *t, struct tm *out) {
     gmtime_s(out, t);
 #else
     gmtime_r(t, out);
-#endif
-}
-
-static int platform_seek(FILE *fp, const uint64_t offset) {
-#if defined(_WIN32)
-    return _fseeki64(fp, (__int64)offset, SEEK_SET);
-#else
-    return fseeko(fp, (off_t)offset, SEEK_SET);
-#endif
-}
-
-static void platform_fsync(FILE *fp) {
-    fflush(fp);
-#if defined(_WIN32)
-    _commit(_fileno(fp));
-#else
-    fsync(fileno(fp));
 #endif
 }
 
@@ -426,7 +410,7 @@ typedef struct DownloadJob {
     char *dest_path;
     char *state_path;
     DownloadState *state;
-    FILE *fp;
+    AvarAsyncFile *file;
     AvarMutex *mutex;
     ChunkSlot *slots;
     size_t slot_capacity;
@@ -507,9 +491,7 @@ static int download_item_strip_config_url(const char *item_id);
 
 static void set_error(DownloadJob *job, const char *fmt, ...);
 
-static void close_file(DownloadJob *job);
-
-static void sync_temp_file(DownloadJob *job);
+static int close_file(DownloadJob *job);
 
 static bool persist_buffered_progress(DownloadJob *job, bool force);
 
@@ -584,15 +566,12 @@ static void send_request_for_slot(DownloadJob *job, struct mg_connection *c, Chu
 
 static void init_download_tls(struct mg_connection *c, const char *url);
 
-static bool fwrite_chunks(FILE *fp, const void *data, size_t len);
 
 static bool open_temp_file(DownloadJob *job, const char *mode);
 
 static bool write_at_offset(DownloadJob *job, const void *data, size_t len, uint64_t offset);
 
 static bool append_stream(DownloadJob *job, const void *data, size_t len);
-
-// static void sync_temp_file(DownloadJob *job);
 
 static void begin_stream_body(DownloadJob *job, struct mg_connection *c, struct mg_http_message *hm);
 
@@ -666,12 +645,20 @@ static void set_error(DownloadJob *job, const char *fmt, ...) {
     LOG_ERROR("%s", job->error);
 }
 
-static void close_file(DownloadJob *job) {
-    if (job != NULL && job->fp != NULL) {
-        sync_temp_file(job);
-        fclose(job->fp);
-        job->fp = NULL;
+static int close_file(DownloadJob *job) {
+    if (job == NULL || job->file == NULL) {
+        return 0;
     }
+
+    const int rc = avar_async_file_close(job->file);
+    job->file = NULL;
+    return rc;
+}
+
+/* Blocks until every byte handed to the async writer is flushed to the OS.
+ * Must succeed before state.json records the data (content before state). */
+static bool drain_temp_file(DownloadJob *job) {
+    return job == NULL || job->file == NULL || avar_async_file_drain(job->file) == 0;
 }
 
 static char *build_job_dir(const char *temp_dir, const char *item_id) {
@@ -808,8 +795,10 @@ static bool persist_buffered_progress(DownloadJob *job, const bool force) {
         return false;
     }
 
-    /* Data is fflush()ed to the OS on every write; a full disk sync here would
-     * stall the transfer loop, so it only happens when the file is closed. */
+    /* Data goes through the async writer and is fflush()ed to the OS by its
+     * worker; drain_temp_file() below waits for that before the ranges are
+     * saved, so state.json never describes bytes the OS has not seen. A full
+     * disk sync would stall even the writer, so it only happens on close. */
 
     if (job->mutex != NULL) {
         avar_mutex_lock(job->mutex);
@@ -851,7 +840,9 @@ static bool persist_buffered_progress(DownloadJob *job, const bool force) {
 
     if (changed) {
         job->state->bytes_downloaded = download_state_bytes_done(job->state);
-        (void)download_state_save(job->state, job->state_path);
+        if (drain_temp_file(job)) {
+            (void)download_state_save(job->state, job->state_path);
+        }
         job->bytes_since_persist = 0U;
         job->last_persist_ms = mg_millis();
     }
@@ -1833,7 +1824,7 @@ static void handle_resume_unsupported(DownloadJob *job) {
         return;
     }
 
-    close_file(job);
+    (void)close_file(job);
     job->streaming = false;
     job->done = true;
     job->failed = false;
@@ -1858,7 +1849,7 @@ static void disable_segment_mode(DownloadJob *job) {
     job->use_ranges = false;
     job->segment_disabled = true;
 
-    close_file(job);
+    (void)close_file(job);
 
     if (job->slots != NULL) {
         for (size_t i = 0; i < job->slot_capacity; i++) {
@@ -1970,23 +1961,6 @@ static void send_request(DownloadJob *job, struct mg_connection *c, const uint64
     mg_printf(c, "\r\n");
 }
 
-static bool fwrite_chunks(FILE *fp, const void *data, const size_t len) {
-    const unsigned char *cursor = data;
-    size_t remaining = len;
-
-    while (remaining > 0) {
-        const size_t chunk =
-                remaining > DL_WRITE_CHUNK_SIZE ? DL_WRITE_CHUNK_SIZE : remaining;
-        if (fwrite(cursor, 1, chunk, fp) != chunk) {
-            return false;
-        }
-        cursor += chunk;
-        remaining -= chunk;
-    }
-
-    return true;
-}
-
 static void init_download_tls(struct mg_connection *c, const char *url) {
     struct mg_tls_opts opts = {0};
     opts.name = mg_url_host(url);
@@ -2070,7 +2044,7 @@ static bool ensure_temp_dir(const char *temp_path) {
 }
 
 static bool open_temp_file(DownloadJob *job, const char *mode) {
-    if (job->fp != NULL) {
+    if (job->file != NULL) {
         return true;
     }
 
@@ -2078,11 +2052,11 @@ static bool open_temp_file(DownloadJob *job, const char *mode) {
         return false;
     }
 
-    job->fp = fopen(job->temp_path, mode);
+    job->file = avar_async_file_open(job->temp_path, mode);
 
     LOG_DEBUG("Opened a temp file, path: %s", job->temp_path);
 
-    return job->fp != NULL;
+    return job->file != NULL;
 }
 
 static bool write_at_offset(DownloadJob *job, const void *data, const size_t len,
@@ -2091,7 +2065,7 @@ static bool write_at_offset(DownloadJob *job, const void *data, const size_t len
         avar_mutex_lock(job->mutex);
     }
 
-    if (job->fp == NULL) {
+    if (job->file == NULL) {
         if (!open_temp_file(job, "r+b") && !open_temp_file(job, "w+b")) {
             if (job->mutex != NULL) {
                 avar_mutex_unlock(job->mutex);
@@ -2101,37 +2075,20 @@ static bool write_at_offset(DownloadJob *job, const void *data, const size_t len
         }
     }
 
-    if (platform_seek(job->fp, offset) != 0) {
+    if (avar_async_file_write(job->file, offset, data, len) != 0) {
         if (job->mutex != NULL) {
             avar_mutex_unlock(job->mutex);
         }
-        set_error(job, "Failed to seek in temp file");
+        set_error(job, "Failed to write temp file: %s", job->temp_path);
         return false;
     }
 
-    if (!fwrite_chunks(job->fp, data, len)) {
-        if (job->mutex != NULL) {
-            avar_mutex_unlock(job->mutex);
-        }
-        set_error(job, "Failed to write temp file: %s", strerror(errno));
-        return false;
-    }
-
-    fflush(job->fp);
     job->last_activity_ms = mg_millis();
 
     if (job->mutex != NULL) {
         avar_mutex_unlock(job->mutex);
     }
     return true;
-}
-
-static void sync_temp_file(DownloadJob *job) {
-    if (job == NULL || job->fp == NULL) {
-        return;
-    }
-
-    platform_fsync(job->fp);
 }
 
 static bool append_stream(DownloadJob *job, const void *data, const size_t len) {
@@ -2141,7 +2098,7 @@ static bool append_stream(DownloadJob *job, const void *data, const size_t len) 
 
     LOG_DUMP("Writing stream to file, jobId: %s, len: %d", job->item_id, len);
 
-    if (job->fp == NULL) {
+    if (job->file == NULL) {
         if (job->stream_received == 0U && job->temp_path != NULL) {
             job->stream_received = existing_file_size(job->temp_path);
         }
@@ -2152,12 +2109,11 @@ static bool append_stream(DownloadJob *job, const void *data, const size_t len) 
         }
     }
 
-    if (!fwrite_chunks(job->fp, data, len)) {
-        set_error(job, "Failed to write temp file: %s", strerror(errno));
+    if (avar_async_file_write(job->file, job->stream_received, data, len) != 0) {
+        set_error(job, "Failed to write temp file: %s", job->temp_path);
         return false;
     }
 
-    fflush(job->fp);
     job->stream_received += len;
     job->bytes_since_persist += len;
     job->last_activity_ms = mg_millis();
@@ -2382,7 +2338,9 @@ static bool slot_mark_segment_done(DownloadJob *job, ChunkSlot *slot, struct mg_
     (void)download_state_mark_range_done(job->state, done_start, done_end);
     slot->persisted_received = slot->chunk_received;
     job->state->bytes_downloaded = download_state_bytes_done(job->state);
-    (void)download_state_save(job->state, job->state_path);
+    if (drain_temp_file(job)) {
+        (void)download_state_save(job->state, job->state_path);
+    }
     job->bytes_since_persist = 0U;
     job->last_persist_ms = mg_millis();
     if (job->mutex != NULL) {
@@ -2627,7 +2585,10 @@ static bool finalize_download(DownloadJob *job) {
     }
 
     (void)persist_buffered_progress(job, true);
-    close_file(job);
+    if (close_file(job) != 0) {
+        set_error(job, "Failed to flush download data to disk: %s", job->temp_path);
+        return false;
+    }
 
     if (job->state != NULL && job->state->total_size > 0) {
         const uint64_t done = job->step == DL_STEP_STREAM
@@ -2835,7 +2796,9 @@ static void on_connection_closed(DownloadJob *job, ChunkSlot *slot, struct mg_co
                                                  job->active_range_end);
             job->chunk_persisted = job->chunk_received;
             job->state->bytes_downloaded = download_state_bytes_done(job->state);
-            (void)download_state_save(job->state, job->state_path);
+            if (drain_temp_file(job)) {
+                (void)download_state_save(job->state, job->state_path);
+            }
             job->bytes_since_persist = 0U;
             job->last_persist_ms = mg_millis();
             if (job->mutex != NULL) {
@@ -3721,7 +3684,7 @@ static void job_free(DownloadJob *job) {
     }
 
     active_jobs_unregister(job);
-    close_file(job);
+    (void)close_file(job);
     free(job->slots);
     avar_mutex_destroy(job->mutex);
     free(job->url);

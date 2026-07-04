@@ -107,6 +107,10 @@ avar_add_test(test_file_system TIMEOUT ${AVAR_TEST_TIMEOUT_UNIT} test_file_syste
         ${AVAR_TEST_GUARD_SOURCES})
 avar_link_core_test(test_file_system)
 
+avar_add_test(test_file_async TIMEOUT ${AVAR_TEST_TIMEOUT_CONCURRENT} test_file_async.c
+        ${AVAR_TEST_GUARD_SOURCES})
+avar_link_core_test(test_file_async)
+
 avar_add_test(test_logger TIMEOUT ${AVAR_TEST_TIMEOUT_UNIT} test_logger.c ${AVAR_TEST_GUARD_SOURCES})
 avar_link_core_test(test_logger)
 
