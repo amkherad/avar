@@ -28,6 +28,9 @@ typedef struct {
     char *original_page;
     char *referer;
     char *stream_kind;
+    /* Explicit segment URLs for a "ts-sequence" stream_kind (no .m3u8 master to fetch). */
+    char **ts_segments;
+    size_t ts_segment_count;
     char *added_through;
     char *queue_id;
     char *etag;

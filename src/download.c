@@ -3581,7 +3581,44 @@ static int run_hls_download(DownloadJob *job) {
     return EXIT_SUCCESS;
 }
 
+static bool stream_kind_is_ts_sequence(const char *stream_kind) {
+    return stream_kind != NULL && strcmp(stream_kind, "ts-sequence") == 0;
+}
+
+static int run_ts_sequence_download(DownloadJob *job) {
+    if (job == NULL || job->temp_path == NULL || job->state == NULL
+        || job->state->ts_segments == NULL || job->state->ts_segment_count == 0U) {
+        return EXIT_FAILURE;
+    }
+
+    job->failed = false;
+    job->done = false;
+    (void)dm_item_upsert(job, AVAR_DL_STATUS_DOWNLOADING);
+
+    const char *referer = job->state->referer;
+    if (stream_hls_download_segments((const char *const *)job->state->ts_segments,
+                                     job->state->ts_segment_count, job->temp_path, referer) != 0) {
+        set_error(job, "Segment download failed");
+        (void)dm_item_upsert(job, AVAR_DL_STATUS_FAILED);
+        job->failed = true;
+        job->done = true;
+        return EXIT_FAILURE;
+    }
+
+    if (!finalize_download(job)) {
+        job->failed = true;
+        return EXIT_FAILURE;
+    }
+
+    fputc('\n', stderr);
+    report_cli(job);
+    return EXIT_SUCCESS;
+}
+
 static int run_download_inner(DownloadJob *job) {
+    if (job->state != NULL && stream_kind_is_ts_sequence(job->state->stream_kind)) {
+        return run_ts_sequence_download(job);
+    }
     if (stream_url_is_hls(job->url, job->state != NULL ? job->state->stream_kind : NULL)) {
         return run_hls_download(job);
     }
@@ -3988,6 +4025,73 @@ int download_enqueue_ex(const char *url, const char *queue, const char *name,
                         const bool force_new_id, char **id_out) {
     return run_transient_download_ex(url, queue, name, proxy_url, false, false, id_out, stream_kind,
                                      referer, force_new_id, NULL);
+}
+
+int download_enqueue_segments(const char *url, const char *queue, const char *name,
+                              const char *proxy_url, const char *referer,
+                              const char *const *segment_urls, size_t segment_count,
+                              const bool force_new_id, char **id_out) {
+    if (segment_urls == NULL || segment_count == 0U) {
+        return EXIT_FAILURE;
+    }
+
+    char *item_id = NULL;
+    if (download_enqueue_ex(url, queue, name, proxy_url, "ts-sequence", referer, force_new_id,
+                            &item_id) != EXIT_SUCCESS
+        || item_id == NULL) {
+        free(item_id);
+        return EXIT_FAILURE;
+    }
+
+    char *state_path = download_item_state_path(item_id);
+    DownloadState *state = state_path != NULL ? download_state_load(state_path) : NULL;
+    if (state == NULL) {
+        free(state_path);
+        free(item_id);
+        return EXIT_FAILURE;
+    }
+
+    for (size_t i = 0U; i < state->ts_segment_count; i++) {
+        free(state->ts_segments[i]);
+    }
+    free(state->ts_segments);
+    state->ts_segments = calloc(segment_count, sizeof(char *));
+    state->ts_segment_count = 0U;
+    if (state->ts_segments == NULL) {
+        download_state_free(state);
+        free(state_path);
+        free(item_id);
+        return EXIT_FAILURE;
+    }
+
+    size_t written = 0U;
+    for (size_t i = 0U; i < segment_count; i++) {
+        if (segment_urls[i] == NULL) {
+            continue;
+        }
+        state->ts_segments[written] = strdup(segment_urls[i]);
+        if (state->ts_segments[written] == NULL) {
+            break;
+        }
+        written++;
+    }
+    state->ts_segment_count = written;
+
+    const int save_rc = download_state_save(state, state_path);
+    download_state_free(state);
+    free(state_path);
+
+    if (save_rc != 0 || written == 0U) {
+        free(item_id);
+        return EXIT_FAILURE;
+    }
+
+    if (id_out != NULL) {
+        *id_out = item_id;
+    } else {
+        free(item_id);
+    }
+    return EXIT_SUCCESS;
 }
 
 int transient_download(const char *url, const char *queue, const char *name, const char *proxy_url,

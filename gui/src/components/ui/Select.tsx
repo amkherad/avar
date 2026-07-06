@@ -70,24 +70,38 @@ export function Select({
   const options = parseOptions(children);
   const [open, setOpen] = useState(false);
   const [fixedMenuStyle, setFixedMenuStyle] = useState<CSSProperties | undefined>();
+  const [openUpward, setOpenUpward] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
 
   const currentValue = value !== undefined ? String(value) : defaultValue !== undefined ? String(defaultValue) : options[0]?.value ?? "";
   const selected = options.find((option) => option.value === currentValue) ?? options[0];
 
-  function updateFixedMenuPosition(): CSSProperties | undefined {
+  const MENU_ESTIMATED_HEIGHT = 280;
+
+  function shouldOpenUpward(rect: DOMRect): boolean {
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    return spaceBelow < MENU_ESTIMATED_HEIGHT && spaceAbove > spaceBelow;
+  }
+
+  function updateFixedMenuPosition(upward: boolean): CSSProperties | undefined {
     if (!compact || !containerRef.current) {
       return undefined;
     }
     const rect = containerRef.current.getBoundingClientRect();
-    return {
+    const style: CSSProperties = {
       position: "fixed",
-      top: rect.bottom + 4,
       left: rect.left,
       width: Math.max(rect.width, 160),
       zIndex: 200,
     };
+    if (upward) {
+      style.bottom = window.innerHeight - rect.top + 4;
+    } else {
+      style.top = rect.bottom + 4;
+    }
+    return style;
   }
 
   function toggleDropdown(event?: React.MouseEvent<HTMLButtonElement>) {
@@ -98,7 +112,10 @@ export function Select({
     setOpen((prev) => {
       const next = !prev;
       if (next) {
-        setFixedMenuStyle(updateFixedMenuPosition());
+        const rect = containerRef.current?.getBoundingClientRect();
+        const upward = rect ? shouldOpenUpward(rect) : false;
+        setOpenUpward(upward);
+        setFixedMenuStyle(updateFixedMenuPosition(upward));
       } else {
         setFixedMenuStyle(undefined);
       }
@@ -112,7 +129,7 @@ export function Select({
     }
 
     function refreshMenuPosition() {
-      setFixedMenuStyle(updateFixedMenuPosition());
+      setFixedMenuStyle(updateFixedMenuPosition(openUpward));
     }
 
     refreshMenuPosition();
@@ -122,7 +139,7 @@ export function Select({
       window.removeEventListener("resize", refreshMenuPosition);
       window.removeEventListener("scroll", refreshMenuPosition, true);
     };
-  }, [open, compact]);
+  }, [open, compact, openUpward]);
 
   useEffect(() => {
     if (!open) {
@@ -175,7 +192,7 @@ export function Select({
   const menu = open ? (
     <ul
       ref={menuRef}
-      className={`avar-dropdown__menu ${compact ? "avar-dropdown__menu--fixed" : ""}`.trim()}
+      className={`avar-dropdown__menu ${compact ? "avar-dropdown__menu--fixed" : ""} ${openUpward ? "avar-dropdown__menu--up" : ""}`.trim()}
       style={compact ? fixedMenuStyle : undefined}
       role="listbox"
       aria-labelledby={selectId}

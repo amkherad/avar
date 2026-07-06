@@ -7,6 +7,7 @@ export interface AddDownloadPrefill {
   filename?: string;
   referer?: string;
   streamKind?: string;
+  segments?: string[];
   defaultQueueId?: string | null;
   pageTitle?: string;
 }
@@ -16,11 +17,15 @@ export function normalizeAddDownloadPrefill(payload: AddDownloadPrefill): AddDow
     payload.referer?.trim() ||
     (payload as { originalPage?: string }).originalPage?.trim() ||
     undefined;
+  const segments = Array.isArray(payload.segments)
+    ? payload.segments.filter((value) => typeof value === "string" && value.trim())
+    : undefined;
   return {
     url: payload.url?.trim() ?? "",
     filename: payload.filename?.trim() || undefined,
     referer,
     streamKind: payload.streamKind?.trim() || undefined,
+    segments: segments && segments.length > 0 ? segments : undefined,
     defaultQueueId: payload.defaultQueueId ?? null,
     pageTitle: payload.pageTitle?.trim() || undefined,
   };

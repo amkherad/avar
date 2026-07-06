@@ -279,6 +279,43 @@ static int load_done_ranges(DownloadState *state, const cJSON *ranges) {
     return 0;
 }
 
+static int load_ts_segments(DownloadState *state, const cJSON *segments) {
+    if (state == NULL || segments == NULL || !cJSON_IsArray(segments)) {
+        return -1;
+    }
+
+    const int count = cJSON_GetArraySize(segments);
+    if (count <= 0) {
+        return 0;
+    }
+
+    char **urls = calloc((size_t)count, sizeof(char *));
+    if (urls == NULL) {
+        return -1;
+    }
+
+    size_t written = 0U;
+    for (int i = 0; i < count; i++) {
+        const cJSON *item = cJSON_GetArrayItem(segments, i);
+        if (item == NULL || !cJSON_IsString(item) || item->valuestring == NULL) {
+            continue;
+        }
+        urls[written] = strdup(item->valuestring);
+        if (urls[written] == NULL) {
+            for (size_t j = 0U; j < written; j++) {
+                free(urls[j]);
+            }
+            free(urls);
+            return -1;
+        }
+        written++;
+    }
+
+    state->ts_segments = urls;
+    state->ts_segment_count = written;
+    return 0;
+}
+
 void download_state_free(DownloadState *state) {
     if (state == NULL) {
         return;
@@ -297,6 +334,10 @@ void download_state_free(DownloadState *state) {
     free(state->original_page);
     free(state->referer);
     free(state->stream_kind);
+    for (size_t i = 0U; i < state->ts_segment_count; i++) {
+        free(state->ts_segments[i]);
+    }
+    free(state->ts_segments);
     free(state->added_through);
     free(state->queue_id);
     free(state->etag);
@@ -406,6 +447,12 @@ DownloadState *download_state_load(const char *path) {
     state->original_page = json_get_string(root, AVAR_FIELD_ORIGINAL_PAGE);
     state->referer = json_get_string(root, AVAR_FIELD_REFERER);
     state->stream_kind = json_get_string(root, AVAR_FIELD_STREAM_KIND);
+    const cJSON *ts_segments = cJSON_GetObjectItemCaseSensitive(root, AVAR_FIELD_TS_SEGMENTS);
+    if (ts_segments != NULL && load_ts_segments(state, ts_segments) != 0) {
+        cJSON_Delete(root);
+        download_state_free(state);
+        return NULL;
+    }
     state->added_through = json_get_string(root, AVAR_FIELD_ADDED_THROUGH);
     state->queue_id = json_get_string(root, AVAR_FIELD_QUEUE_ID);
     state->etag = json_get_string(root, AVAR_FIELD_ETAG);
@@ -496,6 +543,16 @@ int download_state_save(const DownloadState *state, const char *path) {
     json_add_string_or_null(root, AVAR_FIELD_ORIGINAL_PAGE, state->original_page);
     json_add_string_or_null(root, AVAR_FIELD_REFERER, state->referer);
     json_add_string_or_null(root, AVAR_FIELD_STREAM_KIND, state->stream_kind);
+    if (state->ts_segment_count > 0U) {
+        cJSON *segments = cJSON_AddArrayToObject(root, AVAR_FIELD_TS_SEGMENTS);
+        if (segments == NULL) {
+            cJSON_Delete(root);
+            return -1;
+        }
+        for (size_t i = 0U; i < state->ts_segment_count; i++) {
+            cJSON_AddItemToArray(segments, cJSON_CreateString(state->ts_segments[i]));
+        }
+    }
     json_add_string_or_null(root, AVAR_FIELD_ADDED_THROUGH,
                             state->added_through != NULL ? state->added_through
                                                          : AVAR_DL_ADDED_DIRECT);

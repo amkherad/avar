@@ -28,6 +28,7 @@ export interface AddDownloadParams {
   proxy?: ProxySettings;
   referer?: string;
   streamKind?: string;
+  segments?: string[];
   forceNew?: boolean;
 }
 
@@ -311,6 +312,9 @@ export class DaemonClient {
             ...(options.proxy ? { proxy: proxySettingsToRpcParams(options.proxy) } : {}),
             ...(options.referer ? { referer: options.referer } : {}),
             ...(options.streamKind ? { streamKind: options.streamKind } : {}),
+            ...(options.segments && options.segments.length > 0
+              ? { segments: options.segments }
+              : {}),
             ...(options.forceNew ? { forceNew: true } : {}),
           };
 

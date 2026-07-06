@@ -736,6 +736,7 @@ function buildContentDownloadItem(item) {
   return {
     url: item.url,
     streamKind: item.kind,
+    segments: Array.isArray(item.segments) ? item.segments : undefined,
     filename: linkName,
     linkName,
     fileType: AvarMedia.classifyMediaCategory(item),

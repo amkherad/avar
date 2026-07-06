@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faListCheck, faPlay } from "@fortawesome/free-solid-svg-icons";
+import { faListCheck, faPlay, faPlus } from "@fortawesome/free-solid-svg-icons";
 import type { BatchAddDownloadItem } from "@/lib/batchAddDownloads";
 import {
   formatBatchFileType,
@@ -14,6 +14,7 @@ import { applyTableSelection } from "@/lib/tableSelection";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore, selectEffectiveQueueId, selectSelectedQueue } from "@/stores/dataStore";
 import { createDefaultQueueInfo, isDefaultQueue, withDefaultQueue } from "@/queue/defaultQueue";
+import { CreateQueueModal } from "@/components/queue/CreateQueueModal";
 import { Button } from "@/components/ui/Button";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Input } from "@/components/ui/Input";
@@ -71,6 +72,7 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
   const [searchQuery, setSearchQuery] = useState("");
   const [queueId, setQueueId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [createQueueOpen, setCreateQueueOpen] = useState(false);
   const selectionAnchorRef = useRef<string | null>(null);
 
   const filteredItems = useMemo(
@@ -276,6 +278,7 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
             name: item.filename || item.linkName,
             referer: payload.pageUrl || item.referer || item.originalUrl,
             streamKind: item.streamKind || item.fileType,
+            segments: item.segments,
           });
           succeeded += 1;
         } catch (err) {
@@ -348,20 +351,6 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
               </p>
             ) : null}
           </div>
-          <div className="avar-batch-add-popup__queue">
-            <Select
-              compact
-              label={t("download.targetQueue")}
-              value={effectiveQueueId}
-              onChange={(e) => setQueueId(e.target.value)}
-            >
-              {displayQueues.map((queue) => (
-                <option key={queue.id} value={queue.id}>
-                  {queue.name}
-                </option>
-              ))}
-            </Select>
-          </div>
         </header>
 
         <div className="avar-batch-add-popup__toolbar">
@@ -417,6 +406,32 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
           />
         </div>
 
+        <div className="avar-batch-add-popup__queue-row">
+          <Select
+            className="avar-batch-add-popup__queue-select"
+            label={t("download.targetQueue")}
+            value={effectiveQueueId}
+            onChange={(e) => setQueueId(e.target.value)}
+          >
+            {displayQueues.map((queue) => (
+              <option key={queue.id} value={queue.id}>
+                {queue.name}
+              </option>
+            ))}
+          </Select>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="avar-batch-add-popup__queue-add"
+            onClick={() => setCreateQueueOpen(true)}
+            aria-label={t("queue.add")}
+            title={t("queue.add")}
+          >
+            <FontAwesomeIcon icon={faPlus} />
+          </Button>
+        </div>
+
         <footer className="avar-batch-add-popup__footer">
           <span className="avar-batch-add-popup__count">
             {t("download.batchAdd.selectedCount", { count: selectedIds.length })}
@@ -445,6 +460,15 @@ export function BatchAddDownloadsPopupPage({ batchId }: BatchAddDownloadsPopupPa
           </div>
         </footer>
       </div>
+
+      <CreateQueueModal
+        open={createQueueOpen}
+        onClose={() => setCreateQueueOpen(false)}
+        onCreated={(id) => {
+          setQueueId(id);
+          void useDataStore.getState().refresh();
+        }}
+      />
     </div>
   );
 }

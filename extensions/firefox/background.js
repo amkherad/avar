@@ -100,6 +100,7 @@ async function addDownload(payload) {
       : {
           url: payload.url,
           streamKind: payload.streamKind,
+          segments: payload.segments,
           referer: pageUrl,
           pageUrl,
           queue: payload.queue,
@@ -141,6 +142,7 @@ async function openSingleAdd(payload) {
   return sendMessage(bridgeUrl, "download.add.open", {
     url: payload.url,
     streamKind: payload.streamKind,
+    segments: payload.segments,
     filename: payload.filename,
     referer: pageUrl,
     pageUrl,
@@ -161,6 +163,7 @@ async function openDownloads(payload) {
     return openSingleAdd({
       url: item.url,
       streamKind: item.streamKind,
+      segments: item.segments,
       filename: item.filename,
       referer: pageUrl,
       pageUrl,
@@ -181,6 +184,7 @@ function buildBatchItemFromMedia(item, pageTitle, pageUrl) {
   return {
     url: item.url,
     streamKind: item.kind,
+    segments: Array.isArray(item.segments) ? item.segments : undefined,
     filename: linkName,
     linkName,
     fileType: AvarMedia.classifyMediaCategory(item),
@@ -404,6 +408,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     openSingleAdd({
       url: message.item.url,
       streamKind: message.item.streamKind,
+      segments: message.item.segments,
       filename: message.item.filename,
       referer: pageUrl,
       pageUrl,

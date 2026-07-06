@@ -12,6 +12,7 @@ export interface BatchAddDownloadItem {
   originalUrl?: string;
   fileSize?: number | null;
   streamKind?: string;
+  segments?: string[];
   referer?: string;
 }
 

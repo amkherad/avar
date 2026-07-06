@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FontAwesomeIcon } from "@/icons";
-import { faListCheck, faPlay } from "@fortawesome/free-solid-svg-icons";
+import { faListCheck, faPlay, faPlus } from "@fortawesome/free-solid-svg-icons";
 import type { AddDownloadParams } from "@/api/daemon";
 import { loadAddDownloadPrefill, type AddDownloadPrefill } from "@/lib/addDownloadPrefill";
 import { DOWNLOAD_GROUPS } from "@/lib/downloadGroups";
@@ -11,6 +11,7 @@ import { ProxySettingsFields } from "@/components/settings/ProxySettingsFields";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useDataStore, selectEffectiveQueueId, selectSelectedQueue } from "@/stores/dataStore";
 import { createDefaultQueueInfo, isDefaultQueue, withDefaultQueue } from "@/queue/defaultQueue";
+import { CreateQueueModal } from "@/components/queue/CreateQueueModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DirectoryPathInput } from "@/components/ui/DirectoryPathInput";
@@ -38,6 +39,7 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
   const [group, setGroup] = useState<string>("default");
   const [proxy, setProxy] = useState(defaultProxySettings);
   const [adding, setAdding] = useState(false);
+  const [createQueueOpen, setCreateQueueOpen] = useState(false);
   const directoryPathMode = useDaemonDirectoryPathMode();
 
   const displayQueues = withDefaultQueue(
@@ -97,6 +99,7 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
       proxy,
       referer: prefill?.referer,
       streamKind: prefill?.streamKind,
+      segments: prefill?.segments,
     };
 
     setAdding(true);
@@ -158,17 +161,31 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
             autoFocus
           />
 
-          <Select
-            label={t("download.targetQueue")}
-            value={effectiveQueueId}
-            onChange={(e) => setQueueId(e.target.value)}
-          >
-            {displayQueues.map((queue) => (
-              <option key={queue.id} value={queue.id}>
-                {queue.name}
-              </option>
-            ))}
-          </Select>
+          <div className="avar-add-download-popup__queue-row">
+            <Select
+              className="avar-add-download-popup__queue-select"
+              label={t("download.targetQueue")}
+              value={effectiveQueueId}
+              onChange={(e) => setQueueId(e.target.value)}
+            >
+              {displayQueues.map((queue) => (
+                <option key={queue.id} value={queue.id}>
+                  {queue.name}
+                </option>
+              ))}
+            </Select>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="avar-add-download-popup__queue-add"
+              onClick={() => setCreateQueueOpen(true)}
+              aria-label={t("queue.add")}
+              title={t("queue.add")}
+            >
+              <FontAwesomeIcon icon={faPlus} />
+            </Button>
+          </div>
 
           <Input
             label={t("download.filename")}
@@ -216,6 +233,15 @@ export function AddDownloadPopupPage({ addId }: AddDownloadPopupPageProps) {
           </div>
         </footer>
       </div>
+
+      <CreateQueueModal
+        open={createQueueOpen}
+        onClose={() => setCreateQueueOpen(false)}
+        onCreated={(id) => {
+          setQueueId(id);
+          void useDataStore.getState().refresh();
+        }}
+      />
     </div>
   );
 }

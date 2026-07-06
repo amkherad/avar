@@ -500,12 +500,38 @@ static cJSON *handle_download_add(cJSON *params) {
     const cJSON *force_new = cJSON_GetObjectItemCaseSensitive(params, "forceNew");
     const bool force_new_id = cJSON_IsTrue(force_new);
 
+    const cJSON *segments_json = cJSON_GetObjectItemCaseSensitive(params, "segments");
+    char **segment_urls = NULL;
+    size_t segment_count = 0U;
+    if (cJSON_IsArray(segments_json)) {
+        const int count = cJSON_GetArraySize(segments_json);
+        if (count > 0) {
+            segment_urls = calloc((size_t)count, sizeof(char *));
+            if (segment_urls != NULL) {
+                for (int i = 0; i < count; i++) {
+                    const cJSON *item = cJSON_GetArrayItem(segments_json, i);
+                    if (cJSON_IsString(item) && item->valuestring != NULL) {
+                        segment_urls[segment_count++] = item->valuestring;
+                    }
+                }
+            }
+        }
+    }
+
     char *id = NULL;
-    int rc = download_enqueue_ex(normalized_url, queue_name, dl_name, proxy_url, stream_kind,
+    int rc;
+    if (segment_count > 0U) {
+        rc = download_enqueue_segments(normalized_url, queue_name, dl_name, proxy_url, referer,
+                                       (const char *const *)segment_urls, segment_count,
+                                       force_new_id, &id);
+    } else {
+        rc = download_enqueue_ex(normalized_url, queue_name, dl_name, proxy_url, stream_kind,
                                  referer, force_new_id, &id);
+    }
     if (rc == EXIT_SUCCESS && should_start && id != NULL) {
         rc = download_start(id);
     }
+    free(segment_urls);
     free(normalized_url);
     free(proxy_url);
     cJSON_AddNumberToObject(result, "exitCode", rc);

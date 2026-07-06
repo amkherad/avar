@@ -239,6 +239,14 @@ function pickFullerPageUrl(...candidates) {
   );
 }
 
+function normalizeSegmentUrls(segments) {
+  if (!Array.isArray(segments)) {
+    return undefined;
+  }
+  const urls = segments.filter((value) => typeof value === "string" && value.trim());
+  return urls.length > 0 ? urls : undefined;
+}
+
 function normalizeAddDownloadPayload(payload, pageUrl) {
   const url = typeof payload.url === "string" ? payload.url.trim() : "";
   if (!url) {
@@ -262,6 +270,7 @@ function normalizeAddDownloadPayload(payload, pageUrl) {
       typeof payload.streamKind === "string" && payload.streamKind.trim()
         ? payload.streamKind.trim()
         : undefined,
+    segments: normalizeSegmentUrls(payload.segments),
     defaultQueueId:
       typeof payload.defaultQueueId === "string" ? payload.defaultQueueId : null,
     pageTitle:
@@ -320,6 +329,7 @@ function normalizeBatchItems(items, pageUrl) {
           : typeof raw.fileType === "string"
             ? raw.fileType.trim()
             : undefined,
+      segments: normalizeSegmentUrls(raw.segments),
     });
   }
 
@@ -415,6 +425,10 @@ async function handleDownloadAdd(payload) {
   const params = { url: payload.url.trim(), attached: false };
   if (typeof payload.streamKind === "string" && payload.streamKind) {
     params.streamKind = payload.streamKind;
+  }
+  const segments = normalizeSegmentUrls(payload.segments);
+  if (segments) {
+    params.segments = segments;
   }
   const referer = pickFullerPageUrl(payload.pageUrl, payload.referer);
   if (referer) {

@@ -36,6 +36,16 @@ int download_enqueue_ex(const char *url, const char *queue, const char *name,
                         const char *proxy_url, const char *stream_kind, const char *referer,
                         bool force_new_id, char **id_out);
 
+/**
+ * Enqueues an ad-hoc ".ts sequence" download: segment_urls is downloaded in order and
+ * concatenated into one file (see stream_hls_download_segments). Used when the browser
+ * extension captured bare .ts segment requests with no .m3u8 master to fetch.
+ */
+int download_enqueue_segments(const char *url, const char *queue, const char *name,
+                              const char *proxy_url, const char *referer,
+                              const char *const *segment_urls, size_t segment_count,
+                              bool force_new_id, char **id_out);
+
 /** Clears partial progress and starts the same download item from the beginning. */
 int download_restart(const char *id);
 

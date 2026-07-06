@@ -584,6 +584,39 @@ int stream_hls_download(const char *playlist_url, const char *dest_path, const c
     return rc;
 }
 
+int stream_hls_download_segments(const char *const *segment_urls, size_t count,
+                                 const char *dest_path, const char *referer) {
+    if (segment_urls == NULL || count == 0U || dest_path == NULL) {
+        return -1;
+    }
+
+    FILE *fp = fopen(dest_path, "wb");
+    if (fp == NULL) {
+        return -1;
+    }
+
+    int rc = 0;
+    for (size_t i = 0U; i < count; i++) {
+        if (segment_urls[i] == NULL) {
+            rc = -1;
+            break;
+        }
+        const HlsSegment segment = {
+            .uri = (char *)segment_urls[i],
+            .key_uri = NULL,
+            .iv_set = false,
+            .encrypted = false,
+        };
+        if (hls_write_segment(fp, &segment, referer) != 0) {
+            rc = -1;
+            break;
+        }
+    }
+
+    fclose(fp);
+    return rc;
+}
+
 #if defined(AVAR_TESTING)
 bool stream_hls_test_playlist_is_master(const char *text) {
     return playlist_is_master(text);

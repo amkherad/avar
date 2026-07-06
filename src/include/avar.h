@@ -237,6 +237,7 @@
 #define AVAR_FIELD_ORIGINAL_PAGE "originalPage"
 #define AVAR_FIELD_REFERER "referer"
 #define AVAR_FIELD_STREAM_KIND "streamKind"
+#define AVAR_FIELD_TS_SEGMENTS "tsSegments"
 #define AVAR_FIELD_ADDED_THROUGH "addedThrough"
 #define AVAR_FIELD_QUEUE_ID "queueId"
 

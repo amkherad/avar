@@ -13,6 +13,14 @@ bool stream_url_is_hls(const char *url, const char *stream_kind);
  */
 int stream_hls_download(const char *playlist_url, const char *dest_path, const char *referer);
 
+/*
+ * Concatenates an explicit, caller-supplied list of segment URLs into dest_path, in order.
+ * Used for ad-hoc .ts sequences the browser extension captured with no .m3u8 master to fetch
+ * (segments are unencrypted; no key/IV handling like the manifest-driven path above).
+ */
+int stream_hls_download_segments(const char *const *segment_urls, size_t count,
+                                 const char *dest_path, const char *referer);
+
 #if defined(AVAR_TESTING)
 bool stream_hls_test_playlist_is_master(const char *text);
 
