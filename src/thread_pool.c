@@ -38,6 +38,7 @@ struct ThreadPool {
 };
 
 static ThreadPool *g_global_pool = NULL;
+static ThreadPool *g_io_pool = NULL;
 
 static void thread_pool_push_locked(ThreadPool *pool, ThreadPoolWork *work) {
     work->next = NULL;
@@ -257,11 +258,22 @@ ThreadPool *thread_pool_global(void) {
     return g_global_pool;
 }
 
+ThreadPool *thread_pool_io_global(void) {
+    if (g_io_pool == NULL) {
+        g_io_pool = thread_pool_create(DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS);
+    }
+    return g_io_pool;
+}
+
 #if defined(AVAR_TESTING)
 void thread_pool_reset_global(void) {
     if (g_global_pool != NULL) {
         thread_pool_destroy(g_global_pool);
         g_global_pool = NULL;
+    }
+    if (g_io_pool != NULL) {
+        thread_pool_destroy(g_io_pool);
+        g_io_pool = NULL;
     }
 }
 

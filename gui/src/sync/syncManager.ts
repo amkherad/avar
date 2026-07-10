@@ -82,7 +82,6 @@ function startSseSync(client: DaemonClient): SyncStopFn {
 
   source.onopen = () => {
     appLogger.gui.info("SSE connection opened");
-    useConnectionStore.getState().noteStreamActivity();
   };
 
   source.onerror = () => {
@@ -108,7 +107,6 @@ function startWebSocketSync(client: DaemonClient, reconnectDelayMs: number): Syn
 
     ws.onopen = () => {
       appLogger.gui.info("WebSocket connection opened");
-      useConnectionStore.getState().noteStreamActivity();
     };
 
     ws.onmessage = (event) => {
@@ -211,9 +209,7 @@ export function initSyncCoordinator(): () => void {
 
     if (state.connection === "connected" && prev.connection !== "connected") {
       appLogger.gui.info("Connection established — starting sync");
-      if (!isPushSyncChannel(channel)) {
-        void useDataStore.getState().refresh();
-      }
+      void useDataStore.getState().refresh();
       restartDataSync();
     }
     if (state.connection !== "connected" && prev.connection === "connected") {

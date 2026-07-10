@@ -33,6 +33,9 @@ export function filterDownloadsByStatus(
   if (statusFilter === "all") {
     return downloads;
   }
+  if (statusFilter === "error") {
+    return downloads.filter((item) => item.status === "error" || item.status === "failed");
+  }
   return downloads.filter((item) => item.status === statusFilter);
 }
 
@@ -65,6 +68,20 @@ export function sortDownloads(
   });
 
   return sorted;
+}
+
+const ALL_FILTER_STATUSES: string[] = [
+  "downloading",
+  "queued",
+  "paused",
+  "error",
+  "cancelled",
+  "stopped",
+  "completed",
+];
+
+export function allDownloadFilterStatuses(): string[] {
+  return [...ALL_FILTER_STATUSES].sort((a, b) => statusRank(a) - statusRank(b));
 }
 
 export function collectDownloadStatuses(downloads: DownloadInfo[]): string[] {

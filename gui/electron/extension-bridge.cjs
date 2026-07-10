@@ -829,7 +829,7 @@ async function handleProtocolMessage(message, origin, res) {
             createErrorResponse(
               "download.add.open",
               id,
-              addDownloadWindowBlockedMessage(blocked.reason ?? "tooManyOpen"),
+              addDownloadWindowBlockedMessage(blocked.reason ?? "rateLimited"),
             ),
             origin,
           );

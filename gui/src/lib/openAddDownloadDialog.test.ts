@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { readStashedAddDownloadPrefill } from "@/lib/addDownloadPrefill";
 import {
-  MAX_OPEN_ADD_DOWNLOAD_WINDOWS,
+  MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW,
   resetAddDownloadWindowGuardForTests,
   tryAcquireAddDownloadSlot,
 } from "@/lib/addDownloadWindowGuard";
@@ -47,7 +47,7 @@ describe("openAddDownloadDialog", () => {
   it("does not open another popup when the web guard limit is reached", () => {
     window.avar = undefined;
 
-    for (let i = 0; i < MAX_OPEN_ADD_DOWNLOAD_WINDOWS; i += 1) {
+    for (let i = 0; i < MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW; i += 1) {
       tryAcquireAddDownloadSlot();
     }
 

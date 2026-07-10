@@ -1287,8 +1287,8 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 }
 
 .avar-download-toolbar__search--compact {
-  flex: 0 1 230px;
-  min-width: 170px;
+  flex: 0 1 280px;
+  min-width: 210px;
 }
 
 .avar-download-toolbar__search--compact .avar-field {
@@ -3122,10 +3122,11 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 
 .avar-context-menu__submenu {
   position: absolute;
-  inset-inline-start: 100%;
+  inset-inline-start: calc(100% - 4px);
   inset-block-start: 0;
   min-width: 10rem;
   padding: 0.35rem 0;
+  padding-inline-start: 4px;
   list-style: none;
   margin: 0;
   background: var(--avar-bg-elevated);

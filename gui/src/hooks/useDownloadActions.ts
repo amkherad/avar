@@ -9,6 +9,7 @@ import {
   moveDownloadsToQueue,
   startDownloads,
   stopDownloads,
+  stopAllDownloadsAndQueues,
   togglePauseResume,
   toggleStartStop,
 } from "@/lib/downloadActions";
@@ -17,6 +18,7 @@ import {
   canResume,
   canStart,
   canStop,
+  canStopAll,
   canRedownload,
   isPaused,
   isCompleted,
@@ -31,6 +33,7 @@ import { showConfirmDialog } from "@/lib/popup";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { useConfigStore } from "@/stores/configStore";
 import { useDataStore } from "@/stores/dataStore";
+import { createDefaultQueueInfo, withDefaultQueue } from "@/queue/defaultQueue";
 
 export function useDownloadActions() {
   const { t } = useTranslation();
@@ -38,6 +41,7 @@ export function useDownloadActions() {
   const activeSession = useConnectionStore((s) => s.activeSession);
   const localDownloadPath = useConfigStore((s) => s.config.localDownloadPath);
   const allDownloads = useDataStore((s) => s.downloads);
+  const queues = useDataStore((s) => s.queues);
   const fileDownloadEnabled = useDataStore((s) => s.health?.fileDownloadEnabled === true);
   const [busy, setBusy] = useState(false);
 
@@ -109,6 +113,22 @@ export function useDownloadActions() {
         await stopDownloads(client, ids, allDownloads);
       }),
     [allDownloads, client, withBusy],
+  );
+
+  const stopAll = useCallback(
+    () =>
+      withBusy("Stop all downloads and queues", async () => {
+        if (!client) {
+          return;
+        }
+        const displayQueues = withDefaultQueue(
+          queues,
+          createDefaultQueueInfo(t("queue.defaultName"), t("queue.defaultDescription")),
+          allDownloads,
+        );
+        await stopAllDownloadsAndQueues(client, allDownloads, displayQueues);
+      }),
+    [allDownloads, client, queues, t, withBusy],
   );
 
   const remove = useCallback(
@@ -265,7 +285,7 @@ export function useDownloadActions() {
         if (!client) {
           return;
         }
-        await moveDownloadsToQueue(client, ids, queue);
+        await moveDownloadsToQueue(client, ids, queue, allDownloads);
       }),
     [client, withBusy],
   );
@@ -276,6 +296,7 @@ export function useDownloadActions() {
     resume,
     start,
     stop,
+    stopAll,
     remove,
     removeWithConfirm,
     redownload,

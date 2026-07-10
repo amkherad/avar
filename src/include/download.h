@@ -97,6 +97,22 @@ void download_progress_notify_watch(const char *id);
 /** Adds chunkSize, doneRanges, and activeRanges (when job is active) to a JSON object. */
 void download_entry_add_progress_json(const char *id, cJSON *entry);
 
+/** Returns true when status is a known dm.items lifecycle value (not an id or other string). */
+bool download_status_is_valid(const char *status);
+
+/**
+ * Repairs dm.items status from state.json or active-job context when config holds
+ * a corrupt value (for example the download id). Writes fixed status to status_out
+ * when non-NULL. Returns true when a repair was applied.
+ */
+bool download_item_repair_persisted_status(const char *item_id, char **status_out);
+
+/** Keeps dm.items.queueId and state.json queueId in sync. Returns true when repaired. */
+bool download_item_reconcile_queue_membership(const char *item_id);
+
+/** Reconciles queue membership and returns the authoritative dm.items queue id (may be NULL). */
+char *download_item_authoritative_queue_id(const char *item_id);
+
 /** Waits until no active downloads or timeout. Returns true when idle. */
 bool download_wait_idle(unsigned timeout_ms);
 
@@ -108,6 +124,8 @@ int download_remove(const char *target, bool by_id, bool purge_files, bool force
 
 int download_pause(const char *id);
 int download_resume(const char *id);
+/** Starts a queued item through the queue scheduler (honours queue started state). */
+int download_start_scheduled(const char *id);
 int download_start(const char *id);
 int download_stop(const char *id);
 
@@ -131,6 +149,8 @@ bool download_test_parse_content_range_total(const char *header, uint64_t *total
 uint64_t download_test_existing_file_size(const char *path);
 
 char *download_test_generate_id(void);
+
+bool download_test_status_is_valid(const char *status);
 #endif
 
 #endif

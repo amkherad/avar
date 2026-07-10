@@ -18,6 +18,10 @@ export function canStop(status: string): boolean {
   return status === "downloading" || status === "paused";
 }
 
+export function canStopAll(status: string): boolean {
+  return canStop(status) || status === "queued";
+}
+
 export function canPause(status: string): boolean {
   return status === "downloading";
 }

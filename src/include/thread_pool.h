@@ -16,6 +16,14 @@ bool thread_pool_submit(ThreadPool *pool, ThreadPoolTask task, void *arg);
 
 ThreadPool *thread_pool_global(void);
 
+/**
+ * Dedicated pool for async file-write flush tasks (see file_async.c). Kept
+ * separate from thread_pool_global() so that saturating the download-job
+ * pool (one long-lived worker per active download) can never starve the
+ * short-lived write tasks those same downloads depend on to make progress.
+ */
+ThreadPool *thread_pool_io_global(void);
+
 #if defined(AVAR_TESTING)
 void thread_pool_reset_global(void);
 

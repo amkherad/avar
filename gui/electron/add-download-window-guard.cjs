@@ -3,49 +3,35 @@
  * Keep in sync with src/lib/addDownloadWindowGuard.ts.
  */
 
-const MAX_OPEN_ADD_DOWNLOAD_WINDOWS = 5;
-const MAX_EXTENSION_GRABS_IN_WINDOW = 5;
-const EXTENSION_GRAB_WINDOW_MS = 30_000;
-
-/** @type {number} */
-let openAddDownloadWindowCount = 0;
+const MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW = 5;
+const ADD_DOWNLOAD_OPEN_WINDOW_MS = 30_000;
 
 /** @type {number[]} */
-const recentExtensionGrabTimestamps = [];
+const recentAddDownloadOpenTimestamps = [];
 
-function pruneOldExtensionGrabs(now) {
+function pruneOldAddDownloadOpens(now) {
   while (
-    recentExtensionGrabTimestamps.length > 0 &&
-    recentExtensionGrabTimestamps[0] < now - EXTENSION_GRAB_WINDOW_MS
+    recentAddDownloadOpenTimestamps.length > 0 &&
+    recentAddDownloadOpenTimestamps[0] < now - ADD_DOWNLOAD_OPEN_WINDOW_MS
   ) {
-    recentExtensionGrabTimestamps.shift();
+    recentAddDownloadOpenTimestamps.shift();
   }
 }
 
-function countOpenAddDownloadWindows() {
-  return openAddDownloadWindowCount;
-}
-
-function countRecentExtensionGrabs(now = Date.now()) {
-  pruneOldExtensionGrabs(now);
-  return recentExtensionGrabTimestamps.length;
+function countRecentAddDownloadOpens(now = Date.now()) {
+  pruneOldAddDownloadOpens(now);
+  return recentAddDownloadOpenTimestamps.length;
 }
 
 /**
  * @param {{ fromExtensionGrab?: boolean }} [options]
- * @returns {{ allowed: boolean, reason?: 'tooManyOpen' | 'grabRateLimited' }}
+ * @returns {{ allowed: boolean, reason?: 'rateLimited' }}
  */
-function evaluateAddDownloadSlot(options = {}) {
-  if (openAddDownloadWindowCount >= MAX_OPEN_ADD_DOWNLOAD_WINDOWS) {
-    return { allowed: false, reason: "tooManyOpen" };
-  }
-
-  if (options.fromExtensionGrab) {
-    const now = Date.now();
-    pruneOldExtensionGrabs(now);
-    if (recentExtensionGrabTimestamps.length >= MAX_EXTENSION_GRABS_IN_WINDOW) {
-      return { allowed: false, reason: "grabRateLimited" };
-    }
+function evaluateAddDownloadSlot(_options = {}) {
+  const now = Date.now();
+  pruneOldAddDownloadOpens(now);
+  if (recentAddDownloadOpenTimestamps.length >= MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW) {
+    return { allowed: false, reason: "rateLimited" };
   }
 
   return { allowed: true };
@@ -53,7 +39,7 @@ function evaluateAddDownloadSlot(options = {}) {
 
 /**
  * @param {{ fromExtensionGrab?: boolean }} [options]
- * @returns {{ allowed: boolean, reason?: 'tooManyOpen' | 'grabRateLimited' }}
+ * @returns {{ allowed: boolean, reason?: 'rateLimited' }}
  */
 function tryAcquireAddDownloadSlot(options = {}) {
   const evaluation = evaluateAddDownloadSlot(options);
@@ -61,44 +47,33 @@ function tryAcquireAddDownloadSlot(options = {}) {
     return evaluation;
   }
 
-  if (options.fromExtensionGrab) {
-    recentExtensionGrabTimestamps.push(Date.now());
-  }
-
-  openAddDownloadWindowCount += 1;
+  recentAddDownloadOpenTimestamps.push(Date.now());
   return { allowed: true };
 }
 
-function releaseAddDownloadSlot() {
-  openAddDownloadWindowCount = Math.max(0, openAddDownloadWindowCount - 1);
-}
+function releaseAddDownloadSlot() {}
 
 function isAddDownloadPopupHash(hash) {
   return typeof hash === "string" && hash.includes("/popup/add-download/");
 }
 
 function resetAddDownloadWindowGuardForTests() {
-  openAddDownloadWindowCount = 0;
-  recentExtensionGrabTimestamps.length = 0;
+  recentAddDownloadOpenTimestamps.length = 0;
 }
 
 function addDownloadWindowBlockedMessage(reason) {
   switch (reason) {
-    case "tooManyOpen":
-      return "Too many add download windows are already open. Close one and try again.";
-    case "grabRateLimited":
-      return "Too many download grabs in a short time. Wait a moment and try again.";
+    case "rateLimited":
+      return "Too many add download windows opened in a short time. Wait a moment and try again.";
     default:
       return "Could not open add download window.";
   }
 }
 
 module.exports = {
-  MAX_OPEN_ADD_DOWNLOAD_WINDOWS,
-  MAX_EXTENSION_GRABS_IN_WINDOW,
-  EXTENSION_GRAB_WINDOW_MS,
-  countOpenAddDownloadWindows,
-  countRecentExtensionGrabs,
+  MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW,
+  ADD_DOWNLOAD_OPEN_WINDOW_MS,
+  countRecentAddDownloadOpens,
   evaluateAddDownloadSlot,
   tryAcquireAddDownloadSlot,
   releaseAddDownloadSlot,

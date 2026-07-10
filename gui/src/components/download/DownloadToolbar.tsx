@@ -9,9 +9,10 @@ import type { DownloadInfo } from "@/api/types";
 import type { DownloadViewMode } from "@/stores/layoutStore";
 import { formatDownloadStatus } from "@/lib/downloadStatusLabel";
 import type { DownloadStatusFilter } from "@/lib/downloadFilterSort";
-import { canStop } from "@/lib/downloadStatus";
+import { canStopAll } from "@/lib/downloadStatus";
 import { useDownloadActions } from "@/hooks/useDownloadActions";
 import { useDataStore } from "@/stores/dataStore";
+import { createDefaultQueueInfo, queueHasLifecycleActions, withDefaultQueue } from "@/queue/defaultQueue";
 import { DownloadControls } from "./DownloadControls";
 import { useShortcutAction } from "@/shortcuts/useShortcutAction";
 
@@ -41,16 +42,37 @@ export function DownloadToolbar({
   const { t } = useTranslation();
   const searchRef = useRef<HTMLInputElement>(null);
   const allDownloads = useDataStore((s) => s.downloads);
-  const { busy, stop } = useDownloadActions();
+  const queues = useDataStore((s) => s.queues);
+  const { busy, stopAll } = useDownloadActions();
+
+  const displayQueues = useMemo(
+    () =>
+      withDefaultQueue(
+        queues,
+        createDefaultQueueInfo(t("queue.defaultName"), t("queue.defaultDescription")),
+        allDownloads,
+      ),
+    [allDownloads, queues, t],
+  );
 
   const stoppableIds = useMemo(
-    () => allDownloads.filter((item) => canStop(item.status)).map((item) => item.id),
+    () => allDownloads.filter((item) => canStopAll(item.status)).map((item) => item.id),
     [allDownloads],
+  );
+
+  const hasRunningQueue = useMemo(
+    () => displayQueues.some((queue) => queueHasLifecycleActions(queue) && queue.running),
+    [displayQueues],
+  );
+
+  const hasStoppableWork = useMemo(
+    () => stoppableIds.length > 0 || hasRunningQueue,
+    [hasRunningQueue, stoppableIds.length],
   );
 
   useShortcutAction("download.search", () => searchRef.current?.focus());
 
-  const showStopAll = stoppableIds.length > 0;
+  const showStopAll = hasStoppableWork;
   const showSelection = selectedDownloads.length > 0;
 
   const startGroups: ReactNode[] = [];
@@ -64,7 +86,7 @@ export function DownloadToolbar({
         loading={busy}
         title={t("download.stopAll")}
         aria-label={t("download.stopAll")}
-        onClick={() => void stop(stoppableIds)}
+        onClick={() => void stopAll()}
       >
         <FontAwesomeIcon icon={faStop} />
         {t("download.stopAll")}

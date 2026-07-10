@@ -14,10 +14,10 @@ const {
 } = require(`${appRoot}/electron/add-download-window-guard.cjs`) as {
   tryAcquireAddDownloadSlot: (options?: {
     fromExtensionGrab?: boolean;
-  }) => { allowed: boolean; reason?: "tooManyOpen" | "grabRateLimited" };
+  }) => { allowed: boolean; reason?: "rateLimited" };
   releaseAddDownloadSlot: () => void;
   isAddDownloadPopupHash: (hash: string) => boolean;
-  addDownloadWindowBlockedMessage: (reason?: "tooManyOpen" | "grabRateLimited") => string;
+  addDownloadWindowBlockedMessage: (reason?: "rateLimited") => string;
 };
 
 const PRELOAD_URL = "views://avarbridge/avar-preload.js";
@@ -75,7 +75,7 @@ function focusPopupWindow(popup: BrowserWindow): void {
 }
 
 function showAddDownloadWindowBlockedNotification(
-  reason?: "tooManyOpen" | "grabRateLimited",
+  reason?: "rateLimited",
 ): void {
   console.warn(addDownloadWindowBlockedMessage(reason));
 }

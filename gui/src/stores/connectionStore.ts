@@ -187,28 +187,41 @@ export const useConnectionStore = create<ConnectionStoreState>()((set, get) => (
       const { config } = useConfigStore.getState();
       const intervalMs = Math.max(config.pingIntervalMs, 500);
       const lastStreamAt = get().lastStreamAt;
-      const fresh =
+      const streamFresh =
         lastStreamAt !== null && Date.now() - lastStreamAt <= intervalMs * 2;
-      const nextConnection = fresh ? "connected" : "connecting";
-      if (nextConnection !== prevConnection) {
-        if (fresh) {
+
+      if (streamFresh) {
+        if (prevConnection !== "connected") {
           appLogger.gui.info("Daemon reachable");
-        } else if (prevConnection === "connected") {
-          appLogger.gui.error("Cannot connect to daemon");
+          set({ connection: "connected" });
         }
-        set({ connection: nextConnection });
+        return true;
       }
 
-      if (!fresh) {
+      appLogger.gui.debug("Push stream stale — checking daemon health");
+      const ok = await pingWithTimeout(client);
+      if (ok) {
+        if (prevConnection !== "connected") {
+          appLogger.gui.info("Daemon reachable (HTTP fallback)");
+        }
+        set({ connection: "connected" });
+        void useDataStore.getState().refresh();
+
         const now = Date.now();
         if (now - lastPushStreamRestartAt >= intervalMs) {
           lastPushStreamRestartAt = now;
           appLogger.gui.debug("Push stream stale — requesting reconnect");
           requestPushStreamReconnect();
         }
+        return true;
       }
 
-      return fresh;
+      if (prevConnection !== "disconnected") {
+        appLogger.gui.error("Cannot connect to daemon");
+        useDataStore.getState().setStats(null);
+        set({ connection: "disconnected", lastStreamAt: null });
+      }
+      return false;
     }
 
     if (prevConnection === "disconnected") {

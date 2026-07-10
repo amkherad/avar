@@ -57,10 +57,18 @@ QueueError queue_remove(const char *id_or_name, bool by_name, bool purge_items);
 /** Applies partial updates to the queue identified by id. */
 QueueError queue_edit(const char *id, const QueuePatch *patch);
 
-/** Schedules the queue (stub: logs until scheduler integration). */
+/** Marks the queue started and begins downloading its queued items. */
 QueueError queue_start(const char *id);
 
-/** Stops active downloads in the queue by resetting their persisted status. */
+/**
+ * Starts as many AVAR_DL_STATUS_QUEUED items in the queue as its
+ * maxConcurrentDownloads setting allows. No-op when the queue isn't started.
+ * Safe to call after every download status change so the next queued item
+ * picks up a freed slot.
+ */
+void queue_dispatch(const char *queue_id);
+
+/** Stops active and paused downloads in the queue and clears the started flag. */
 QueueError queue_stop(const char *id);
 
 /** Returns true when the queue scheduler flag is set. */

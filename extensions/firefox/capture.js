@@ -5,10 +5,22 @@
 function createNetworkMediaCapture(api, options = {}) {
   const { onCaptured } = options;
 
-  /** @type {Map<number, Map<string, {url: string, kind: string, filename?: string, size?: number}>>} */
+  /** @type {Map<number, Map<string, {url: string, kind: string, filename?: string, size?: number, segments?: string[]}>>} */
   const capturedByTab = new Map();
 
-  function remember(tabId, url, kind, filename, size) {
+  /** @type {Map<number, object>} */
+  const tsTrackerByTab = new Map();
+
+  function getTsTracker(tabId) {
+    let tracker = tsTrackerByTab.get(tabId);
+    if (!tracker) {
+      tracker = AvarMedia.createTsSequenceTracker();
+      tsTrackerByTab.set(tabId, tracker);
+    }
+    return tracker;
+  }
+
+  function remember(tabId, url, kind, filename, size, segments) {
     if (tabId < 0 || !url || typeof AvarMedia === "undefined") {
       return;
     }
@@ -25,6 +37,9 @@ function createNetworkMediaCapture(api, options = {}) {
       }
       if (typeof size === "number" && size >= 0) {
         item.size = size;
+      }
+      if (Array.isArray(segments)) {
+        item.segments = segments;
       }
       tabMap.set(url, item);
       if (typeof onCaptured === "function") {
@@ -43,11 +58,15 @@ function createNetworkMediaCapture(api, options = {}) {
     if (typeof size === "number" && size >= 0 && next.size == null) {
       next.size = size;
     }
+    if (Array.isArray(segments)) {
+      next.segments = segments;
+    }
     tabMap.set(url, next);
   }
 
   function clearTab(tabId) {
     capturedByTab.delete(tabId);
+    tsTrackerByTab.delete(tabId);
   }
 
   function getForTab(tabId) {
@@ -62,10 +81,20 @@ function createNetworkMediaCapture(api, options = {}) {
     if (!details?.url || details.tabId < 0 || typeof AvarMedia === "undefined") {
       return;
     }
-    const captured = AvarMedia.classifyCapturedRequest(details.url, details.responseHeaders);
-    if (captured) {
-      remember(details.tabId, captured.url, captured.kind, captured.filename, captured.size);
+    const captured = AvarMedia.classifyCapturedRequest(details.url, details.responseHeaders, details.type);
+    if (!captured) {
+      return;
     }
+
+    if (captured.kind === "direct" && AvarMedia.isTsSegmentUrl(captured.url)) {
+      const grouped = getTsTracker(details.tabId).addSegment(captured.url);
+      if (grouped) {
+        remember(details.tabId, grouped.url, grouped.kind, grouped.filename, captured.size, grouped.segments);
+      }
+      return;
+    }
+
+    remember(details.tabId, captured.url, captured.kind, captured.filename, captured.size);
   }
 
   function installListeners() {

@@ -69,7 +69,35 @@ function canStop(status: string) {
   return ["downloading", "paused", "queued"].includes(status);
 }
 
+async function listQueues() {
+  const result = await daemonRpc("queue.list", {});
+  if (result?.exitCode !== 0) {
+    return [];
+  }
+  return Array.isArray(result.queues) ? result.queues : [];
+}
+
+async function stopAllRunningQueues() {
+  const queues = await listQueues();
+  for (const queue of queues) {
+    const id = typeof queue?.id === "string" ? queue.id : "";
+    const running = Boolean(queue?.started ?? queue?.running);
+    if (!id || !running) {
+      continue;
+    }
+    try {
+      await daemonRpc("cli.exec", { argv: ["avar", "queue", "stop", id] });
+    } catch {
+      // Continue with remaining queues.
+    }
+  }
+}
+
 async function runBulkAction(kind: "start" | "pause" | "resume" | "stop") {
+  if (kind === "stop") {
+    await stopAllRunningQueues();
+  }
+
   const downloads = await listDownloads();
   const ids = downloads
     .filter((item: { status?: string }) => {

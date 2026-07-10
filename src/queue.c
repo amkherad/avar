@@ -2,6 +2,7 @@
 
 #include <avar.h>
 #include <config.h>
+#include <download.h>
 #include <logger.h>
 #include <queue.h>
 
@@ -17,7 +18,9 @@ static QueueError queue_detach_items(const char *queue_id);
 static QueueError queue_purge_items(const char *queue_id);
 static QueueError queue_set_started(const char *id, const bool started);
 static bool queue_item_keeps_running(const char *status);
+static bool queue_item_should_stop(const char *status);
 static bool queue_has_running_work(const char *queue_id);
+static uint32_t queue_max_concurrent(const char *queue_id);
 
 static int queue_find_index(const char *field, const char *value) {
     if (field == NULL || value == NULL) {
@@ -167,6 +170,15 @@ static bool queue_item_keeps_running(const char *status) {
            || strcmp(status, AVAR_DL_STATUS_QUEUED) == 0;
 }
 
+static bool queue_item_should_stop(const char *status) {
+    if (status == NULL) {
+        return false;
+    }
+
+    return strcmp(status, AVAR_DL_STATUS_DOWNLOADING) == 0
+           || strcmp(status, AVAR_DL_STATUS_PAUSED) == 0;
+}
+
 static bool queue_has_running_work(const char *queue_id) {
     const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
     for (size_t i = 0; i < count; i++) {
@@ -186,6 +198,33 @@ static bool queue_has_running_work(const char *queue_id) {
     }
 
     return false;
+}
+
+static uint32_t queue_max_concurrent(const char *queue_id) {
+    if (queue_id == NULL || queue_id[0] == '\0') {
+        return DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+    }
+
+    const int index = queue_find_index(AVAR_FIELD_ID, queue_id);
+    if (index < 0) {
+        return DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+    }
+
+    char *value =
+            get_config_array_item_field(AVAR_CFG_DM_QUEUES, (size_t)index, AVAR_QUEUE_FIELD_MAX_CONCURRENT);
+    if (value == NULL || value[0] == '\0') {
+        free(value);
+        return DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+    }
+
+    char *end = NULL;
+    const unsigned long parsed = strtoul(value, &end, 10);
+    free(value);
+    if (end == value || parsed == 0) {
+        return DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+    }
+
+    return (uint32_t)parsed;
 }
 
 static QueueError queue_set_started(const char *id, const bool started) {
@@ -420,7 +459,62 @@ QueueError queue_start(const char *id) {
     LOG_INFO("Scheduling queue '%s' (%s)", name != NULL ? name : id, id);
     free(name);
 
-    return queue_set_started(id, true);
+    const QueueError rc = queue_set_started(id, true);
+    if (rc == QueueErrorNone) {
+        queue_dispatch(id);
+    }
+    return rc;
+}
+
+void queue_dispatch(const char *queue_id) {
+    if (queue_id == NULL || queue_id[0] == '\0' || !queue_is_started(queue_id)) {
+        return;
+    }
+
+    const uint32_t max_concurrent = queue_max_concurrent(queue_id);
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+
+    size_t active = 0;
+    for (size_t i = 0; i < count && active < max_concurrent; i++) {
+        char *item_queue = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_QUEUE_ID);
+        if (item_queue == NULL || strcmp(item_queue, queue_id) != 0) {
+            free(item_queue);
+            continue;
+        }
+        free(item_queue);
+
+        char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_STATUS);
+        if (status != NULL && strcmp(status, AVAR_DL_STATUS_DOWNLOADING) == 0) {
+            active++;
+        }
+        free(status);
+    }
+
+    for (size_t i = 0; i < count && active < max_concurrent; i++) {
+        char *item_queue = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_QUEUE_ID);
+        if (item_queue == NULL || strcmp(item_queue, queue_id) != 0) {
+            free(item_queue);
+            continue;
+        }
+        free(item_queue);
+
+        char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_STATUS);
+        const bool is_queued = status != NULL && strcmp(status, AVAR_DL_STATUS_QUEUED) == 0;
+        free(status);
+        if (!is_queued) {
+            continue;
+        }
+
+        char *id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
+        if (id == NULL) {
+            continue;
+        }
+
+        if (download_start_scheduled(id) == EXIT_SUCCESS) {
+            active++;
+        }
+        free(id);
+    }
 }
 
 bool queue_is_started(const char *id) {
@@ -480,38 +574,19 @@ QueueError queue_stop(const char *id) {
         free(item_queue);
 
         char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_STATUS);
-        if (status == NULL || strcmp(status, AVAR_DL_STATUS_DOWNLOADING) != 0) {
+        if (!queue_item_should_stop(status)) {
             free(status);
             continue;
         }
         free(status);
 
-        char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, i);
-        if (json == NULL) {
-            return QueueErrorPersist;
+        char *item_id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
+        if (item_id == NULL) {
+            continue;
         }
 
-        cJSON *obj = cJSON_Parse(json);
-        cJSON_free(json);
-        if (obj == NULL || !cJSON_IsObject(obj)) {
-            cJSON_Delete(obj);
-            return QueueErrorPersist;
-        }
-
-        cJSON_ReplaceItemInObjectCaseSensitive(obj, AVAR_FIELD_STATUS,
-                                               cJSON_CreateString(AVAR_DL_STATUS_QUEUED));
-        char *updated = cJSON_PrintUnformatted(obj);
-        cJSON_Delete(obj);
-        if (updated == NULL) {
-            return QueueErrorPersist;
-        }
-
-        if (replace_config_array_item_at(AVAR_CFG_DM_ITEMS, i, updated) != 0) {
-            cJSON_free(updated);
-            return QueueErrorPersist;
-        }
-
-        cJSON_free(updated);
+        (void)download_stop(item_id);
+        free(item_id);
     }
 
     return queue_set_started(id, false);

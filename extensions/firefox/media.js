@@ -189,7 +189,7 @@ function classifyMediaCategory(item) {
   const url = item?.url || "";
   const kind = item?.kind || classifyStreamKind(url);
 
-  if (kind === "hls" || kind === "dash") {
+  if (kind === "hls" || kind === "dash" || kind === "ts-sequence") {
     return "video";
   }
 
@@ -325,6 +325,27 @@ function getContentLengthFromHeaders(headers) {
   return parseContentLength(getResponseHeader(headers, "content-length"));
 }
 
+/** Parses "bytes start-end/total" and returns the full resource size, not the range size. */
+function parseContentRangeTotal(value) {
+  if (!value) {
+    return null;
+  }
+  const match = /bytes\s+\d+-\d+\/(\d+)/i.exec(value);
+  if (!match) {
+    return null;
+  }
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function getFullSizeFromHeaders(headers) {
+  const fromRange = parseContentRangeTotal(getResponseHeader(headers, "content-range"));
+  if (fromRange !== null) {
+    return fromRange;
+  }
+  return getContentLengthFromHeaders(headers);
+}
+
 function extractFilenameFromHeaders(headers) {
   const fromDisposition = parseContentDispositionFilename(
     getResponseHeader(headers, "content-disposition"),
@@ -368,14 +389,17 @@ function withCapturedMetadata(item, responseHeaders) {
   if (filename) {
     next.filename = filename;
   }
-  const size = getContentLengthFromHeaders(responseHeaders);
+  const size = getFullSizeFromHeaders(responseHeaders);
   if (size !== null) {
     next.size = size;
   }
   return next;
 }
 
-function classifyCapturedRequest(url, responseHeaders) {
+/** Chrome/Firefox already classify the fetch; trust "media" regardless of URL/content-type shape. */
+const MEDIA_RESOURCE_TYPES = new Set(["media"]);
+
+function classifyCapturedRequest(url, responseHeaders, resourceType) {
   if (!isFetchable(url)) {
     return null;
   }
@@ -422,13 +446,17 @@ function classifyCapturedRequest(url, responseHeaders) {
 
   if (
     contentType === "application/octet-stream" ||
-    contentType === "binary/octet-stream"
+    contentType === "binary/octet-stream" ||
+    contentType === ""
   ) {
-    const size = getContentLengthFromHeaders(responseHeaders);
-    if (size === null || size >= 50_000) {
+    const size = getFullSizeFromHeaders(responseHeaders);
+    if (size === null || size >= 50_000 || MEDIA_RESOURCE_TYPES.has(resourceType)) {
       const classified = classifyMediaUrl(url);
       if (classified) {
         return withCapturedMetadata(classified, responseHeaders);
+      }
+      if (MEDIA_RESOURCE_TYPES.has(resourceType)) {
+        return withCapturedMetadata({ url, kind: classifyStreamKind(url) }, responseHeaders);
       }
     }
   }
@@ -610,11 +638,83 @@ function itemDisplayFilename(item, pageTitle) {
 
 const HLS_SEGMENT_RE = /\.(ts|m4s|cmfv|cmfa|aac|vtt|key)(\?|#|$)/i;
 
+const TS_SEGMENT_URL_RE = /\.ts(\?|#|$)/i;
+
+function isTsSegmentUrl(url) {
+  return Boolean(url && TS_SEGMENT_URL_RE.test(url));
+}
+
+/**
+ * Groups bare .ts segment URLs (players fetching segments directly with no .m3u8
+ * master) into one pseudo-stream once two or more share the same numbered-file template.
+ */
+function tsSegmentTemplate(url) {
+  if (!isTsSegmentUrl(url)) {
+    return null;
+  }
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split("/");
+    const last = parts[parts.length - 1];
+    const match = /^(.*?)(\d+)(\.ts)$/i.exec(last);
+    if (!match) {
+      return null;
+    }
+    const [, prefix, digits, ext] = match;
+    const dir = parts.slice(0, -1).join("/");
+    return {
+      key: `${parsed.origin}${dir}/ ${prefix} ${digits.length}${ext.toLowerCase()}`,
+      index: parseInt(digits, 10),
+      prefix,
+      ext,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function createTsSequenceTracker() {
+  const templates = new Map();
+
+  function buildItem(bucket) {
+    const orderedSegments = [...bucket.segments.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, segmentUrl]) => segmentUrl);
+    const stem = bucket.prefix.replace(/^[-_.]+|[-_.]+$/g, "") || "stream";
+    return {
+      url: orderedSegments[0],
+      kind: "ts-sequence",
+      segments: orderedSegments,
+      filename: `${stem}${bucket.ext}`,
+    };
+  }
+
+  function addSegment(url) {
+    const template = tsSegmentTemplate(url);
+    if (!template) {
+      return null;
+    }
+    let bucket = templates.get(template.key);
+    if (!bucket) {
+      bucket = { prefix: template.prefix, ext: template.ext, segments: new Map() };
+      templates.set(template.key, bucket);
+    }
+    bucket.segments.set(template.index, url);
+    return bucket.segments.size >= 2 ? buildItem(bucket) : null;
+  }
+
+  function clear() {
+    templates.clear();
+  }
+
+  return { addSegment, clear };
+}
+
 function shouldListMediaItem(item) {
   if (!item?.url) {
     return false;
   }
-  if (item.kind === "hls" || item.kind === "dash") {
+  if (item.kind === "hls" || item.kind === "dash" || item.kind === "ts-sequence") {
     return true;
   }
   if (item.kind !== "direct") {
@@ -1110,6 +1210,8 @@ if (typeof globalThis !== "undefined") {
     extractFilenameFromHeaders,
     parseContentLength,
     getContentLengthFromHeaders,
+    parseContentRangeTotal,
+    getFullSizeFromHeaders,
     guessFilename,
     guessFilenameFromUrl,
     isInferableUrlFilename,
@@ -1121,6 +1223,9 @@ if (typeof globalThis !== "undefined") {
     filterMediaItems,
     matchesMediaFilter,
     shouldListMediaItem,
+    isTsSegmentUrl,
+    tsSegmentTemplate,
+    createTsSequenceTracker,
     formatFileSize,
     formatDisplayUrl,
     rangeContainsNode,

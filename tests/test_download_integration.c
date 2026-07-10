@@ -10,6 +10,7 @@
 #include "download.h"
 #include "download_segment.h"
 #include "file-system.h"
+#include "queue.h"
 #include "thread_pool.h"
 
 #define SEGMENTED_SIZE (512U * 1024U)
@@ -379,6 +380,101 @@ AVAR_TEST(download_integration_background_downloads_use_thread_pool) {
     thread_pool_reset_global();
 }
 
+static char *find_item_status(const char *id) {
+    const size_t count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < count; i++) {
+        char *item_id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
+        if (item_id != NULL && strcmp(item_id, id) == 0) {
+            free(item_id);
+            return get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_STATUS);
+        }
+        free(item_id);
+    }
+    return NULL;
+}
+
+/* Regression test: queue_start() used to only flip the "started" flag
+ * (queue_dispatch() did nothing), and the download-job thread pool and the
+ * async file writer used to share one pool sized to exactly
+ * DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS. Starting a queue with that many queued
+ * items at once saturated every worker with long-lived download jobs, leaving
+ * none free to service the writer flush tasks those same jobs depended on -
+ * a full deadlock (items stuck "downloading" with zero throughput). */
+AVAR_TEST(download_integration_queue_start_dispatches_at_full_concurrency) {
+    AVAR_ASSERT(setup_isolated_paths());
+    configure_segmentation("1024", "65536", "4", "true");
+    remove_segmented_artifacts();
+    remove_named_artifacts("segmented2.bin");
+    remove_named_artifacts("segmented3.bin");
+    remove_named_artifacts("segmented4.bin");
+    thread_pool_reset_global();
+
+    QueueOptions options = {0};
+    options.max_concurrent_downloads = DL_DEFAULT_MAX_CONCURRENT_DOWNLOADS;
+    char *queue_id = NULL;
+    AVAR_ASSERT_EQ(queue_add("dispatch-test", &options, &queue_id), QueueErrorNone);
+    AVAR_ASSERT_NOT_NULL(queue_id);
+
+    char url1[256];
+    char url2[256];
+    char url3[256];
+    char url4[256];
+    build_url("segmented.bin", url1, sizeof url1);
+    build_url("segmented2.bin", url2, sizeof url2);
+    build_url("segmented3.bin", url3, sizeof url3);
+    build_url("segmented4.bin", url4, sizeof url4);
+
+    char *id1 = NULL;
+    char *id2 = NULL;
+    char *id3 = NULL;
+    char *id4 = NULL;
+    AVAR_ASSERT_EQ(download_enqueue_with_proxy(url1, queue_id, NULL, NULL, &id1), EXIT_SUCCESS);
+    AVAR_ASSERT_EQ(download_enqueue_with_proxy(url2, queue_id, NULL, NULL, &id2), EXIT_SUCCESS);
+    AVAR_ASSERT_EQ(download_enqueue_with_proxy(url3, queue_id, NULL, NULL, &id3), EXIT_SUCCESS);
+    AVAR_ASSERT_EQ(download_enqueue_with_proxy(url4, queue_id, NULL, NULL, &id4), EXIT_SUCCESS);
+
+    AVAR_ASSERT_EQ(queue_start(queue_id), QueueErrorNone);
+
+    /* download_wait_idle() only looks at the active-job counter, which the
+     * pool worker increments after it actually dequeues the task. Give the
+     * pool a moment to pick the submissions up before treating count==0 as
+     * "already finished" instead of "hasn't started yet". */
+    for (int i = 0; i < 100 && download_active_count() == 0U; i++) {
+#if defined(_WIN32)
+        Sleep(20);
+#else
+        usleep(20000);
+#endif
+    }
+
+    AVAR_ASSERT(download_wait_idle(INTEGRATION_IDLE_WAIT_MS));
+
+    char *status1 = find_item_status(id1);
+    char *status2 = find_item_status(id2);
+    char *status3 = find_item_status(id3);
+    char *status4 = find_item_status(id4);
+    AVAR_ASSERT_NOT_NULL(status1);
+    AVAR_ASSERT_NOT_NULL(status2);
+    AVAR_ASSERT_NOT_NULL(status3);
+    AVAR_ASSERT_NOT_NULL(status4);
+    AVAR_ASSERT_STR_EQ(status1, AVAR_DL_STATUS_COMPLETED);
+    AVAR_ASSERT_STR_EQ(status2, AVAR_DL_STATUS_COMPLETED);
+    AVAR_ASSERT_STR_EQ(status3, AVAR_DL_STATUS_COMPLETED);
+    AVAR_ASSERT_STR_EQ(status4, AVAR_DL_STATUS_COMPLETED);
+
+    free(status1);
+    free(status2);
+    free(status3);
+    free(status4);
+    free(id1);
+    free(id2);
+    free(id3);
+    free(id4);
+    free(queue_id);
+
+    thread_pool_reset_global();
+}
+
 AVAR_TEST_MAIN(
         run_download_integration_attached_roundtrip();
         run_download_integration_redirect_follow();
@@ -389,4 +485,5 @@ AVAR_TEST_MAIN(
         run_download_integration_chunked_stream_completes();
         run_download_integration_range_refused_falls_back_to_stream();
         run_download_integration_background_downloads_use_thread_pool();
+        run_download_integration_queue_start_dispatches_at_full_concurrency();
         test_guard_http_server_stop(&g_http_server);)

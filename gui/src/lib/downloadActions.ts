@@ -6,13 +6,14 @@ import {
   canResume,
   canStart,
   canStop,
+  canStopAll,
   canRedownload,
   isPaused,
 } from "@/lib/downloadStatus";
 import { useDataStore } from "@/stores/dataStore";
 import { useConnectionStore } from "@/stores/connectionStore";
 import { guardDownloadStartSize } from "@/lib/downloadSizeCheck";
-import { isDefaultQueue } from "@/queue/defaultQueue";
+import { isDefaultQueue, DEFAULT_QUEUE_ID, queueHasLifecycleActions } from "@/queue/defaultQueue";
 
 export type DownloadActionKind = "pause" | "resume" | "start" | "stop" | "delete";
 
@@ -183,10 +184,14 @@ export async function stopDownloads(
   client: DaemonClient,
   ids: string[],
   downloads: DownloadInfo[],
+  options?: { includeQueued?: boolean },
 ): Promise<DownloadActionResult> {
   const eligible = ids.filter((id) => {
     const item = downloads.find((d) => d.id === id);
-    return item && canStop(item.status);
+    if (!item) {
+      return false;
+    }
+    return options?.includeQueued ? canStopAll(item.status) : canStop(item.status);
   });
   return runForIds(
     eligible,
@@ -194,6 +199,35 @@ export async function stopDownloads(
     (id) => client.stopDownload(id),
     (id) => downloads.find((d) => d.id === id)?.filename,
   );
+}
+
+export async function stopAllDownloadsAndQueues(
+  client: DaemonClient,
+  downloads: DownloadInfo[],
+  queues: QueueInfo[],
+): Promise<void> {
+  for (const queue of queues) {
+    if (!queueHasLifecycleActions(queue) || isDefaultQueue(queue.id)) {
+      continue;
+    }
+    try {
+      await client.stopQueue(queue.id);
+      appLogger.gui.info("Queue stop", queue.name);
+    } catch (err) {
+      appLogger.gui.error(
+        "queue stop",
+        err instanceof Error ? err.message : undefined,
+      );
+    }
+  }
+
+  const ids = downloads.filter((item) => canStopAll(item.status)).map((item) => item.id);
+  if (ids.length > 0) {
+    await stopDownloads(client, ids, downloads, { includeQueued: true });
+    return;
+  }
+
+  await useDataStore.getState().refresh();
 }
 
 export async function deleteDownloads(
@@ -283,8 +317,22 @@ export async function moveDownloadsToQueue(
   client: DaemonClient,
   ids: string[],
   queue: QueueInfo,
+  downloads: DownloadInfo[] = [],
 ): Promise<DownloadActionResult> {
-  return runForIds(ids, "move to queue", async (id) => {
+  const idsToMove = ids.filter((id) => {
+    const item = downloads.find((download) => download.id === id);
+    if (item === undefined) {
+      return true;
+    }
+    const currentQueueId = item.queueId ?? DEFAULT_QUEUE_ID;
+    return currentQueueId !== queue.id;
+  });
+
+  if (idsToMove.length === 0) {
+    return { succeeded: [], failed: [] };
+  }
+
+  return runForIds(idsToMove, "move to queue", async (id) => {
     const argv = ["avar", "dl", "set-queue", id];
     if (!isDefaultQueue(queue.id)) {
       argv.push(`--queue=${queue.name}`);

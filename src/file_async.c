@@ -136,7 +136,7 @@ static void async_file_submit_locked(AvarAsyncFile *file) {
     file->bufs[file->active].len = 0U;
 
     if (!file->worker_queued) {
-        if (thread_pool_submit(thread_pool_global(), async_file_worker, file)) {
+        if (thread_pool_submit(thread_pool_io_global(), async_file_worker, file)) {
             file->worker_queued = true;
         } else {
             /* Pool unavailable: write inline so no data is dropped. */

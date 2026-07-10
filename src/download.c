@@ -229,6 +229,7 @@ typedef struct {
     char *name;
     char *item_id;
     char *proxy;
+    bool force_start;
 } BackgroundDownloadArgs;
 
 static void background_args_free(BackgroundDownloadArgs *args) {
@@ -305,7 +306,7 @@ bool download_wait_idle(const unsigned timeout_ms) {
 
 static int find_download_item_index(const char *target, bool by_id);
 
-static int spawn_download_by_id(const char *item_id, const char *proxy_override);
+static int spawn_download_by_id(const char *item_id, const char *proxy_override, bool force_start);
 
 static int download_status_exit_code(const char *status) {
     if (status == NULL) {
@@ -477,10 +478,12 @@ static struct {
 static void active_jobs_register(DownloadJob *job);
 static void active_jobs_unregister(DownloadJob *job);
 static DownloadJob *active_jobs_find(const char *item_id);
-static int run_download_for_item_id(const char *item_id, const char *proxy_override);
+static int run_download_for_item_id(const char *item_id, const char *proxy_override,
+                                    bool force_start);
 static void apply_proxy_to_state(DownloadState *state, const char *proxy_override);
 static void background_download_task_by_id(void *arg);
 static int update_download_item_status(const char *item_id, const char *status);
+static int update_download_item_queue_id(const char *item_id, const char *queue_id);
 static void sync_queue_started_for_job(const DownloadJob *job);
 static void sync_queue_started_for_item_id(const char *item_id);
 static void log_download_item_status(const char *item_id, const char *filename, const char *status);
@@ -504,6 +507,8 @@ static char *format_datetime_iso(void);
 static char *find_resumable_item_id(const char *url);
 
 static char *download_generate_id(void);
+
+static char *read_config_item_queue_id(const char *item_id);
 
 static uint64_t download_snowflake_next(void);
 
@@ -1102,6 +1107,33 @@ static void download_job_add_json_progress(cJSON *obj, const DownloadJob *job) {
     json_add_active_ranges(obj, job);
 }
 
+bool download_status_is_valid(const char *status) {
+    if (status == NULL || status[0] == '\0') {
+        return false;
+    }
+
+    if (strncmp(status, AVAR_DL_ID_PREFIX, strlen(AVAR_DL_ID_PREFIX)) == 0) {
+        return false;
+    }
+
+    return strcmp(status, AVAR_DL_STATUS_QUEUED) == 0
+           || strcmp(status, AVAR_DL_STATUS_DOWNLOADING) == 0
+           || strcmp(status, AVAR_DL_STATUS_PAUSED) == 0
+           || strcmp(status, AVAR_DL_STATUS_STOPPED) == 0
+           || strcmp(status, AVAR_DL_STATUS_COMPLETED) == 0
+           || strcmp(status, AVAR_DL_STATUS_FAILED) == 0;
+}
+
+static const char *download_status_normalize(const char *status, const char *fallback) {
+    if (download_status_is_valid(status)) {
+        return status;
+    }
+    if (download_status_is_valid(fallback)) {
+        return fallback;
+    }
+    return AVAR_DL_STATUS_QUEUED;
+}
+
 void download_progress_notify_watch(const char *id) {
     if (id == NULL || id[0] == '\0') {
         return;
@@ -1112,8 +1144,17 @@ void download_progress_notify_watch(const char *id) {
         return;
     }
 
-    const char *status = job->state != NULL && job->state->status != NULL ? job->state->status
-                                                                          : AVAR_DL_STATUS_DOWNLOADING;
+    const char *status = AVAR_DL_STATUS_DOWNLOADING;
+    if (job->mutex != NULL) {
+        avar_mutex_lock(job->mutex);
+    }
+    if (job->state != NULL && job->state->status != NULL
+        && download_status_is_valid(job->state->status)) {
+        status = job->state->status;
+    }
+    if (job->mutex != NULL) {
+        avar_mutex_unlock(job->mutex);
+    }
     (void)dm_item_upsert(job, status);
 }
 
@@ -1164,11 +1205,15 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
         cJSON_AddNullToObject(obj, AVAR_FIELD_MAX_RETRIES);
     }
 
-    if (job->state != NULL && job->state->queue_id != NULL) {
+    char *config_queue_id = job->item_id != NULL ? read_config_item_queue_id(job->item_id) : NULL;
+    if (config_queue_id != NULL && config_queue_id[0] != '\0') {
+        cJSON_AddStringToObject(obj, AVAR_FIELD_QUEUE_ID, config_queue_id);
+    } else if (job->state != NULL && job->state->queue_id != NULL && job->state->queue_id[0] != '\0') {
         cJSON_AddStringToObject(obj, AVAR_FIELD_QUEUE_ID, job->state->queue_id);
     } else {
         cJSON_AddNullToObject(obj, AVAR_FIELD_QUEUE_ID);
     }
+    free(config_queue_id);
 
     if (job->state != NULL && job->state->description != NULL) {
         cJSON_AddStringToObject(obj, AVAR_FIELD_DESCRIPTION, job->state->description);
@@ -1204,10 +1249,35 @@ static char *build_item_json(const DownloadJob *job, const char *status) {
     return json;
 }
 
-static int dm_item_upsert(DownloadJob *job, const char *status) {
-    sync_state_metadata(job, status);
+static char *read_config_item_queue_id(const char *item_id) {
+    if (item_id == NULL) {
+        return NULL;
+    }
 
-    char *json = build_item_json(job, status);
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return NULL;
+    }
+
+    return get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_QUEUE_ID);
+}
+
+static int dm_item_upsert(DownloadJob *job, const char *status) {
+    const char *normalized =
+            download_status_normalize(status, AVAR_DL_STATUS_DOWNLOADING);
+
+    if (job != NULL && job->item_id != NULL && job->state != NULL) {
+        char *config_queue_id = read_config_item_queue_id(job->item_id);
+        free(job->state->queue_id);
+        job->state->queue_id =
+                config_queue_id != NULL && config_queue_id[0] != '\0' ? strdup(config_queue_id)
+                                                                      : NULL;
+        free(config_queue_id);
+    }
+
+    sync_state_metadata(job, normalized);
+
+    char *json = build_item_json(job, normalized);
     if (json == NULL) {
         return -1;
     }
@@ -1222,7 +1292,7 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
     cJSON_free(json);
     if (rc == 0) {
         job->last_upsert_ms = mg_millis();
-        log_job_status(job, status);
+        log_job_status(job, normalized);
         (void)download_item_strip_config_url(job->item_id);
         sync_queue_started_for_job(job);
     }
@@ -3976,7 +4046,7 @@ static int run_transient_download_ex(const char *url, const char *queue, const c
                 download_io_scope_end();
                 return EXIT_FAILURE;
             }
-            if (spawn_download_by_id(spawn_id, proxy_override) != EXIT_SUCCESS) {
+            if (spawn_download_by_id(spawn_id, proxy_override, true) != EXIT_SUCCESS) {
                 free(spawn_id);
                 download_io_scope_end();
                 return EXIT_FAILURE;
@@ -4301,6 +4371,7 @@ static void sync_queue_started_for_job(const DownloadJob *job) {
         return;
     }
 
+    queue_dispatch(job->state->queue_id);
     queue_sync_started_state(job->state->queue_id);
 }
 
@@ -4317,6 +4388,7 @@ static void sync_queue_started_for_item_id(const char *item_id) {
     char *queue_id =
             get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_QUEUE_ID);
     if (queue_id != NULL && queue_id[0] != '\0') {
+        queue_dispatch(queue_id);
         queue_sync_started_state(queue_id);
     }
     free(queue_id);
@@ -4324,6 +4396,10 @@ static void sync_queue_started_for_item_id(const char *item_id) {
 
 static int update_download_item_status(const char *item_id, const char *status) {
     if (item_id == NULL || status == NULL) {
+        return -1;
+    }
+
+    if (!download_status_is_valid(status)) {
         return -1;
     }
 
@@ -4364,6 +4440,45 @@ static int update_download_item_status(const char *item_id, const char *status) 
         log_download_item_status(item_id, filename, status);
         sync_queue_started_for_item_id(item_id);
     }
+    return rc;
+}
+
+static int update_download_item_queue_id(const char *item_id, const char *queue_id) {
+    if (item_id == NULL) {
+        return -1;
+    }
+
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return -1;
+    }
+
+    char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, (size_t)index);
+    if (json == NULL) {
+        return -1;
+    }
+
+    cJSON *obj = cJSON_Parse(json);
+    free(json);
+    if (obj == NULL) {
+        return -1;
+    }
+
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_QUEUE_ID);
+    if (queue_id != NULL && queue_id[0] != '\0') {
+        cJSON_AddStringToObject(obj, AVAR_FIELD_QUEUE_ID, queue_id);
+    } else {
+        cJSON_AddNullToObject(obj, AVAR_FIELD_QUEUE_ID);
+    }
+
+    char *updated = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    if (updated == NULL) {
+        return -1;
+    }
+
+    const int rc = replace_config_array_item_at(AVAR_CFG_DM_ITEMS, (size_t)index, updated);
+    cJSON_free(updated);
     return rc;
 }
 
@@ -4469,9 +4584,31 @@ static void cleanup_download_artifacts(const char *item_id, const bool purge_des
     free(temp_dir);
 }
 
-static int run_download_for_item_id(const char *item_id, const char *proxy_override) {
+static bool download_scheduler_spawn_blocked(const char *status, const char *queue_id) {
+    if (status == NULL) {
+        return true;
+    }
+
+    if (strcmp(status, AVAR_DL_STATUS_STOPPED) == 0) {
+        return true;
+    }
+
+    if (strcmp(status, AVAR_DL_STATUS_QUEUED) == 0 && queue_id != NULL && queue_id[0] != '\0'
+        && !queue_is_started(queue_id)) {
+        return true;
+    }
+
+    return false;
+}
+
+static int run_download_for_item_id(const char *item_id, const char *proxy_override,
+                                    const bool force_start) {
     if (item_id == NULL) {
         return EXIT_FAILURE;
+    }
+
+    if (!force_start && active_jobs_find(item_id) != NULL) {
+        return EXIT_SUCCESS;
     }
 
     const int index = find_download_item_index(item_id, true);
@@ -4482,6 +4619,14 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
 
     char *url = download_item_load_url(item_id);
     char *queue_id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_QUEUE_ID);
+    char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_STATUS);
+    if (!force_start && download_scheduler_spawn_blocked(status, queue_id)) {
+        free(url);
+        free(queue_id);
+        free(status);
+        return EXIT_SUCCESS;
+    }
+    free(status);
     if (url == NULL || !is_valid_http_url(url)) {
         free(url);
         free(queue_id);
@@ -4556,9 +4701,6 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
             state->id = strdup(item_id);
             state->queued_at = format_datetime_iso();
             state->added_through = strdup(AVAR_DL_ADDED_DIRECT);
-            if (queue_id != NULL) {
-                state->queue_id = strdup(queue_id);
-            }
             if (stream_kind != NULL && stream_kind[0] != '\0') {
                 state->stream_kind = stream_kind;
                 stream_kind = NULL;
@@ -4573,6 +4715,15 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
             }
         }
         free(stream_kind);
+    }
+
+    if (state != NULL) {
+        /* dm.items.queueId is the authoritative queue membership (it can change
+         * via GUI move-to-queue after the job's state.json was first written);
+         * always resync it here so a restart doesn't fall back to the queue
+         * that was current the last time this item ran. */
+        free(state->queue_id);
+        state->queue_id = (queue_id != NULL && queue_id[0] != '\0') ? strdup(queue_id) : NULL;
     }
 
     apply_proxy_to_state(state, proxy_override);
@@ -4654,7 +4805,16 @@ static int run_download_for_item_id(const char *item_id, const char *proxy_overr
 
 static void background_download_task_by_id(void *arg);
 
-static int spawn_download_by_id(const char *item_id, const char *proxy_override) {
+static int spawn_download_by_id(const char *item_id, const char *proxy_override,
+                                const bool force_start) {
+    if (item_id == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    if (!force_start && active_jobs_find(item_id) != NULL) {
+        return EXIT_SUCCESS;
+    }
+
     BackgroundDownloadArgs *args = calloc(1, sizeof(*args));
     if (args == NULL) {
         return EXIT_FAILURE;
@@ -4662,6 +4822,7 @@ static int spawn_download_by_id(const char *item_id, const char *proxy_override)
 
     args->item_id = strdup(item_id);
     args->proxy = proxy_override != NULL ? strdup(proxy_override) : NULL;
+    args->force_start = force_start;
     if (args->item_id == NULL) {
         background_args_free(args);
         return EXIT_FAILURE;
@@ -4683,7 +4844,7 @@ static void background_download_task_by_id(void *arg) {
     }
 
     atomic_fetch_add(&g_active_downloads, 1U);
-    (void)run_download_for_item_id(args->item_id, args->proxy);
+    (void)run_download_for_item_id(args->item_id, args->proxy, args->force_start);
     atomic_fetch_sub(&g_active_downloads, 1U);
     background_args_free(args);
 }
@@ -4728,7 +4889,7 @@ void download_resume_interrupted(void) {
         }
 
         LOG_INFO("Resuming download %s after daemon start", id);
-        (void)spawn_download_by_id(id, NULL);
+        (void)spawn_download_by_id(id, NULL, false);
         free(id);
     }
 }
@@ -4776,7 +4937,27 @@ int download_resume(const char *id) {
     }
     free(status);
 
-    return spawn_download_by_id(id, NULL);
+    return spawn_download_by_id(id, NULL, true);
+}
+
+int download_start_scheduled(const char *id) {
+    if (id == NULL) {
+        return EXIT_FAILURE;
+    }
+
+    const int index = find_download_item_index(id, true);
+    if (index < 0) {
+        return EXIT_FAILURE;
+    }
+
+    char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_STATUS);
+    if (status == NULL || strcmp(status, AVAR_DL_STATUS_QUEUED) != 0) {
+        free(status);
+        return EXIT_FAILURE;
+    }
+    free(status);
+
+    return spawn_download_by_id(id, NULL, false);
 }
 
 int download_start(const char *id) {
@@ -4804,7 +4985,7 @@ int download_start(const char *id) {
         return EXIT_FAILURE;
     }
 
-    return spawn_download_by_id(id, NULL);
+    return spawn_download_by_id(id, NULL, true);
 }
 
 int download_stop(const char *id) {
@@ -5053,6 +5234,109 @@ DownloadState *download_item_state_load(const char *id) {
     return state;
 }
 
+bool download_item_repair_persisted_status(const char *item_id, char **status_out) {
+    if (item_id == NULL || item_id[0] == '\0') {
+        return false;
+    }
+
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return false;
+    }
+
+    char *config_status =
+            get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_STATUS);
+    if (config_status != NULL && download_status_is_valid(config_status)) {
+        if (status_out != NULL) {
+            *status_out = config_status;
+        } else {
+            free(config_status);
+        }
+        return false;
+    }
+    free(config_status);
+
+    const char *replacement = NULL;
+    if (download_item_is_active(item_id)) {
+        replacement = AVAR_DL_STATUS_DOWNLOADING;
+    } else {
+        DownloadState *state = download_item_state_load(item_id);
+        if (state != NULL && download_status_is_valid(state->status)) {
+            replacement = state->status;
+        }
+        download_state_free(state);
+    }
+    if (replacement == NULL) {
+        replacement = AVAR_DL_STATUS_QUEUED;
+    }
+
+    if (update_download_item_status(item_id, replacement) != 0) {
+        return false;
+    }
+
+    if (status_out != NULL) {
+        *status_out = strdup(replacement);
+    }
+    return true;
+}
+
+bool download_item_reconcile_queue_membership(const char *item_id) {
+    if (item_id == NULL || item_id[0] == '\0') {
+        return false;
+    }
+
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return false;
+    }
+
+    char *config_queue =
+            get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_QUEUE_ID);
+    const bool config_empty = config_queue == NULL || config_queue[0] == '\0';
+
+    char *state_path = download_item_state_path(item_id);
+    DownloadState *state = state_path != NULL ? download_state_load(state_path) : NULL;
+    if (state == NULL) {
+        free(config_queue);
+        free(state_path);
+        return false;
+    }
+
+    const bool state_empty = state->queue_id == NULL || state->queue_id[0] == '\0';
+    const bool matches = config_empty ? state_empty
+                                      : (state->queue_id != NULL
+                                         && strcmp(state->queue_id, config_queue) == 0);
+    if (matches) {
+        download_state_free(state);
+        free(state_path);
+        free(config_queue);
+        return false;
+    }
+
+    bool repaired = false;
+    if (config_empty && !state_empty) {
+        repaired = update_download_item_queue_id(item_id, state->queue_id) == 0;
+    } else {
+        free(state->queue_id);
+        state->queue_id = config_empty ? NULL : strdup(config_queue);
+        repaired = download_state_save(state, state_path) == 0;
+    }
+
+    download_state_free(state);
+    free(state_path);
+    free(config_queue);
+    return repaired;
+}
+
+char *download_item_authoritative_queue_id(const char *item_id) {
+    if (item_id == NULL || item_id[0] == '\0') {
+        return NULL;
+    }
+
+    (void)download_item_reconcile_queue_membership(item_id);
+    return read_config_item_queue_id(item_id);
+}
+
 static int clear_download_item_description(const char *item_id) {
     if (item_id == NULL) {
         return -1;
@@ -5165,7 +5449,7 @@ int download_restart(const char *id) {
         return EXIT_FAILURE;
     }
 
-    return spawn_download_by_id(id, NULL);
+    return spawn_download_by_id(id, NULL, true);
 }
 
 int download_dismiss_resume_prompt(const char *id) {
@@ -5284,6 +5568,8 @@ int download_set_queue(const char *id, const char *queue) {
         return EXIT_FAILURE;
     }
 
+    (void)download_item_reconcile_queue_membership(id);
+
     const int index = find_download_item_index(id, true);
     if (index < 0) {
         LOG_ERROR("Download item not found: %s", id);
@@ -5395,5 +5681,9 @@ uint64_t download_test_existing_file_size(const char *path) {
 
 char *download_test_generate_id(void) {
     return download_generate_id();
+}
+
+bool download_test_status_is_valid(const char *status) {
+    return download_status_is_valid(status);
 }
 #endif

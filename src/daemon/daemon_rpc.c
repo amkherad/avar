@@ -750,9 +750,27 @@ static void enrich_download_entry_from_disk(cJSON *entry) {
         return;
     }
 
+    const cJSON *status = cJSON_GetObjectItemCaseSensitive(entry, AVAR_FIELD_STATUS);
+    if (!cJSON_IsString(status) || !download_status_is_valid(status->valuestring)) {
+        char *repaired = NULL;
+        if (download_item_repair_persisted_status(id->valuestring, &repaired)) {
+            json_replace_or_add_string(entry, AVAR_FIELD_STATUS, repaired);
+            free(repaired);
+        }
+    }
+
     if (download_item_is_active(id->valuestring)) {
         return;
     }
+
+    char *queue_id = download_item_authoritative_queue_id(id->valuestring);
+    if (queue_id != NULL && queue_id[0] != '\0') {
+        json_replace_or_add_string(entry, AVAR_FIELD_QUEUE_ID, queue_id);
+    } else {
+        cJSON_DeleteItemFromObjectCaseSensitive(entry, AVAR_FIELD_QUEUE_ID);
+        cJSON_AddNullToObject(entry, AVAR_FIELD_QUEUE_ID);
+    }
+    free(queue_id);
 
     DownloadState *state = download_item_state_load(id->valuestring);
     if (state == NULL) {
@@ -761,9 +779,10 @@ static void enrich_download_entry_from_disk(cJSON *entry) {
 
     json_replace_or_add_number(entry, AVAR_FIELD_BYTES_DOWNLOADED, (double)state->bytes_downloaded);
     json_replace_or_add_number(entry, AVAR_FIELD_TOTAL_BYTES, (double)state->total_size);
-    json_replace_or_add_string(entry, AVAR_FIELD_QUEUE_ID, state->queue_id);
     json_replace_or_add_string(entry, AVAR_FIELD_FILENAME, state->filename);
     json_replace_or_add_string(entry, AVAR_FIELD_DESCRIPTION, state->description);
+    download_state_add_json_progress(entry, state);
+    cJSON_DeleteItemFromObjectCaseSensitive(entry, "activeRanges");
     download_state_free(state);
 }
 
@@ -788,7 +807,8 @@ static cJSON *handle_downloads_list(void) {
             enrich_download_entry_dest_path(entry);
             enrich_download_entry_from_disk(entry);
             const cJSON *entry_id = cJSON_GetObjectItemCaseSensitive(entry, AVAR_FIELD_ID);
-            if (cJSON_IsString(entry_id) && entry_id->valuestring != NULL) {
+            if (cJSON_IsString(entry_id) && entry_id->valuestring != NULL
+                && download_item_is_active(entry_id->valuestring)) {
                 download_entry_add_progress_json(entry_id->valuestring, entry);
             }
             cJSON_AddItemToArray(downloads, entry);
@@ -1606,7 +1626,8 @@ bool daemon_rpc_build_snapshot(char **json_out) {
             enrich_download_entry_dest_path(entry);
             enrich_download_entry_from_disk(entry);
             const cJSON *entry_id = cJSON_GetObjectItemCaseSensitive(entry, AVAR_FIELD_ID);
-            if (cJSON_IsString(entry_id) && entry_id->valuestring != NULL) {
+            if (cJSON_IsString(entry_id) && entry_id->valuestring != NULL
+                && download_item_is_active(entry_id->valuestring)) {
                 download_entry_add_progress_json(entry_id->valuestring, entry);
             }
             cJSON_AddItemToArray(downloads, entry);

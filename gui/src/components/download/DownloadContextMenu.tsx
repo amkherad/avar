@@ -26,6 +26,20 @@ import {
   isCompleted,
 } from "@/lib/downloadStatus";
 import { openDownloadPopup } from "@/lib/popup";
+import { DEFAULT_QUEUE_ID } from "@/queue/defaultQueue";
+
+function filterMoveTargetQueues(
+  downloads: DownloadInfo[],
+  targetQueues: QueueInfo[],
+): QueueInfo[] {
+  if (downloads.length === 0) {
+    return targetQueues;
+  }
+
+  return targetQueues.filter((queue) =>
+    downloads.some((item) => (item.queueId ?? DEFAULT_QUEUE_ID) !== queue.id),
+  );
+}
 
 export interface DownloadContextMenuProps {
   downloads: DownloadInfo[];
@@ -46,6 +60,10 @@ export function DownloadContextMenu({
   const actions = useDownloadActions();
   const batchMode = downloads.length > 1;
   const ids = downloads.map((item) => item.id);
+  const moveTargetQueues = useMemo(
+    () => filterMoveTargetQueues(downloads, targetQueues),
+    [downloads, targetQueues],
+  );
 
   const items = useMemo((): ContextMenuItem[] => {
     if (downloads.length === 0) {
@@ -126,16 +144,15 @@ export function DownloadContextMenu({
         });
       }
 
-      if (targetQueues.length > 0) {
+      if (moveTargetQueues.length > 0) {
         menuItems.push({
           id: "moveToQueue",
           label: t("download.moveToQueue"),
           icon: faRightLeft,
           disabled: actions.busy,
-          children: targetQueues.map((queue, index) => ({
+          children: moveTargetQueues.map((queue) => ({
             id: `moveToQueue-${queue.id}`,
             label: queue.name,
-            checked: index === 0,
             disabled: actions.busy,
             onClick: () => void actions.moveToQueue(ids, queue),
           })),
@@ -227,6 +244,21 @@ export function DownloadContextMenu({
       });
     }
 
+    if (moveTargetQueues.length > 0 && !isCompleted(download.status)) {
+      menuItems.push({
+        id: "moveToQueue",
+        label: t("download.moveToQueue"),
+        icon: faRightLeft,
+        disabled: actions.busy,
+        children: moveTargetQueues.map((queue) => ({
+          id: `moveToQueue-${queue.id}`,
+          label: queue.name,
+          disabled: actions.busy,
+          onClick: () => void actions.moveToQueue([download.id], queue),
+        })),
+      });
+    }
+
     if (actions.openFileVisible && isCompleted(download.status)) {
       menuItems.push({
         id: "openFile",
@@ -267,9 +299,9 @@ export function DownloadContextMenu({
     batchMode,
     downloads,
     ids,
+    moveTargetQueues,
     onRefreshLink,
     t,
-    targetQueues,
   ]);
 
   if (downloads.length === 0 || !position) {

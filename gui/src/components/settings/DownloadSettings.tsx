@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/Input";
 import { DirectoryPathInput } from "@/components/ui/DirectoryPathInput";
 import { Select } from "@/components/ui/Select";
-import { Button } from "@/components/ui/Button";
 import { ProxySettingsFields } from "@/components/settings/ProxySettingsFields";
 import { defaultProxySettings, type ProxySettings } from "@/lib/proxySettings";
 import { useDaemonDirectoryPathMode } from "@/hooks/useDirectoryPathMode";
@@ -72,14 +71,59 @@ export function DownloadSettings() {
   const directoryPathMode = useDaemonDirectoryPathMode();
   const [values, setValues] = useState<Record<string, string>>({});
   const [proxy, setProxy] = useState<ProxySettings>(defaultProxySettings());
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const loadedRef = useRef(false);
+
+  const persistConfig = useCallback(
+    async (key: string, value: string) => {
+      if (!client) {
+        setError(t("settings.backendDisconnected"));
+        return;
+      }
+      if (!loadedRef.current) {
+        return;
+      }
+      try {
+        await client.setConfig(key, value);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t("common.error"));
+      }
+    },
+    [client, t],
+  );
+
+  const persistProxy = useCallback(
+    async (next: ProxySettings) => {
+      if (!client) {
+        setError(t("settings.backendDisconnected"));
+        return;
+      }
+      if (!loadedRef.current) {
+        return;
+      }
+      try {
+        await client.setConfig("dm.proxy.enabled", next.enabled ? "true" : "false");
+        await client.setConfig("dm.proxy.type", next.type);
+        await client.setConfig("dm.proxy.host", next.host);
+        await client.setConfig("dm.proxy.port", next.port);
+        await client.setConfig("dm.proxy.username", next.username);
+        await client.setConfig("dm.proxy.password", next.password);
+        await client.setConfig("dm.proxy.noProxy", next.noProxy ?? "");
+        setError(null);
+        appLogger.gui.info("Download proxy settings saved");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t("common.error"));
+      }
+    },
+    [client, t],
+  );
 
   const load = useCallback(async () => {
     if (!client) {
       return;
     }
+    loadedRef.current = false;
     try {
       const next: Record<string, string> = {};
       for (const key of SEGMENT_KEYS) {
@@ -119,6 +163,7 @@ export function DownloadSettings() {
           (await client.getConfig("dm.proxy.noProxy", CONFIG_DEFAULTS["dm.proxy.noProxy"])) ??
           CONFIG_DEFAULTS["dm.proxy.noProxy"],
       });
+      loadedRef.current = true;
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
     }
@@ -128,40 +173,14 @@ export function DownloadSettings() {
     void load();
   }, [load]);
 
-  async function save() {
-    if (!client) {
-      setError(t("settings.backendDisconnected"));
-      setSaved(false);
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    setSaved(false);
-    try {
-      for (const key of SEGMENT_KEYS) {
-        if (values[key] !== undefined) {
-          await client.setConfig(key, values[key]);
-        }
-      }
-      await client.setConfig("dm.proxy.enabled", proxy.enabled ? "true" : "false");
-      await client.setConfig("dm.proxy.type", proxy.type);
-      await client.setConfig("dm.proxy.host", proxy.host);
-      await client.setConfig("dm.proxy.port", proxy.port);
-      await client.setConfig("dm.proxy.username", proxy.username);
-      await client.setConfig("dm.proxy.password", proxy.password);
-      await client.setConfig("dm.proxy.noProxy", proxy.noProxy ?? "");
-      appLogger.gui.info("Download settings saved");
-      setSaved(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("common.error"));
-    } finally {
-      setSaving(false);
-    }
+  function setField(key: string, value: string) {
+    setValues((prev) => ({ ...prev, [key]: value }));
+    void persistConfig(key, value);
   }
 
-  function setField(key: string, value: string) {
-    setSaved(false);
-    setValues((prev) => ({ ...prev, [key]: value }));
+  function updateProxy(next: ProxySettings) {
+    setProxy(next);
+    void persistProxy(next);
   }
 
   return (
@@ -256,20 +275,9 @@ export function DownloadSettings() {
         </Select>
       </section>
 
-      <ProxySettingsFields
-        value={proxy}
-        onChange={(next) => {
-          setSaved(false);
-          setProxy(next);
-        }}
-        showNoProxy
-      />
+      <ProxySettingsFields value={proxy} onChange={updateProxy} showNoProxy />
 
       {error ? <p className="avar-field__error">{error}</p> : null}
-      {saved ? <p className="avar-settings-status">{t("settings.saved")}</p> : null}
-      <Button loading={saving} onClick={() => void save()}>
-        {t("common.save")}
-      </Button>
     </form>
   );
 }

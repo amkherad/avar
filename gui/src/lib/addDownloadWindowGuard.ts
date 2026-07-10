@@ -1,9 +1,8 @@
-export const MAX_OPEN_ADD_DOWNLOAD_WINDOWS = 5;
-export const MAX_EXTENSION_GRABS_IN_WINDOW = 5;
-/** Sliding window for extension grab bursts. */
-export const EXTENSION_GRAB_WINDOW_MS = 30_000;
+export const MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW = 5;
+/** Sliding window for add-download popup bursts (manual + extension). */
+export const ADD_DOWNLOAD_OPEN_WINDOW_MS = 30_000;
 
-export type AddDownloadWindowGuardReason = "tooManyOpen" | "grabRateLimited";
+export type AddDownloadWindowGuardReason = "rateLimited";
 
 export interface AddDownloadWindowGuardResult {
   allowed: boolean;
@@ -11,44 +10,33 @@ export interface AddDownloadWindowGuardResult {
 }
 
 export interface TryAcquireAddDownloadSlotOptions {
-  /** Counts toward the grab burst limit (browser extension captures). */
+  /** @deprecated All opens share the same rate limit; kept for caller compatibility. */
   fromExtensionGrab?: boolean;
 }
 
-let openAddDownloadWindowCount = 0;
-const recentExtensionGrabTimestamps: number[] = [];
+const recentAddDownloadOpenTimestamps: number[] = [];
 
-function pruneOldExtensionGrabs(now: number): void {
+function pruneOldAddDownloadOpens(now: number): void {
   while (
-    recentExtensionGrabTimestamps.length > 0 &&
-    recentExtensionGrabTimestamps[0] < now - EXTENSION_GRAB_WINDOW_MS
+    recentAddDownloadOpenTimestamps.length > 0 &&
+    recentAddDownloadOpenTimestamps[0] < now - ADD_DOWNLOAD_OPEN_WINDOW_MS
   ) {
-    recentExtensionGrabTimestamps.shift();
+    recentAddDownloadOpenTimestamps.shift();
   }
 }
 
-export function countOpenAddDownloadWindows(): number {
-  return openAddDownloadWindowCount;
-}
-
-export function countRecentExtensionGrabs(now = Date.now()): number {
-  pruneOldExtensionGrabs(now);
-  return recentExtensionGrabTimestamps.length;
+export function countRecentAddDownloadOpens(now = Date.now()): number {
+  pruneOldAddDownloadOpens(now);
+  return recentAddDownloadOpenTimestamps.length;
 }
 
 export function evaluateAddDownloadSlot(
-  options: TryAcquireAddDownloadSlotOptions = {},
+  _options: TryAcquireAddDownloadSlotOptions = {},
 ): AddDownloadWindowGuardResult {
-  if (openAddDownloadWindowCount >= MAX_OPEN_ADD_DOWNLOAD_WINDOWS) {
-    return { allowed: false, reason: "tooManyOpen" };
-  }
-
-  if (options.fromExtensionGrab) {
-    const now = Date.now();
-    pruneOldExtensionGrabs(now);
-    if (recentExtensionGrabTimestamps.length >= MAX_EXTENSION_GRABS_IN_WINDOW) {
-      return { allowed: false, reason: "grabRateLimited" };
-    }
+  const now = Date.now();
+  pruneOldAddDownloadOpens(now);
+  if (recentAddDownloadOpenTimestamps.length >= MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW) {
+    return { allowed: false, reason: "rateLimited" };
   }
 
   return { allowed: true };
@@ -62,17 +50,12 @@ export function tryAcquireAddDownloadSlot(
     return evaluation;
   }
 
-  if (options.fromExtensionGrab) {
-    recentExtensionGrabTimestamps.push(Date.now());
-  }
-
-  openAddDownloadWindowCount += 1;
+  recentAddDownloadOpenTimestamps.push(Date.now());
   return { allowed: true };
 }
 
-export function releaseAddDownloadSlot(): void {
-  openAddDownloadWindowCount = Math.max(0, openAddDownloadWindowCount - 1);
-}
+/** No-op: rate limiting is based on open timestamps, not concurrent window count. */
+export function releaseAddDownloadSlot(): void {}
 
 export function isAddDownloadPopupHash(hash: string): boolean {
   return hash.includes("/popup/add-download/");
@@ -80,6 +63,5 @@ export function isAddDownloadPopupHash(hash: string): boolean {
 
 /** Reset guard state (tests only). */
 export function resetAddDownloadWindowGuardForTests(): void {
-  openAddDownloadWindowCount = 0;
-  recentExtensionGrabTimestamps.length = 0;
+  recentAddDownloadOpenTimestamps.length = 0;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { FontAwesomeIcon } from "@/icons";
 import { faChevronRight } from "@fortawesome/free-solid-svg-icons";
@@ -30,6 +30,24 @@ interface ContextMenuListProps {
 
 function ContextMenuList({ items, onClose, nested = false }: ContextMenuListProps) {
   const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
+  const closeSubmenuTimerRef = useRef<number | null>(null);
+
+  const clearCloseSubmenuTimer = () => {
+    if (closeSubmenuTimerRef.current !== null) {
+      window.clearTimeout(closeSubmenuTimerRef.current);
+      closeSubmenuTimerRef.current = null;
+    }
+  };
+
+  const scheduleCloseSubmenu = () => {
+    clearCloseSubmenuTimer();
+    closeSubmenuTimerRef.current = window.setTimeout(() => {
+      setOpenSubmenuId(null);
+      closeSubmenuTimerRef.current = null;
+    }, 200);
+  };
+
+  useEffect(() => () => clearCloseSubmenuTimer(), []);
 
   return (
     <ul
@@ -45,10 +63,17 @@ function ContextMenuList({ items, onClose, nested = false }: ContextMenuListProp
               className="avar-context-menu__submenu-wrap"
               onMouseEnter={() => {
                 if (!item.disabled) {
+                  clearCloseSubmenuTimer();
                   setOpenSubmenuId(item.id);
                 }
               }}
-              onMouseLeave={() => setOpenSubmenuId(null)}
+              onMouseLeave={(event: ReactMouseEvent<HTMLLIElement>) => {
+                const related = event.relatedTarget;
+                if (related instanceof Node && event.currentTarget.contains(related)) {
+                  return;
+                }
+                scheduleCloseSubmenu();
+              }}
             >
               <button
                 type="button"
@@ -70,7 +95,11 @@ function ContextMenuList({ items, onClose, nested = false }: ContextMenuListProp
                 <FontAwesomeIcon icon={faChevronRight} className="avar-context-menu__chevron" />
               </button>
               {openSubmenuId === item.id ? (
-                <ContextMenuList items={item.children} onClose={onClose} nested />
+                <ContextMenuList
+                  items={item.children}
+                  onClose={onClose}
+                  nested
+                />
               ) : null}
             </li>
           );

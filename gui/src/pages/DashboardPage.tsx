@@ -23,7 +23,7 @@ import { useLayoutStore } from "@/stores/layoutStore";
 import { createDefaultQueueInfo, withDefaultQueue } from "@/queue/defaultQueue";
 import { filterDownloadsBySearch } from "@/lib/downloadSearch";
 import {
-  collectDownloadStatuses,
+  allDownloadFilterStatuses,
   filterDownloadsByStatus,
   sortDownloads,
   type DownloadSort,
@@ -124,10 +124,7 @@ function DownloadPanel({
   const [sort, setSort] = useState<DownloadSort>({ key: null, direction: "asc" });
   const [page, setPage] = useState(1);
 
-  const availableStatuses = useMemo(
-    () => collectDownloadStatuses(queueDownloads),
-    [queueDownloads],
-  );
+  const availableStatuses = useMemo(() => allDownloadFilterStatuses(), []);
 
   const filteredDownloads = useMemo(() => {
     const searched = filterDownloadsBySearch(queueDownloads, searchQuery);

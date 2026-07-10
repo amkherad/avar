@@ -124,7 +124,32 @@ AVAR_TEST(queue_stop_resets_downloading_items) {
 
     char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, 0, AVAR_FIELD_STATUS);
     AVAR_ASSERT_NOT_NULL(status);
-    AVAR_ASSERT_STR_EQ(status, AVAR_DL_STATUS_QUEUED);
+    AVAR_ASSERT_STR_EQ(status, AVAR_DL_STATUS_STOPPED);
+    free(status);
+
+    free(id);
+}
+
+AVAR_TEST(queue_stop_resets_paused_items) {
+    setup_temp_config();
+
+    char *id = NULL;
+    AVAR_ASSERT_EQ(queue_add("stop-paused", NULL, &id), QueueErrorNone);
+    AVAR_ASSERT_NOT_NULL(id);
+
+    char item_json[256];
+    snprintf(item_json, sizeof item_json,
+             "{\"" AVAR_FIELD_ID "\":\"dl-paused\",\"" AVAR_FIELD_URL
+             "\":\"https://example.com\",\"" AVAR_FIELD_QUEUE_ID "\":\"%s\",\""
+             AVAR_FIELD_STATUS "\":\"" AVAR_DL_STATUS_PAUSED "\"}",
+             id);
+    AVAR_ASSERT_EQ(append_config_array_item(AVAR_CFG_DM_ITEMS, item_json), 0);
+
+    AVAR_ASSERT_EQ(queue_stop(id), QueueErrorNone);
+
+    char *status = get_config_array_item_field(AVAR_CFG_DM_ITEMS, 0, AVAR_FIELD_STATUS);
+    AVAR_ASSERT_NOT_NULL(status);
+    AVAR_ASSERT_STR_EQ(status, AVAR_DL_STATUS_STOPPED);
     free(status);
 
     free(id);
@@ -234,6 +259,7 @@ AVAR_TEST_MAIN(
         run_queue_remove_detaches_items();
         run_queue_remove_purges_items();
         run_queue_stop_resets_downloading_items();
+        run_queue_stop_resets_paused_items();
         run_queue_is_started_tracks_scheduler_flag();
         run_queue_sync_started_state_stops_when_no_active_work();
         run_queue_sync_started_state_keeps_running_with_queued_items();

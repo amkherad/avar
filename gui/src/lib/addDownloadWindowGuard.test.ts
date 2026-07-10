@@ -1,12 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  EXTENSION_GRAB_WINDOW_MS,
-  MAX_EXTENSION_GRABS_IN_WINDOW,
-  MAX_OPEN_ADD_DOWNLOAD_WINDOWS,
-  countOpenAddDownloadWindows,
-  countRecentExtensionGrabs,
-  releaseAddDownloadSlot,
+  ADD_DOWNLOAD_OPEN_WINDOW_MS,
+  MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW,
+  countRecentAddDownloadOpens,
   resetAddDownloadWindowGuardForTests,
   tryAcquireAddDownloadSlot,
 } from "@/lib/addDownloadWindowGuard";
@@ -20,57 +17,61 @@ describe("addDownloadWindowGuard", () => {
     vi.useRealTimers();
   });
 
-  it("allows manual opens until the concurrent window limit is reached", () => {
-    for (let i = 0; i < MAX_OPEN_ADD_DOWNLOAD_WINDOWS; i += 1) {
+  it("allows opens until the sliding-window limit is reached", () => {
+    for (let i = 0; i < MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW; i += 1) {
       expect(tryAcquireAddDownloadSlot()).toEqual({ allowed: true });
     }
 
     expect(tryAcquireAddDownloadSlot()).toEqual({
       allowed: false,
-      reason: "tooManyOpen",
+      reason: "rateLimited",
     });
-    expect(countOpenAddDownloadWindows()).toBe(MAX_OPEN_ADD_DOWNLOAD_WINDOWS);
+    expect(countRecentAddDownloadOpens()).toBe(MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW);
   });
 
-  it("releases slots when an add-download window closes", () => {
-    for (let i = 0; i < MAX_OPEN_ADD_DOWNLOAD_WINDOWS; i += 1) {
+  it("does not free slots when an add-download window closes", () => {
+    for (let i = 0; i < MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW; i += 1) {
       tryAcquireAddDownloadSlot();
     }
-    releaseAddDownloadSlot();
 
-    expect(tryAcquireAddDownloadSlot()).toEqual({ allowed: true });
+    expect(tryAcquireAddDownloadSlot()).toEqual({
+      allowed: false,
+      reason: "rateLimited",
+    });
   });
 
-  it("rate-limits extension grabs within the sliding window", () => {
-    for (let i = 0; i < MAX_EXTENSION_GRABS_IN_WINDOW; i += 1) {
+  it("rate-limits manual and extension opens with the same sliding window", () => {
+    for (let i = 0; i < MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW; i += 1) {
       expect(tryAcquireAddDownloadSlot({ fromExtensionGrab: true })).toEqual({ allowed: true });
-      releaseAddDownloadSlot();
     }
 
+    expect(tryAcquireAddDownloadSlot()).toEqual({
+      allowed: false,
+      reason: "rateLimited",
+    });
     expect(tryAcquireAddDownloadSlot({ fromExtensionGrab: true })).toEqual({
       allowed: false,
-      reason: "grabRateLimited",
+      reason: "rateLimited",
     });
-    expect(countRecentExtensionGrabs()).toBe(MAX_EXTENSION_GRABS_IN_WINDOW);
+    expect(countRecentAddDownloadOpens()).toBe(MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW);
   });
 
-  it("allows extension grabs again after the sliding window expires", () => {
+  it("allows opens again after the sliding window expires", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
 
-    for (let i = 0; i < MAX_EXTENSION_GRABS_IN_WINDOW; i += 1) {
-      tryAcquireAddDownloadSlot({ fromExtensionGrab: true });
-      releaseAddDownloadSlot();
+    for (let i = 0; i < MAX_ADD_DOWNLOAD_OPENS_IN_WINDOW; i += 1) {
+      tryAcquireAddDownloadSlot();
     }
 
-    expect(tryAcquireAddDownloadSlot({ fromExtensionGrab: true })).toEqual({
+    expect(tryAcquireAddDownloadSlot()).toEqual({
       allowed: false,
-      reason: "grabRateLimited",
+      reason: "rateLimited",
     });
 
-    vi.advanceTimersByTime(EXTENSION_GRAB_WINDOW_MS + 1);
+    vi.advanceTimersByTime(ADD_DOWNLOAD_OPEN_WINDOW_MS + 1);
 
-    expect(countRecentExtensionGrabs()).toBe(0);
-    expect(tryAcquireAddDownloadSlot({ fromExtensionGrab: true })).toEqual({ allowed: true });
+    expect(countRecentAddDownloadOpens()).toBe(0);
+    expect(tryAcquireAddDownloadSlot()).toEqual({ allowed: true });
   });
 });

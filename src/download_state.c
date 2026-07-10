@@ -1,4 +1,5 @@
 #include <cJSON.h>
+#include <download.h>
 #include <download_state.h>
 #include <download_io.h>
 #include <file-system.h>
@@ -440,6 +441,10 @@ DownloadState *download_state_load(const char *path) {
     state->temp_path = json_get_string(root, AVAR_STATE_FIELD_TEMP_PATH);
     state->dest_path = json_get_string(root, AVAR_STATE_FIELD_DEST_PATH);
     state->status = json_get_string(root, AVAR_FIELD_STATUS);
+    if (state->status != NULL && !download_status_is_valid(state->status)) {
+        free(state->status);
+        state->status = NULL;
+    }
     state->proxy = json_get_string(root, AVAR_FIELD_PROXY);
     state->queued_at = json_get_string(root, AVAR_FIELD_QUEUED_AT);
     state->last_try_at = json_get_string(root, AVAR_FIELD_LAST_TRY_AT);

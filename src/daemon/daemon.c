@@ -740,7 +740,8 @@ int daemon_start(const DaemonConfig *cfg) {
         }
 
         if (auto_shutdown_idle) {
-            const bool downloads_idle = download_active_count() == 0U;
+            const bool downloads_idle =
+                    download_active_count() == 0U && download_active_list(NULL, 0U) == 0U;
             const bool clients_idle = !daemon_rpc_frontend_clients_active(
                     _runtime.cfg.server.auto_shutdown_idle_seconds);
             if (downloads_idle && clients_idle) {

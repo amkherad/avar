@@ -72,7 +72,7 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
   const [showCheckboxes, setShowCheckboxes] = useState(true);
 
   const isManage = mode === "manage";
-  const showDelete = isManage;
+  const showDelete = true;
   const showModify = isManage || Boolean(onModifyQueue);
   const selectable = !isManage;
 

@@ -2,11 +2,38 @@
  * Intercept native browser downloads and forward them to Avar.
  */
 
+const STARTUP_GRACE_MS = 15_000;
+
 function createDownloadIntercept(api, handlers) {
   const { openSingleAdd, requireReachableBridge } = handlers;
 
+  const sessionBootMs = Date.now();
+  let suppressUntilMs = sessionBootMs + STARTUP_GRACE_MS;
+
   /** @type {Map<string, number>} */
   const recentUrls = new Map();
+
+  function markStartupGrace() {
+    suppressUntilMs = Date.now() + STARTUP_GRACE_MS;
+  }
+
+  function isWithinStartupGrace() {
+    return Date.now() < suppressUntilMs;
+  }
+
+  function isSessionRestoredDownload(downloadItem) {
+    const startTime = downloadItem?.startTime;
+    if (typeof startTime !== "number" || !Number.isFinite(startTime) || startTime <= 0) {
+      return false;
+    }
+    // Downloads that began before this background session are usually resumed
+    // after browser restart — do not re-forward them to Avar.
+    return startTime < sessionBootMs - 1000;
+  }
+
+  function shouldDeferIntercept(downloadItem) {
+    return isWithinStartupGrace() || isSessionRestoredDownload(downloadItem);
+  }
 
   function shouldInterceptUrl(url) {
     if (!url) {
@@ -94,6 +121,10 @@ function createDownloadIntercept(api, handlers) {
       return;
     }
 
+    if (shouldDeferIntercept(downloadItem)) {
+      return;
+    }
+
     const url = downloadItem.finalUrl || downloadItem.url;
     if (!shouldInterceptUrl(url)) {
       return;
@@ -156,6 +187,11 @@ function createDownloadIntercept(api, handlers) {
   function installListeners() {
     if (!api.downloads?.onCreated) {
       return;
+    }
+    if (api.runtime?.onStartup) {
+      api.runtime.onStartup.addListener(() => {
+        markStartupGrace();
+      });
     }
     api.downloads.onCreated.addListener((item) => {
       void handleDownloadCreated(item);

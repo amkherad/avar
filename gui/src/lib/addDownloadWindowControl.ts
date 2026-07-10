@@ -14,10 +14,8 @@ export interface OpenAddDownloadPopupOptions {
 
 function guardReasonMessage(reason: AddDownloadWindowGuardReason): string {
   switch (reason) {
-    case "tooManyOpen":
-      return i18n.t("download.tooManyAddWindows");
-    case "grabRateLimited":
-      return i18n.t("download.grabRateLimited");
+    case "rateLimited":
+      return i18n.t("download.addDownloadRateLimited");
   }
 }
 
