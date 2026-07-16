@@ -48,6 +48,7 @@
     "deleteConfirm": "Remove this queue? Downloads will be detached.",
     "manage": "Manage",
     "modify": "Modify queue",
+    "rename": "Rename queue",
     "manageTitle": "Manage queues",
     "manageHint": "Create, start, stop, or remove download queues.",
     "defaultName": "Default",

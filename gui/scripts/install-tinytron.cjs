@@ -38,7 +38,8 @@ function resolveNodeGyp() {
 
 run("npm", [
   "install",
-  `tinytron@${tinytronVersion}`,
+  `tinytron@${tinyt
+  ronVersion}`,
   "--no-save",
   "--ignore-scripts",
 ]);

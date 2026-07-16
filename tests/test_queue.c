@@ -61,6 +61,40 @@ AVAR_TEST(queue_edit_and_resolve) {
     free(id);
 }
 
+AVAR_TEST(queue_edit_rename) {
+    setup_temp_config();
+
+    char *id = NULL;
+    AVAR_ASSERT_EQ(queue_add("work", NULL, &id), QueueErrorNone);
+    AVAR_ASSERT_NOT_NULL(id);
+
+    QueuePatch patch = {.set_name = true, .name = "projects"};
+    AVAR_ASSERT_EQ(queue_edit(id, &patch), QueueErrorNone);
+
+    char *resolved = queue_resolve_id("projects", true);
+    AVAR_ASSERT_NOT_NULL(resolved);
+    AVAR_ASSERT_STR_EQ(resolved, id);
+    free(resolved);
+
+    char *name = queue_name_at(0);
+    AVAR_ASSERT_NOT_NULL(name);
+    AVAR_ASSERT_STR_EQ(name, "projects");
+    free(name);
+
+    QueuePatch duplicate = {.set_name = true, .name = "projects"};
+    AVAR_ASSERT_EQ(queue_edit(id, &duplicate), QueueErrorNone);
+
+    char *other_id = NULL;
+    AVAR_ASSERT_EQ(queue_add("archive", NULL, &other_id), QueueErrorNone);
+    AVAR_ASSERT_NOT_NULL(other_id);
+
+    QueuePatch conflict = {.set_name = true, .name = "projects"};
+    AVAR_ASSERT_EQ(queue_edit(other_id, &conflict), QueueErrorDuplicateName);
+
+    free(other_id);
+    free(id);
+}
+
 AVAR_TEST(queue_remove_detaches_items) {
     setup_temp_config();
 
@@ -256,6 +290,7 @@ AVAR_TEST(queue_sync_started_state_stops_after_last_downloading_item) {
 AVAR_TEST_MAIN(
         run_queue_add_and_list();
         run_queue_edit_and_resolve();
+        run_queue_edit_rename();
         run_queue_remove_detaches_items();
         run_queue_remove_purges_items();
         run_queue_stop_resets_downloading_items();

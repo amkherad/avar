@@ -164,11 +164,15 @@ static int build_queue_options(arg_str_t *description, arg_str_t *max_concurrent
     return EXIT_SUCCESS;
 }
 
-static int build_queue_patch(arg_str_t *description, arg_str_t *max_concurrent,
+static int build_queue_patch(arg_str_t *name, arg_str_t *description, arg_str_t *max_concurrent,
                              arg_str_t *max_connections, arg_str_t *temp_path,
                              arg_str_t *download_path, QueuePatch *out) {
     QueuePatch patch = {0};
 
+    if (name->count > 0) {
+        patch.set_name = true;
+        patch.name = name->sval[0];
+    }
     if (description->count > 0) {
         patch.set_description = true;
         patch.description = description->sval[0];
@@ -310,6 +314,7 @@ static int handle_queue_edit(int argc, char *argv[]) {
     }
 
     arg_str_t *id = arg_str1(NULL, NULL, "ID", "queue id");
+    arg_str_t *name = arg_str0(NULL, "name", "NAME", "queue name");
     arg_str_t *description = arg_str0(NULL, "description", "TEXT", "queue description");
     arg_str_t *max_concurrent =
         arg_str0(NULL, "maxConcurrentDownloads", "N", "max concurrent downloads");
@@ -318,7 +323,7 @@ static int handle_queue_edit(int argc, char *argv[]) {
     arg_str_t *download_path = arg_str0(NULL, "downloadPath", "PATH", "override save path");
     arg_lit_t *help = arg_lit0("h", "help", "show help");
     arg_end_t *end = arg_end(20);
-    void *argtable[] = {id,          description, max_concurrent, max_connections,
+    void *argtable[] = {id,          name,        description, max_concurrent, max_connections,
                         temp_path,   download_path, help,           end};
 
     bool help_requested = false;
@@ -338,14 +343,14 @@ static int handle_queue_edit(int argc, char *argv[]) {
     }
 
     QueuePatch patch = {0};
-    if (build_queue_patch(description, max_concurrent, max_connections, temp_path, download_path,
+    if (build_queue_patch(name, description, max_concurrent, max_connections, temp_path, download_path,
                           &patch) != EXIT_SUCCESS) {
         cli_free_subargv(sub_argv);
         arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);
         return EXIT_FAILURE;
     }
 
-    if (!patch.set_description && !patch.set_max_concurrent_downloads &&
+    if (!patch.set_name && !patch.set_description && !patch.set_max_concurrent_downloads &&
         !patch.set_max_connections && !patch.set_temp_path && !patch.set_download_path) {
         cli_free_subargv(sub_argv);
         arg_freetable(argtable, sizeof argtable / sizeof argtable[0]);

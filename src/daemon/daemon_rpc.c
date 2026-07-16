@@ -906,6 +906,12 @@ static QueuePatch parse_queue_patch(cJSON *params) {
         return patch;
     }
 
+    const cJSON *name = cJSON_GetObjectItemCaseSensitive(params, AVAR_QUEUE_FIELD_NAME);
+    if (cJSON_IsString(name) && name->valuestring != NULL) {
+        patch.set_name = true;
+        patch.name = name->valuestring;
+    }
+
     const cJSON *description = cJSON_GetObjectItemCaseSensitive(params, AVAR_FIELD_DESCRIPTION);
     if (cJSON_IsString(description)) {
         patch.set_description = true;

@@ -328,11 +328,11 @@ export function QueuePanel({ mode = "select", onManageQueues, onModifyQueue }: Q
             compact
             showDelete={showDelete}
             selectable={selectable}
-            showModify={mode === "select" && Boolean(onModifyQueue)}
+            showModify
             onSelect={setSelectedQueueId}
             onStart={(id) => void runQueueAction(id, "start", () => client!.startQueue(id))}
             onStop={(id) => void runQueueAction(id, "stop", () => client!.stopQueue(id))}
-            onModify={onModifyQueue}
+            onModify={handleModify}
             onDelete={(id) => void confirmDelete([id])}
             busyId={busyId}
           />

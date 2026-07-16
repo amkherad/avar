@@ -214,7 +214,7 @@ export class DaemonClient {
 
   async editQueue(
     id: string,
-    patch: Partial<Pick<QueueAddParams, "description">>,
+    patch: Partial<Pick<QueueAddParams, "name" | "description">>,
   ): Promise<void> {
     const result = await this.rpc<QueueRpcResult>("queue.edit", { id, ...patch });
     if (result.exitCode !== 0) {

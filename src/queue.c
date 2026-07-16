@@ -366,6 +366,27 @@ QueueError queue_edit(const char *id, const QueuePatch *patch) {
         return QueueErrorPersist;
     }
 
+    if (patch->set_name) {
+        if (patch->name == NULL || patch->name[0] == '\0') {
+            cJSON_Delete(obj);
+            return QueueErrorInvalidArg;
+        }
+
+        if (strlen(patch->name) >= AVAR_QUEUE_NAME_MAX) {
+            cJSON_Delete(obj);
+            return QueueErrorInvalidArg;
+        }
+
+        const int duplicate_index = queue_find_index(AVAR_QUEUE_FIELD_NAME, patch->name);
+        if (duplicate_index >= 0 && duplicate_index != index) {
+            cJSON_Delete(obj);
+            return QueueErrorDuplicateName;
+        }
+
+        cJSON_ReplaceItemInObjectCaseSensitive(obj, AVAR_QUEUE_FIELD_NAME,
+                                               cJSON_CreateString(patch->name));
+    }
+
     if (patch->set_description) {
         if (patch->description != NULL) {
             cJSON_ReplaceItemInObjectCaseSensitive(obj, AVAR_FIELD_DESCRIPTION,

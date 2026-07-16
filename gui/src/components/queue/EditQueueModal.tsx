@@ -17,28 +17,45 @@ export interface EditQueueModalProps {
 export function EditQueueModal({ queue, open, onClose, onSaved }: EditQueueModalProps) {
   const { t } = useTranslation();
   const client = useConnectionStore((s) => s.client);
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (queue && open) {
+      setName(queue.name);
       setDescription(queue.description ?? "");
       setError(null);
     }
   }, [queue, open]);
 
   async function handleSave() {
-    if (!client || !queue) {
+    if (!client || !queue || !name.trim()) {
       return;
     }
+
+    const trimmedName = name.trim();
+    const trimmedDescription = description.trim();
+    const patch: { name?: string; description?: string } = {};
+
+    if (trimmedName !== queue.name) {
+      patch.name = trimmedName;
+    }
+    if (trimmedDescription !== (queue.description ?? "")) {
+      patch.description = trimmedDescription || undefined;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      onClose();
+      return;
+    }
+
     setSaving(true);
     setError(null);
     try {
-      await client.editQueue(queue.id, {
-        description: description.trim() || undefined,
-      });
-      appLogger.gui.info("Queue updated", queue.name);
+      await client.editQueue(queue.id, patch);
+      appLogger.gui.info("Queue updated", queue.id);
       onSaved();
       onClose();
     } catch (err) {
@@ -51,7 +68,7 @@ export function EditQueueModal({ queue, open, onClose, onSaved }: EditQueueModal
   return (
     <Modal
       open={open}
-      title={t("queue.modify")}
+      title={t("queue.rename")}
       onClose={onClose}
       footer={
         <>
@@ -64,7 +81,12 @@ export function EditQueueModal({ queue, open, onClose, onSaved }: EditQueueModal
         </>
       }
     >
-      <Input label={t("queue.name")} value={queue?.name ?? ""} readOnly disabled />
+      <Input
+        label={t("queue.name")}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        autoFocus
+      />
       <Input
         label={t("queue.description")}
         value={description}

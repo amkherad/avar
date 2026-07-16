@@ -23,6 +23,9 @@ typedef struct QueueOptions {
 } QueueOptions;
 
 typedef struct QueuePatch {
+    bool set_name;
+    const char *name;
+
     bool set_description;
     const char *description;
 

@@ -21,7 +21,8 @@ const docsUrl = "https://www.electron.build/multi-platform-build";
 const DESKTOP_TARGETS = [
   { id: "mac", flag: "--mac", hosts: ["darwin"], label: "macOS" },
   { id: "win", flag: "--win", hosts: ["darwin", "linux", "win32"], label: "Windows" },
-  { id: "linux", flag: "--linux", hosts: ["darwin", "linux", "win32"], label: "Linux" },
+  // AppImage packaging uses symlinks; cross-building Linux on Windows fails with EPERM.
+  { id: "linux", flag: "--linux", hosts: ["darwin", "linux"], label: "Linux" },
 ];
 
 /** @type {Record<string, string>} */

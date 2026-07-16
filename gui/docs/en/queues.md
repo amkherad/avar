@@ -6,7 +6,7 @@ Queues organize downloads and control scheduling.
 
 The left sidebar lists queues in a **compact** view — only the queue name is shown. Hover a queue to see its description, running/stopped status, and download count.
 
-Click a queue to filter the download list. Use **Manage** to open queue management in **Settings**.
+Click a queue to filter the download list. Right-click a queue and choose **Rename** to change its name or description. Use **Manage** to open queue management in **Settings**.
 
 ## ⚙️ Settings → Queues
 
@@ -30,7 +30,7 @@ When one or more queues are selected, the toolbar shows **Start**, **Stop**, and
 | **Start** | Begin processing downloads in the queue |
 | **Stop** | Pause the queue |
 | **Add** | Create a new queue |
-| **Modify** | Edit queue description |
+| **Modify** | Edit queue name and description |
 | **Delete** | Remove a queue (downloads are detached) |
 
 The **Default** queue is synthetic and shows downloads without an assigned queue. It cannot be started, stopped, modified, or deleted.

@@ -52,7 +52,6 @@ export function Sidebar({
           <QueuePanel
             mode="select"
             onManageQueues={() => openSettingsCategory("queues")}
-            onModifyQueue={() => openSettingsCategory("queues")}
           />
         );
     }

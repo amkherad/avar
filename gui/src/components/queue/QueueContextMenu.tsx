@@ -6,7 +6,6 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import {
   isDefaultQueue,
   queueHasLifecycleActions,
-  queueIsEditable,
 } from "@/queue/defaultQueue";
 
 export interface QueueContextMenuProps {
@@ -61,8 +60,8 @@ export function QueueContextMenu({
 
     if (!isDefault && showModify && onModify) {
       list.push({
-        id: "modify",
-        label: t("queue.modify"),
+        id: "rename",
+        label: t("queue.rename"),
         icon: faPenToSquare,
         disabled: busy,
         onClick: () => onModify(queue.id),
