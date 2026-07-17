@@ -22,7 +22,7 @@ module.exports = {
   appId: "io.avar.gui",
   productName: "Avar",
   copyright: "Copyright © Ali Kherad",
-  artifactName: "${productName}-${version}-${os}-${arch}-${target}.${ext}",
+  artifactName: "${productName}-${version}-${os}-${arch}.${ext}",
 
   directories: {
     output: "release",
@@ -74,6 +74,7 @@ module.exports = {
     category: "public.app-category.utilities",
     target: ["dmg"],
     icon: "build/icon.png",
+    artifactName: "${productName}-${version}-${os}-${arch}.${ext}",
   },
 
   win: {
@@ -99,5 +100,6 @@ module.exports = {
     category: "Network;FileTransfer",
     synopsis: "Avar Download Manager",
     description: "Cross-platform download manager with segmented transfers, queues, and browser integration.",
+    artifactName: "${productName}-${version}-${os}-${arch}.${ext}",
   },
 };
