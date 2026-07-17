@@ -1,6 +1,7 @@
 ﻿#ifndef AVAR_UTILS_H
 #define AVAR_UTILS_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define stringa     const char  *
