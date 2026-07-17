@@ -1268,11 +1268,12 @@ static int dm_item_upsert(DownloadJob *job, const char *status) {
 
     if (job != NULL && job->item_id != NULL && job->state != NULL) {
         char *config_queue_id = read_config_item_queue_id(job->item_id);
-        free(job->state->queue_id);
-        job->state->queue_id =
-                config_queue_id != NULL && config_queue_id[0] != '\0' ? strdup(config_queue_id)
-                                                                      : NULL;
-        free(config_queue_id);
+        if (config_queue_id != NULL && config_queue_id[0] != '\0') {
+            free(job->state->queue_id);
+            job->state->queue_id = config_queue_id;
+        } else {
+            free(config_queue_id);
+        }
     }
 
     sync_state_metadata(job, normalized);
