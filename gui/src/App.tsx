@@ -9,7 +9,7 @@ import { ConfirmDialogPopupPage } from "@/pages/ConfirmDialogPopupPage";
 import { BatchAddDownloadsPopupPage } from "@/pages/BatchAddDownloadsPopupPage";
 import { AddDownloadPopupPage } from "@/pages/AddDownloadPopupPage";
 import { DownloadDetailPopupPage } from "@/pages/DownloadDetailPopupPage";
-import { useConfigStore } from "@/stores/configStore";
+import { useConfigStore, waitForConfigHydration } from "@/stores/configStore";
 import { useConsoleStore } from "@/stores/consoleStore";
 import { initSyncCoordinator } from "@/sync/syncManager";
 import { initNotificationWatcher } from "@/lib/notificationWatcher";
@@ -144,7 +144,16 @@ function PopupContent() {
 }
 
 export function App() {
+  const [configReady, setConfigReady] = useState(false);
   const isPopup = window.location.hash.startsWith("#/popup/");
+
+  useEffect(() => {
+    void waitForConfigHydration().then(() => setConfigReady(true));
+  }, []);
+
+  if (!configReady) {
+    return null;
+  }
 
   return (
     <ThemeProvider>

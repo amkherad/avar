@@ -1,11 +1,10 @@
 /**
- * Shared desktop-shell environment (Electron, Tiny, future shells).
+ * Shared desktop-shell environment for Electron.
  */
 
 const path = require("node:path");
-const { resolveGuiRoot } = require("./pkg-runtime.cjs");
 
-const guiRoot = resolveGuiRoot();
+const guiRoot = path.join(__dirname, "..");
 
 module.exports = {
   guiRoot,

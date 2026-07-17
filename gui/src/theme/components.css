@@ -1957,7 +1957,7 @@ html.avar-electron:not(.avar-electron-darwin) .avar-header--desktop .avar-window
 
 .avar-data-table__scroll-x {
   min-width: 0;
-  overflow-x: scroll;
+  overflow-x: auto;
   overflow-y: hidden;
 }
 

@@ -67,7 +67,7 @@ export interface AvarSelectDirectoryOptions {
 }
 
 export interface HostInfo {
-  shell: "electron" | "tiny" | "electrobun" | "browser";
+  shell: "electron" | "browser";
   platform?: string;
   versions: Record<string, string>;
 }

@@ -6,7 +6,7 @@ parent: GUI
 
 # Building the GUI
 
-The Avar GUI is a React + Vite application with an optional Electron desktop shell.
+The Avar GUI is a React + Vite application packaged with Electron.
 
 Source code: [{{ site.repo_url }}/tree/main/gui]({{ site.repo_url }}/tree/main/gui)
 
@@ -22,18 +22,16 @@ cd gui
 npm install
 npm run dev          # http://localhost:56000 — proxies /api to daemon
 npm run dev:desktop  # Electron + Vite dev server
-npm run dev:tiny     # Tiny webview experiment + Vite (see gui/tiny/README.md)
 ```
 
-Enable **Use dev proxy** in session settings when using `npm run dev` or `npm run dev:tiny`.
+Enable **Use dev proxy** in session settings when using `npm run dev`.
 
 ## Production builds
 
 ```bash
 npm run build              # Static files in gui/dist/
 npm run build:desktop      # Electron installers for macOS, Windows, Linux
-npm run build:desktop:current  # Package for the current OS only
-npm run start:tiny         # Tiny webview experiment (built SPA)
+npm run build:desktop:current  # Unpacked bundle for the current OS only
 ```
 
 ### Web hosting
@@ -58,12 +56,6 @@ Cross-origin access is enabled by default in the daemon (`daemon.server.cors.ena
 | Linux | AppImage, deb |
 
 For a local unpacked bundle (used by the all-in-one `avar` embed), run `npm run build:desktop:dir`.
-
-### Tiny webview experiment
-
-`gui/tiny/` is an optional minimal shell using a vendored [tinytron](https://github.com/Rafi993/tiny) fork in `gui/third_party/tiny` (Windows, macOS, and Linux). Shared desktop helpers live in `gui/desktop/`. Electron remains the full-featured desktop target; Tiny runs the SPA in web mode without tray, popups, or extension bridge.
-
-CI builds Tiny on Linux and Windows (`tiny-build` job). Tagged releases include `avar-tiny-{os}-{arch}-{version}.zip` artifacts.
 
 ## Embedded GUI (`avar-gui`)
 

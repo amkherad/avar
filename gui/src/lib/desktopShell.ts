@@ -20,7 +20,7 @@ export function isElectronMacDesktop(): boolean {
   return /Mac/i.test(navigator.platform);
 }
 
-/** True when running in any native desktop shell (Electron, Tiny, Electrobun). */
+/** True when running in the Electron desktop shell. */
 export function isDesktopShell(): boolean {
-  return isElectronShell() || window.__AVAR_HOST__?.shell === "tiny" || window.__AVAR_HOST__?.shell === "electrobun";
+  return isElectronShell();
 }

@@ -14,6 +14,8 @@
 #include "queue.h"
 #include "thread_pool.h"
 
+#include "cJSON.h"
+
 #ifndef AVAR_SOURCE_DIR
 #define AVAR_SOURCE_DIR "."
 #endif
@@ -413,6 +415,75 @@ AVAR_TEST(download_lifecycle_resume_unsupported_restart) {
     free(item_id);
 }
 
+AVAR_TEST(download_lifecycle_resume_unsupported_dismiss) {
+    AVAR_ASSERT(setup_paths());
+    thread_pool_reset_global();
+
+    char url[256];
+    build_url("plain.txt", url, sizeof url);
+
+    char *item_id = NULL;
+    AVAR_ASSERT_EQ(download_start_background(url, NULL, "noresume-dismiss", &item_id), EXIT_SUCCESS);
+    AVAR_ASSERT_NOT_NULL(item_id);
+    AVAR_ASSERT(wait_for_item_status(item_id, AVAR_DL_STATUS_COMPLETED, 60000U));
+    AVAR_ASSERT(download_wait_idle(60000U));
+    AVAR_ASSERT_EQ(download_stop(item_id), EXIT_SUCCESS);
+    AVAR_ASSERT(wait_for_item_status(item_id, AVAR_DL_STATUS_STOPPED, 60000U));
+    AVAR_ASSERT(download_wait_idle(60000U));
+
+    char state_path[768];
+    snprintf(state_path, sizeof state_path, "%s%c%s%c%s", g_temp_dir, PATH_SEPARATOR, item_id,
+             PATH_SEPARATOR, "state.json");
+    DownloadState *state = download_state_load(state_path);
+    AVAR_ASSERT_NOT_NULL(state);
+    free(state->description);
+    state->description = strdup(AVAR_DL_DESC_RESUME_UNSUPPORTED);
+    AVAR_ASSERT_EQ(download_state_save(state, state_path), 0);
+    download_state_free(state);
+
+    int config_index = -1;
+    const size_t item_count = get_config_array_size(AVAR_CFG_DM_ITEMS);
+    for (size_t i = 0; i < item_count; ++i) {
+        char *id = get_config_array_item_field(AVAR_CFG_DM_ITEMS, i, AVAR_FIELD_ID);
+        if (id != NULL && strcmp(id, item_id) == 0) {
+            config_index = (int)i;
+        }
+        free(id);
+        if (config_index >= 0) {
+            break;
+        }
+    }
+    AVAR_ASSERT(config_index >= 0);
+
+    char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, (size_t)config_index);
+    AVAR_ASSERT_NOT_NULL(json);
+    cJSON *obj = cJSON_Parse(json);
+    free(json);
+    AVAR_ASSERT_NOT_NULL(obj);
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_DESCRIPTION);
+    cJSON_AddNullToObject(obj, AVAR_FIELD_DESCRIPTION);
+    char *updated = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    AVAR_ASSERT_NOT_NULL(updated);
+    AVAR_ASSERT_EQ(replace_config_array_item_at(AVAR_CFG_DM_ITEMS, (size_t)config_index, updated), 0);
+    cJSON_free(updated);
+
+    AVAR_ASSERT_EQ(download_dismiss_resume_prompt(item_id), EXIT_SUCCESS);
+
+    state = download_item_state_load(item_id);
+    AVAR_ASSERT_NOT_NULL(state);
+    AVAR_ASSERT_NULL(state->description);
+    download_state_free(state);
+
+    char *config_description = find_item_field(item_id, AVAR_FIELD_DESCRIPTION);
+    AVAR_ASSERT(config_description == NULL || config_description[0] == '\0');
+    free(config_description);
+
+    thread_pool_reset_global();
+    AVAR_ASSERT_EQ(download_remove(item_id, true, true, false), EXIT_SUCCESS);
+    free(item_id);
+}
+
 AVAR_TEST(download_lifecycle_invalid_operations) {
     AVAR_ASSERT_EQ(download_pause(NULL), EXIT_FAILURE);
     AVAR_ASSERT_EQ(download_resume("missing"), EXIT_FAILURE);
@@ -428,5 +499,6 @@ AVAR_TEST_MAIN(
         run_download_lifecycle_resume_interrupted();
         run_download_lifecycle_resume_interrupted_started_queue();
         run_download_lifecycle_resume_unsupported_restart();
+        run_download_lifecycle_resume_unsupported_dismiss();
         run_download_lifecycle_invalid_operations();
         test_guard_http_server_stop(&g_http_server);)

@@ -1,6 +1,6 @@
 # Avar GUI
 
-React single-page application for the Avar download manager. Connects to the daemon over HTTP JSON-RPC.
+React single-page application for the Avar download manager, packaged as an Electron desktop app. Connects to the daemon over HTTP JSON-RPC.
 
 ## Prerequisites
 
@@ -18,21 +18,21 @@ cd gui
 npm install
 npm run dev          # http://localhost:56000 (proxies /api to daemon)
 npm run dev:desktop  # Electron + Vite dev server
-npm run dev:tiny     # Tiny webview experiment + Vite dev server
 ```
 
 ## Production builds
 
 ```bash
-npm run build              # Static files in dist/ — host on any static file server
+npm run build              # Static files in dist/ (bundled into Electron)
 npm run build:desktop      # Electron installers for macOS, Windows, and Linux
-npm run build:desktop:current  # Package for the current OS only
-npm run start:tiny       # Tiny webview experiment (production build)
+npm run build:desktop:current  # Unpacked Electron bundle for the current OS (gui/release/)
 ```
+
+Desktop installers and unpacked bundles are written to `gui/release/`.
 
 ### Web hosting
 
-Serve `dist/` as static files. Configure the GUI session with the daemon base URL (e.g. `http://your-host:8000`). For local development, enable **Use dev proxy** in session settings so requests go through Vite's `/api` proxy.
+You can also serve `dist/` as static files from any web server. Configure the GUI session with the daemon base URL (e.g. `http://your-host:8000`). For local development, enable **Use dev proxy** in session settings so requests go through Vite's `/api` proxy.
 
 Cross-origin browser access is enabled by default (`daemon.server.cors.enabled: true`, `allowOrigin: "*"`). Disable or restrict origins in `config.json` for production.
 

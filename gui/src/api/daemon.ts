@@ -501,12 +501,15 @@ export class DaemonClient {
 
   async getConfig(key: string, defaultValue?: string): Promise<string | null> {
     const argv = ["avar", "config", "get", key];
-    if (defaultValue !== undefined) {
+    if (defaultValue !== undefined && defaultValue !== "") {
       argv.push(`--defaultValue=${defaultValue}`);
     }
     const result = await this.cliExec(argv);
     if (result.exitCode !== 0) {
-      return defaultValue ?? null;
+      if (defaultValue !== undefined) {
+        return defaultValue;
+      }
+      throw new DaemonApiError(`Failed to read config ${key}`, result.exitCode);
     }
     if (result.output === undefined || result.output === null) {
       return defaultValue ?? null;
@@ -515,7 +518,11 @@ export class DaemonClient {
   }
 
   async setConfig(key: string, value: string): Promise<void> {
-    const result = await this.cliExec(["avar", "config", "set", key, value]);
+    const argv =
+      value === ""
+        ? ["avar", "config", "reset", key]
+        : ["avar", "config", "set", key, value];
+    const result = await this.cliExec(argv);
     if (result.exitCode !== 0) {
       throw new DaemonApiError(`Failed to set config ${key}`, result.exitCode);
     }

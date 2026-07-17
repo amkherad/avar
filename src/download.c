@@ -5337,23 +5337,92 @@ char *download_item_authoritative_queue_id(const char *item_id) {
     return read_config_item_queue_id(item_id);
 }
 
+static int clear_config_item_description(const char *item_id) {
+    if (item_id == NULL) {
+        return -1;
+    }
+
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return -1;
+    }
+
+    char *json = get_config_array_item_json(AVAR_CFG_DM_ITEMS, (size_t)index);
+    if (json == NULL) {
+        return -1;
+    }
+
+    cJSON *obj = cJSON_Parse(json);
+    free(json);
+    if (obj == NULL) {
+        return -1;
+    }
+
+    cJSON_DeleteItemFromObjectCaseSensitive(obj, AVAR_FIELD_DESCRIPTION);
+    cJSON_AddNullToObject(obj, AVAR_FIELD_DESCRIPTION);
+
+    char *updated = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    if (updated == NULL) {
+        return -1;
+    }
+
+    const int rc = replace_config_array_item_at(AVAR_CFG_DM_ITEMS, (size_t)index, updated);
+    cJSON_free(updated);
+    return rc;
+}
+
+static bool item_has_resume_unsupported_description(const char *item_id) {
+    if (item_id == NULL) {
+        return false;
+    }
+
+    DownloadState *state = download_item_state_load(item_id);
+    if (state != NULL) {
+        const bool from_state = state->description != NULL
+                                && strcmp(state->description, AVAR_DL_DESC_RESUME_UNSUPPORTED) == 0;
+        download_state_free(state);
+        if (from_state) {
+            return true;
+        }
+    }
+
+    const int index = find_download_item_index(item_id, true);
+    if (index < 0) {
+        return false;
+    }
+
+    char *description =
+            get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_DESCRIPTION);
+    const bool from_config = description != NULL
+                             && strcmp(description, AVAR_DL_DESC_RESUME_UNSUPPORTED) == 0;
+    free(description);
+    return from_config;
+}
+
 static int clear_download_item_description(const char *item_id) {
     if (item_id == NULL) {
         return -1;
     }
 
+    int rc = 0;
+
     char *state_path = download_item_state_path(item_id);
     DownloadState *state = state_path != NULL ? download_state_load(state_path) : NULL;
-    if (state == NULL) {
-        free(state_path);
-        return -1;
+    if (state != NULL) {
+        free(state->description);
+        state->description = NULL;
+        if (download_state_save(state, state_path) != 0) {
+            rc = -1;
+        }
+        download_state_free(state);
+    }
+    free(state_path);
+
+    if (clear_config_item_description(item_id) != 0) {
+        rc = -1;
     }
 
-    free(state->description);
-    state->description = NULL;
-    const int rc = download_state_save(state, state_path);
-    download_state_free(state);
-    free(state_path);
     return rc;
 }
 
@@ -5457,17 +5526,7 @@ int download_dismiss_resume_prompt(const char *id) {
         return EXIT_FAILURE;
     }
 
-    const int index = find_download_item_index(id, true);
-    if (index < 0) {
-        return EXIT_FAILURE;
-    }
-
-    char *description =
-            get_config_array_item_field(AVAR_CFG_DM_ITEMS, (size_t)index, AVAR_FIELD_DESCRIPTION);
-    const bool resume_prompt = description != NULL
-                               && strcmp(description, AVAR_DL_DESC_RESUME_UNSUPPORTED) == 0;
-    free(description);
-    if (!resume_prompt) {
+    if (!item_has_resume_unsupported_description(id)) {
         return EXIT_FAILURE;
     }
 

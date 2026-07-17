@@ -20,6 +20,11 @@ interface ConfigState {
   getSessionWithSecrets: (session: GuiSession) => GuiSession;
 }
 
+type PersistedConfigSlice = {
+  config?: Partial<GuiConfig>;
+  sessionSecrets?: Record<string, string>;
+};
+
 function mergeConfig(partial: Partial<GuiConfig>): GuiConfig {
   const defaults = defaultGuiConfig();
   return {
@@ -36,6 +41,68 @@ function stripSecrets(config: GuiConfig): GuiConfig {
     ...config,
     sessions: config.sessions.map(({ authToken: _authToken, ...session }) => session),
   };
+}
+
+function isFlatGuiConfig(value: Record<string, unknown>): boolean {
+  return (
+    ("theme" in value || "locale" in value || "sessions" in value || "shortcuts" in value) &&
+    !("config" in value)
+  );
+}
+
+function normalizePersistedSlice(persisted: unknown): PersistedConfigSlice | null {
+  if (!persisted || typeof persisted !== "object") {
+    return null;
+  }
+
+  const record = persisted as Record<string, unknown>;
+  if (record.config && typeof record.config === "object") {
+    return {
+      config: record.config as Partial<GuiConfig>,
+      sessionSecrets:
+        record.sessionSecrets && typeof record.sessionSecrets === "object"
+          ? (record.sessionSecrets as Record<string, string>)
+          : undefined,
+    };
+  }
+
+  if (isFlatGuiConfig(record)) {
+    const { version: _version, sessionSecrets, ...configFields } = record;
+    return {
+      config: configFields as Partial<GuiConfig>,
+      sessionSecrets:
+        sessionSecrets && typeof sessionSecrets === "object"
+          ? (sessionSecrets as Record<string, string>)
+          : undefined,
+    };
+  }
+
+  return null;
+}
+
+function wrapLegacyStorageValue(raw: string): string | null {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object" || "state" in parsed) {
+      return null;
+    }
+
+    const slice = normalizePersistedSlice(parsed);
+    if (!slice?.config) {
+      return null;
+    }
+
+    return JSON.stringify({
+      state: {
+        config: slice.config,
+        sessionSecrets: slice.sessionSecrets ?? {},
+      },
+      version:
+        typeof parsed.version === "number" ? parsed.version : GUI_CONFIG_VERSION,
+    });
+  } catch {
+    return null;
+  }
 }
 
 let configHydrated = false;
@@ -110,23 +177,27 @@ export const useConfigStore = create<ConfigState>()(
       partialize: (state) => ({
         config: stripSecrets(state.config),
         sessionSecrets: state.sessionSecrets,
-        version: GUI_CONFIG_VERSION,
       }),
+      migrate: (persisted) => {
+        const slice = normalizePersistedSlice(persisted);
+        if (slice?.config) {
+          return {
+            config: slice.config,
+            sessionSecrets: slice.sessionSecrets ?? {},
+          };
+        }
+        return persisted as PersistedConfigSlice;
+      },
       merge: (persisted, current) => {
-        const stored = persisted as Partial<{
-          config: Partial<GuiConfig>;
-          sessionSecrets: Record<string, string>;
-        }> | undefined;
-        const next =
-          !stored?.config
-            ? current
-            : {
-                ...current,
-                config: mergeConfig(stored.config),
-                sessionSecrets: stored.sessionSecrets ?? {},
-              };
-        markConfigHydrated();
-        return next;
+        const stored = normalizePersistedSlice(persisted);
+        if (!stored?.config) {
+          return current;
+        }
+        return {
+          ...current,
+          config: mergeConfig(stored.config),
+          sessionSecrets: stored.sessionSecrets ?? {},
+        };
       },
       onRehydrateStorage: () => (_state, error) => {
         if (error) {
@@ -149,7 +220,10 @@ export const useConfigStore = create<ConfigState>()(
               });
             }
           }
-          return raw;
+          if (!raw) {
+            return null;
+          }
+          return wrapLegacyStorageValue(raw) ?? raw;
         },
         setItem: (name, value) => {
           localStorage.setItem(name, value);

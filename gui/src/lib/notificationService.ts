@@ -24,6 +24,10 @@ const NOTIFY_DOWNLOAD_STATUSES = new Set([
 
 const lastNotifiedDownloadStatus = new Map<string, string>();
 
+/** Drop repeated notifications of the same category within this window (batch-op spam guard). */
+const NOTIFY_RATE_LIMIT_MS = 1000;
+const lastShownAtByType = new Map<NotificationCategory | "general", number>();
+
 let permissionRequested = false;
 let connectionNotifyTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingConnectionNotify: (() => void) | null = null;
@@ -49,6 +53,21 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   return Notification.requestPermission();
 }
 
+function notificationTypeKey(notification: AppNotification): NotificationCategory | "general" {
+  return notification.category ?? "general";
+}
+
+function isNotificationRateLimited(notification: AppNotification): boolean {
+  const type = notificationTypeKey(notification);
+  const now = Date.now();
+  const lastShownAt = lastShownAtByType.get(type);
+  if (lastShownAt !== undefined && now - lastShownAt < NOTIFY_RATE_LIMIT_MS) {
+    return true;
+  }
+  lastShownAtByType.set(type, now);
+  return false;
+}
+
 async function showViaServiceWorker(notification: AppNotification): Promise<boolean> {
   const registration = await getServiceWorkerRegistration();
   if (!registration?.showNotification) {
@@ -70,6 +89,11 @@ export async function showNotification(notification: AppNotification): Promise<v
   appLogger.gui.info(`Notification: ${title}`, body);
 
   if (!useConfigStore.getState().config.notificationsEnabled) {
+    return;
+  }
+
+  if (isNotificationRateLimited(notification)) {
+    appLogger.gui.debug("Notification dropped (rate limited)", notificationTypeKey(notification));
     return;
   }
 

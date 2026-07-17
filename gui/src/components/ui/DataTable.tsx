@@ -163,7 +163,8 @@ function computeTableLayout(
   }
 
   const available = scrollWidth > 0 ? scrollWidth : totalPreferred;
-  const useFill = totalPreferred <= available;
+  // Fill the viewport when minimum widths fit; stored widths are fr weights only.
+  const useFill = totalMin <= available;
 
   if (useFill) {
     for (const column of columns) {

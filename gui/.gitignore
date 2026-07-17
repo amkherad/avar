@@ -1,6 +1,4 @@
 node_modules/
 dist/
 release/
-electrobun/build/
-electrobun/artifacts/
 *.log

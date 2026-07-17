@@ -62,7 +62,8 @@ async function runPromptAction(
       dismissedIds.add(download.id);
     } else {
       appLogger.gui.debug("Resume unsupported dismissed", download.filename);
-      dismissedIds.add(download.id);
+      await client.dismissResumePrompt(download.id);
+      handledIds.add(download.id);
     }
   } finally {
     await useDataStore.getState().refresh();

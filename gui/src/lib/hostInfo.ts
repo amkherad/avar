@@ -1,4 +1,4 @@
-export type HostShellId = "electron" | "tiny" | "electrobun" | "browser";
+export type HostShellId = "electron" | "browser";
 
 export interface HostInfo {
   shell: HostShellId;
@@ -6,19 +6,10 @@ export interface HostInfo {
   versions: Record<string, string>;
 }
 
-declare global {
-  interface Window {
-    __AVAR_HOST__?: HostInfo;
-  }
-}
-
 const VERSION_LABEL_KEYS: Record<string, string> = {
   electron: "settings.about.versionElectron",
   chromium: "settings.about.versionChromium",
   node: "settings.about.versionNode",
-  tinytron: "settings.about.versionTinytron",
-  electrobun: "settings.about.versionElectrobun",
-  bun: "settings.about.versionBun",
 };
 
 export function getHostVersionLabelKey(versionKey: string): string {
@@ -33,10 +24,6 @@ export function getHostInfo(): HostInfo {
     }
   }
 
-  if (window.__AVAR_HOST__) {
-    return window.__AVAR_HOST__;
-  }
-
   return {
     shell: "browser",
     versions: {},
@@ -46,10 +33,6 @@ export function getHostInfo(): HostInfo {
 export async function resolveHostInfo(): Promise<HostInfo> {
   if (window.avar?.getHostInfo) {
     return Promise.resolve(window.avar.getHostInfo());
-  }
-
-  if (window.__AVAR_HOST__) {
-    return window.__AVAR_HOST__;
   }
 
   return {
