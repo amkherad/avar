@@ -32,6 +32,7 @@ const {
 const { trayMenuIcon } = require("./tray-menu-icons.cjs");
 const { DAEMON_TARGET } = require("../desktop/env.cjs");
 const { startDaemonProxy, stopDaemonProxy, getProxyBaseUrl } = require("../desktop/daemon-proxy.cjs");
+const { ensureBundledDaemon, stopBundledDaemon } = require("../desktop/bundled-daemon.cjs");
 const {
   extractHashFromUrl,
   loadElectronWindowContent,
@@ -789,13 +790,14 @@ ipcMain.handle("tray:setActiveDownloads", (_event, payload) => {
 });
 
 if (gotTheLock) {
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     if (app.isPackaged) {
       Menu.setApplicationMenu(null);
     }
 
     registerAvarProtocol(app);
 
+    await ensureBundledDaemon(DAEMON_TARGET);
     startExtensionBridge();
     startDaemonProxy();
     createWindow();
@@ -829,6 +831,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  stopBundledDaemon();
   if (extensionBridgeServer) {
     extensionBridgeServer.close();
     extensionBridgeServer = null;

@@ -25,6 +25,7 @@
     "build:desktop:linux": "npm run build && node scripts/build-desktop.cjs linux",
     "build:desktop:dir": "npm run build && node scripts/build-desktop.cjs --dir",
     "build:desktop:current": "npm run build:desktop:dir",
+    "build:release": "python ../scripts/build_desktop_release.py",
     "build:all": "python ../scripts/build_all.py",
     "icons": "node scripts/generate-icons.cjs"
   },
