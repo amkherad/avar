@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getBuildInfo } from "@/lib/buildInfo";
+import {
+  getHostPlatformLabelKey,
+  getHostShellLabelKey,
+  getHostVersionLabelKey,
+  listHostVersionEntries,
+  resolveHostInfo,
+  type HostInfo,
+} from "@/lib/hostInfo";
 import { getProjectUrls } from "@/lib/projectUrls";
 import { useConnectionStore } from "@/stores/connectionStore";
 
@@ -27,6 +35,21 @@ export function AboutSettings() {
   const connection = useConnectionStore((s) => s.connection);
   const [backendVersion, setBackendVersion] = useState<string | null>(null);
   const [backendLoading, setBackendLoading] = useState(false);
+  const [hostInfo, setHostInfo] = useState<HostInfo | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void resolveHostInfo().then((info) => {
+      if (!cancelled) {
+        setHostInfo(info);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (connection !== "connected" || !client) {
@@ -84,6 +107,30 @@ export function AboutSettings() {
     });
   }
 
+  const hostRows: VersionRow[] = [];
+  if (hostInfo) {
+    hostRows.push({
+      label: t("settings.about.hostShell"),
+      value: t(getHostShellLabelKey(hostInfo.shell)),
+    });
+
+    const platformLabelKey = getHostPlatformLabelKey(hostInfo.platform);
+    if (platformLabelKey) {
+      hostRows.push({
+        label: t("settings.about.hostPlatform"),
+        value: t(platformLabelKey),
+      });
+    }
+
+    for (const entry of listHostVersionEntries(hostInfo)) {
+      hostRows.push({
+        label: t(getHostVersionLabelKey(entry.key)),
+        value: entry.value,
+        mono: true,
+      });
+    }
+  }
+
   return (
     <div className="avar-about">
       <p className="avar-about__intro">{t("settings.about.intro")}</p>
@@ -103,6 +150,24 @@ export function AboutSettings() {
           </tbody>
         </table>
       </section>
+
+      {hostRows.length > 0 ? (
+        <section className="avar-about__section">
+          <h3 className="avar-about__heading">{t("settings.about.hostTitle")}</h3>
+          <table className="avar-about-version-table">
+            <tbody>
+              {hostRows.map((row) => (
+                <tr key={row.label}>
+                  <th scope="row">{row.label}</th>
+                  <td className={row.mono ? "avar-about-version-table__mono" : undefined}>
+                    {row.value}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
 
       <section className="avar-about__section">
         <h3 className="avar-about__heading">{t("settings.about.authorTitle")}</h3>

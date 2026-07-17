@@ -1,8 +1,21 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+function electronHostInfo() {
+  return {
+    shell: "electron",
+    platform: process.platform,
+    versions: {
+      electron: process.versions.electron,
+      chromium: process.versions.chrome,
+      node: process.versions.node,
+    },
+  };
+}
+
 contextBridge.exposeInMainWorld("avar", {
   isElectron: true,
   platform: process.platform,
+  getHostInfo: () => electronHostInfo(),
   minimizeWindow: () => ipcRenderer.invoke("window:minimize"),
   maximizeWindow: () => ipcRenderer.invoke("window:maximize"),
   closeWindow: () => ipcRenderer.invoke("window:close"),

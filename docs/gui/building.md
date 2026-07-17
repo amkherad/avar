@@ -44,7 +44,12 @@ Cross-origin access is enabled by default in the daemon (`daemon.server.cors.ena
 
 ### Electron installers
 
-`npm run build:desktop` produces platform-specific packages in `gui/release/`:
+`npm run build:desktop` produces platform-specific packages in `gui/release/` using [electron-builder](https://www.electron.build/). Configuration lives in `gui/electron-builder.config.cjs` and is tuned for size:
+
+- Renderer npm packages are **devDependencies** only (bundled into `dist/` by Vite, not copied into the Electron app)
+- Only runtime shell files are packaged (`electron/`, selected `desktop/` helpers, `dist/`)
+- Chromium locale packs are trimmed to `en-US` (the GUI ships its own translations)
+- Installer/archive compression is set to `maximum`
 
 | Platform | Formats |
 |----------|---------|
@@ -52,9 +57,11 @@ Cross-origin access is enabled by default in the daemon (`daemon.server.cors.ena
 | Windows | NSIS installer, portable |
 | Linux | AppImage, deb |
 
+For a local unpacked bundle (used by the all-in-one `avar` embed), run `npm run build:desktop:dir`.
+
 ### Tiny webview experiment
 
-`gui/tiny/` is an optional minimal shell using [tinytron](https://github.com/Rafi993/tiny). Shared desktop helpers live in `gui/desktop/`. Electron remains the full-featured desktop target; Tiny runs the SPA in web mode without tray, popups, or extension bridge.
+`gui/tiny/` is an optional minimal shell using a vendored [tinytron](https://github.com/Rafi993/tiny) fork in `gui/third_party/tiny` (Windows, macOS, and Linux). Shared desktop helpers live in `gui/desktop/`. Electron remains the full-featured desktop target; Tiny runs the SPA in web mode without tray, popups, or extension bridge.
 
 CI builds Tiny on Linux and Windows (`tiny-build` job). Tagged releases include `avar-tiny-{os}-{arch}-{version}.zip` artifacts.
 

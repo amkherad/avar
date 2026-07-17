@@ -17,6 +17,7 @@ declare global {
       setExtensionBridgeConfig: (config: Record<string, unknown>) => Promise<void>;
       getExtensionBridgeState: () => Promise<Record<string, unknown>>;
       getExtensionBridgeUrl: () => Promise<string>;
+      getHostInfo: () => Promise<Record<string, unknown>>;
       setTrayLabels: (labels: Record<string, unknown>) => Promise<void>;
       setTrayActiveDownloads: (payload: Record<string, unknown>) => Promise<void>;
       openPath: (filePath: string) => Promise<string>;
@@ -46,6 +47,7 @@ window.avar = {
   setExtensionBridgeConfig: (config) => rpc.request.setExtensionBridgeConfig(config),
   getExtensionBridgeState: () => rpc.request.getExtensionBridgeState(),
   getExtensionBridgeUrl: () => rpc.request.getExtensionBridgeUrl(),
+  getHostInfo: () => rpc.request.getHostInfo(),
   setTrayLabels: (labels) => rpc.request.setTrayLabels(labels),
   setTrayActiveDownloads: (payload) => rpc.request.setTrayActiveDownloads(payload),
   openPath: (filePath) => rpc.request.openPath(filePath),

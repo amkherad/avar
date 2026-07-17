@@ -88,8 +88,17 @@ export function extensionsPlugin(): Plugin {
     closeBundle() {
       syncSharedAssets();
       packageExtensions();
-      const dest = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "dist/extensions");
-      fs.cpSync(extensionsRoot, dest, { recursive: true });
+      const distRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "dist/extensions");
+      const packagesDir = path.join(extensionsRoot, "packages");
+      const destPackages = path.join(distRoot, "packages");
+      fs.mkdirSync(destPackages, { recursive: true });
+      for (const variant of ["chromium", "firefox"]) {
+        const zipName = `avar-${variant}.zip`;
+        const source = path.join(packagesDir, zipName);
+        if (fs.existsSync(source)) {
+          fs.copyFileSync(source, path.join(destPackages, zipName));
+        }
+      }
     },
   };
 }

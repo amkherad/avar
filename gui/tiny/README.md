@@ -1,6 +1,6 @@
 # Tiny desktop shell (experiment)
 
-Minimal desktop wrapper using [tinytron](https://github.com/Rafi993/tiny) (webview + basic window management). Goal: explore a ~10MB executable vs the full Electron bundle.
+Minimal desktop wrapper using a vendored [tinytron](https://github.com/Rafi993/tiny) fork in `gui/third_party/tiny` (webview + basic window management). Goal: explore a ~10MB executable vs the full Electron bundle.
 
 This shell runs the **same** Avar GUI SPA as Electron, but without the Electron preload bridge (`window.avar`). Behavior matches the **web** build: use session settings and enable **Use dev proxy** during development.
 
@@ -19,7 +19,7 @@ cd gui
 node scripts/install-tinytron.cjs
 ```
 
-Upstream project: https://github.com/Rafi993/tiny
+Upstream project: https://github.com/Rafi993/tiny (vendored under `gui/third_party/tiny` with Windows/macOS/Linux `binding.gyp` support).
 
 ## Commands
 
@@ -27,6 +27,7 @@ Upstream project: https://github.com/Rafi993/tiny
 cd gui
 npm run dev:tiny      # Vite dev server + Tiny webview
 npm run start:tiny    # Production build + static server + Tiny webview
+npm run build:tiny:exe # Standalone executable in release/tiny/ (Node 22 pkg runtime)
 ```
 
 Electron workflows are unchanged:

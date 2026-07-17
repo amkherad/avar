@@ -25,14 +25,16 @@
     "build:desktop:mac": "npm run build && node scripts/build-desktop.cjs mac",
     "build:desktop:win": "npm run build && node scripts/build-desktop.cjs win",
     "build:desktop:linux": "npm run build && node scripts/build-desktop.cjs linux",
-    "build:desktop:current": "npm run build && electron-builder --dir",
+    "build:desktop:dir": "npm run build && node scripts/build-desktop.cjs --dir",
+    "build:desktop:current": "npm run build:desktop:dir",
     "start:tiny": "npm run build && concurrently -k \"vite preview --port 4173 --strictPort\" \"wait-on http://localhost:4173 && cross-env AVAR_GUI_URL=http://localhost:4173 node tiny/main.cjs\"",
     "build:tiny": "npm run build && node scripts/install-tinytron.cjs && node tiny/verify-build.cjs",
+    "build:tiny:exe": "npm run build:tiny && node scripts/package-tiny-exe.cjs",
     "build:electrobun": "npm run build && node electrobun/verify-build.cjs && node electrobun/run-build.cjs",
     "build:all": "python ../scripts/build_all.py",
     "icons": "node scripts/generate-icons.cjs"
   },
-  "dependencies": {
+  "devDependencies": {
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
     "@fortawesome/free-solid-svg-icons": "^7.2.0",
     "@fortawesome/react-fontawesome": "^3.3.1",
@@ -43,66 +45,24 @@
     "react-i18next": "^15.5.2",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "zustand": "^5.0.14"
-  },
-  "devDependencies": {
+    "zustand": "^5.0.14",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@types/react-i18next": "^7.8.3",
     "@vitejs/plugin-react": "^4.4.1",
+    "@yao-pkg/pkg": "^6.21.0",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electrobun": "^1.18.1",
     "electron": "^35.1.5",
     "electron-builder": "^26.0.12",
     "jsdom": "^26.1.0",
-    "typescript": "^5.8.3",
     "node-gyp": "^12.4.0",
+    "typescript": "^5.8.3",
     "vite": "^6.3.4",
     "vitest": "^3.2.4",
     "wait-on": "^8.0.3"
-  },
-  "build": {
-    "appId": "io.avar.gui",
-    "productName": "Avar",
-    "icon": "build/icon.png",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "desktop/**/*"
-    ],
-    "mac": {
-      "category": "public.app-category.utilities",
-      "target": [
-        "dmg",
-        "zip"
-      ]
-    },
-    "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ]
-    },
-    "protocols": [
-      {
-        "name": "Avar",
-        "schemes": [
-          "avar"
-        ]
-      }
-    ],
-    "linux": {
-      "maintainer": "Ali Kherad <alimousavikherad@gmail.com>",
-      "target": [
-        "AppImage",
-        "deb"
-      ]
-    }
   }
 }

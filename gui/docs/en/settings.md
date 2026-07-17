@@ -74,6 +74,6 @@ Per-download proxy overrides are available in **Add download**. Global proxy set
 
 ### ✨ About
 
-The last item in the settings sidebar. Shows **front-end** and **back-end (daemon)** version numbers, author credits, open-source license link, sponsor invitation, support buttons (GitHub Sponsors and Star), and **Report a bug** (opens GitHub Issues).
+The last item in the settings sidebar. Shows **front-end** and **back-end (daemon)** version numbers, **host** details when running inside a desktop shell (Electron, Tiny, Electrobun, or web browser), author credits, open-source license link, sponsor invitation, support buttons (GitHub Sponsors and Star), and **Report a bug** (opens GitHub Issues).
 
 Settings (theme, language, server labels/URLs, and monitor toggles) are stored locally in the browser or Electron profile (`localStorage`). Auth tokens are kept separately.

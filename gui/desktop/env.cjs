@@ -3,8 +3,9 @@
  */
 
 const path = require("node:path");
+const { resolveGuiRoot } = require("./pkg-runtime.cjs");
 
-const guiRoot = path.join(__dirname, "..");
+const guiRoot = resolveGuiRoot();
 
 module.exports = {
   guiRoot,

@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { BrowserView, Utils } from "electrobun/bun";
@@ -10,12 +11,18 @@ import type {
   AvarSelectDirectoryOptions,
   AvarTrayActiveDownloads,
   AvarTrayLabels,
+  HostInfo,
 } from "../../shared/avar-rpc";
 import { getProxyBaseUrl } from "./desktop-shell";
 import { getExtensionBridgeModule } from "./extension-host";
 import { openPopup } from "./popup-manager";
 import { setTrayActiveDownloads, setTrayLabels } from "./tray-manager";
 import { setKeepInTrayOnClose } from "./close-behavior";
+
+const require = createRequire(import.meta.url);
+const { electrobunHostInfo } = require("../../../desktop/host-info.cjs") as {
+  electrobunHostInfo: (runtime?: { bunVersion?: string }) => HostInfo;
+};
 
 function fsExists(filePath: string): boolean {
   try {
@@ -110,6 +117,7 @@ export function createAvarRpc() {
         getExtensionBridgeUrl: () => {
           return getExtensionBridgeModule().ELECTRON_EXTENSION_BRIDGE_URL;
         },
+        getHostInfo: () => electrobunHostInfo({ bunVersion: Bun.version }),
         setTrayLabels: (labels: AvarTrayLabels) => {
           if (labels && typeof labels === "object") {
             setTrayLabels(labels);

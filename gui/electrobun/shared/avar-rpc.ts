@@ -69,6 +69,12 @@ export type AvarTrayActiveDownloads = {
   items?: AvarTrayActiveDownloadItem[];
 };
 
+export type HostInfo = {
+  shell: "electron" | "tiny" | "electrobun" | "browser";
+  platform?: string;
+  versions: Record<string, string>;
+};
+
 export type AvarRpcSchema = {
   bun: {
     requests: {
@@ -81,6 +87,7 @@ export type AvarRpcSchema = {
       setExtensionBridgeConfig: { params: AvarExtensionBridgeConfig; response: void };
       getExtensionBridgeState: { params: undefined; response: AvarExtensionBridgeState };
       getExtensionBridgeUrl: { params: undefined; response: string };
+      getHostInfo: { params: undefined; response: HostInfo };
       setTrayLabels: { params: AvarTrayLabels; response: void };
       setTrayActiveDownloads: { params: AvarTrayActiveDownloads; response: void };
       openPath: { params: string; response: string };

@@ -66,9 +66,16 @@ export interface AvarSelectDirectoryOptions {
   title?: string;
 }
 
+export interface HostInfo {
+  shell: "electron" | "tiny" | "electrobun" | "browser";
+  platform?: string;
+  versions: Record<string, string>;
+}
+
 export interface AvarElectronApi {
   isElectron: true;
   platform?: NodeJS.Platform;
+  getHostInfo?: () => HostInfo | Promise<HostInfo>;
   minimizeWindow?: () => Promise<void>;
   maximizeWindow?: () => Promise<void>;
   closeWindow?: () => Promise<void>;

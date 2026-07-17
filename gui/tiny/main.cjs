@@ -25,9 +25,14 @@ const {
   stopStaticServer,
 } = require("../desktop/static-server.cjs");
 const { SHELL_TINY } = require("../desktop/shells.cjs");
+const { resolveTinytronAddonPath } = require("../desktop/pkg-runtime.cjs");
 
 function loadTiny() {
   try {
+    const addonPath = resolveTinytronAddonPath();
+    if (addonPath) {
+      return require(addonPath).Tiny;
+    }
     return require("tinytron");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -103,13 +108,12 @@ function shutdown() {
 async function main() {
   console.log(`Avar desktop shell: ${SHELL_TINY}`);
 
-  const Tiny = loadTiny();
-
   startDaemonProxy();
 
   const guiUrl = await resolveShellGuiUrl();
   console.log(`Loading GUI: ${guiUrl}`);
 
+  const Tiny = loadTiny();
   const window = new Tiny();
   window.setSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
   window.setTitle(APP_TITLE);
@@ -131,4 +135,7 @@ async function main() {
   shutdown();
 }
 
-void main();
+void main().catch((error) => {
+  console.error(error instanceof Error ? error.stack ?? error.message : String(error));
+  process.exit(1);
+});

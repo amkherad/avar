@@ -87,5 +87,20 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes("node_modules/mermaid")) {
+              return "mermaid";
+            }
+            if (id.includes("node_modules/@fortawesome")) {
+              return "fontawesome";
+            }
+          },
+        },
+      },
+    },
   };
 });

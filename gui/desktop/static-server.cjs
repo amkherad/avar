@@ -1,74 +1,62 @@
 /**
  * Minimal static file server for the Tiny shell (production experiment).
+ *
+ * Serves gui/dist over HTTP from a worker thread so requests keep working
+ * while the native webview blocks the main thread.
  */
 
-const http = require("node:http");
-const fs = require("node:fs");
 const path = require("node:path");
+const { Worker } = require("node:worker_threads");
 const { distDir } = require("./env.cjs");
+const { tinyHostInfo } = require("./host-info.cjs");
 
-const MIME_TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".woff2": "font/woff2",
-  ".webmanifest": "application/manifest+json",
-};
-
-/** @type {import('node:http').Server | null} */
-let staticServer = null;
+/** @type {import('node:worker_threads').Worker | null} */
+let staticWorker = null;
 /** @type {string | null} */
 let staticServerUrl = null;
 
-function resolveDistPath(urlPath) {
-  const decoded = decodeURIComponent(urlPath.split("?")[0] || "/");
-  const relative = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
-  const resolved = path.normalize(path.join(distDir, relative));
-
-  if (!resolved.startsWith(distDir)) {
-    return null;
-  }
-
-  return resolved;
+function buildHostInfoScript() {
+  const payload = JSON.stringify(tinyHostInfo()).replace(/</g, "\\u003c");
+  return `<script>window.__AVAR_HOST__=${payload}</script>`;
 }
 
 function startStaticServer(host = "127.0.0.1", port = 0) {
-  if (staticServer && staticServerUrl) {
-    return { server: staticServer, url: staticServerUrl };
+  if (staticWorker && staticServerUrl) {
+    return { url: staticServerUrl };
   }
 
-  staticServer = http.createServer((req, res) => {
-    let filePath = resolveDistPath(req.url || "/");
-    if (!filePath) {
-      res.statusCode = 403;
-      res.end("Forbidden");
-      return;
-    }
-
-    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-      filePath = path.join(distDir, "index.html");
-    }
-
-    const ext = path.extname(filePath).toLowerCase();
-    const mime = MIME_TYPES[ext] || "application/octet-stream";
-
-    res.writeHead(200, { "Content-Type": mime });
-    fs.createReadStream(filePath).pipe(res);
+  staticWorker = new Worker(path.join(__dirname, "static-server-worker.cjs"), {
+    workerData: {
+      distDir,
+      hostInfoScript: buildHostInfoScript(),
+      host,
+      port,
+    },
   });
 
-  staticServer.listen(port, host, () => {
-    const address = staticServer.address();
-    if (address && typeof address === "object") {
-      staticServerUrl = `http://${host}:${address.port}/`;
+  staticWorker.on("message", (message) => {
+    if (message?.type === "ready" && typeof message.url === "string") {
+      staticServerUrl = message.url;
+      return;
     }
+    if (message?.type === "error") {
+      console.error(`Static server worker failed: ${message.message ?? "unknown error"}`);
+    }
+  });
+
+  staticWorker.on("error", (error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+  });
+
+  staticWorker.on("exit", (code) => {
+    if (code !== 0 && code !== null) {
+      console.error(`Static server worker exited with code ${code}`);
+    }
+    staticWorker = null;
+    staticServerUrl = null;
   });
 
   return {
-    server: staticServer,
     get url() {
       return staticServerUrl;
     },
@@ -76,12 +64,14 @@ function startStaticServer(host = "127.0.0.1", port = 0) {
 }
 
 function stopStaticServer() {
-  if (!staticServer) {
+  if (!staticWorker) {
     return;
   }
-  staticServer.close();
-  staticServer = null;
+
+  const worker = staticWorker;
+  staticWorker = null;
   staticServerUrl = null;
+  worker.postMessage({ type: "stop" });
 }
 
 module.exports = {

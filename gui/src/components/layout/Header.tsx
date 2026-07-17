@@ -7,6 +7,7 @@ import { ExtensionIntegrationButton } from "./ExtensionIntegrationButton";
 import { WindowControls } from "./WindowControls";
 import type { AppPage } from "./Sidebar";
 import type { SettingsCategory } from "@/pages/SettingsPage";
+import { isElectronMacDesktop, isElectronShell } from "@/lib/desktopShell";
 
 export interface HeaderProps {
   page: AppPage;
@@ -17,8 +18,8 @@ export interface HeaderProps {
 export function Header({ page, onNavigate, onOpenSettings }: HeaderProps) {
   const { t } = useTranslation();
   const isDashboard = page === "dashboard";
-  const isElectron = Boolean(window.avar?.isElectron);
-  const isMacDesktop = isElectron && window.avar?.platform === "darwin";
+  const isElectron = isElectronShell();
+  const isMacDesktop = isElectronMacDesktop();
   const iconSrc = `${import.meta.env.BASE_URL.replace(/\/?$/, "/")}icon.svg`;
 
   return (

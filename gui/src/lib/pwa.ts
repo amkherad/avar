@@ -1,9 +1,7 @@
-function isElectron(): boolean {
-  return window.avar?.isElectron === true;
-}
+import { isDesktopShell } from "@/lib/desktopShell";
 
 export function isPwaSupported(): boolean {
-  return !isElectron() && "serviceWorker" in navigator;
+  return !isDesktopShell() && "serviceWorker" in navigator;
 }
 
 type ServiceWorkerUpdateListener = () => void;

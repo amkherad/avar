@@ -28,6 +28,7 @@ import { useAppLocation, useAppNavigation } from "@/hooks/useAppLocation";
 import { buildAppHash, defaultAppLocation, navigateAppLocation } from "@/lib/appRouting";
 import { openAddDownloadDialog } from "@/lib/openAddDownloadDialog";
 import i18n, { isRtlLocale } from "@/i18n";
+import { isElectronMacDesktop, isElectronShell } from "@/lib/desktopShell";
 
 function AppContent() {
   const location = useAppLocation();
@@ -48,9 +49,9 @@ function AppContent() {
   }, [locale]);
 
   useEffect(() => {
-    if (window.avar?.isElectron) {
+    if (isElectronShell()) {
       document.documentElement.classList.add("avar-electron");
-      if (window.avar.platform === "darwin") {
+      if (isElectronMacDesktop()) {
         document.documentElement.classList.add("avar-electron-darwin");
       }
       void ensureAppConnectionReady().then(() => {

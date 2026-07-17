@@ -9,12 +9,15 @@
  *   node scripts/build-desktop.cjs            # all targets supported on this host
  *   node scripts/build-desktop.cjs mac        # macOS only
  *   node scripts/build-desktop.cjs win linux  # Windows + Linux
+ *   node scripts/build-desktop.cjs --dir      # unpacked dir only (embed / local test)
  */
 
 const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
 const path = require("node:path");
 
 const guiRoot = path.join(__dirname, "..");
+const builderConfig = path.join(guiRoot, "electron-builder.config.cjs");
 const docsUrl = "https://www.electron.build/multi-platform-build";
 
 /** @type {{ id: string; flag: string; hosts: NodeJS.Platform[]; label: string }[]} */
@@ -42,12 +45,16 @@ function resolveElectronBuilder() {
 }
 
 function runElectronBuilder(args) {
-  return spawnSync(resolveElectronBuilder(), args, {
-    cwd: guiRoot,
-    stdio: "inherit",
-    env: process.env,
-    shell: process.platform === "win32",
-  });
+  return spawnSync(
+    resolveElectronBuilder(),
+    ["--config", builderConfig, "--publish", "never", ...args],
+    {
+      cwd: guiRoot,
+      stdio: "inherit",
+      env: process.env,
+      shell: process.platform === "win32",
+    },
+  );
 }
 
 function resolveTargetIds(argv) {
@@ -92,10 +99,66 @@ function targetById(id) {
   return target;
 }
 
+function formatBytes(bytes) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KiB`;
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+}
+
+function dirSize(root) {
+  let total = 0;
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const full = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      total += dirSize(full);
+    } else if (entry.isFile()) {
+      total += fs.statSync(full).size;
+    }
+  }
+  return total;
+}
+
+function reportUnpackedSizes() {
+  const releaseDir = path.join(guiRoot, "release");
+  if (!fs.existsSync(releaseDir)) {
+    return;
+  }
+
+  const unpackedDirs = fs
+    .readdirSync(releaseDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.includes("unpacked"))
+    .map((entry) => path.join(releaseDir, entry.name));
+
+  if (unpackedDirs.length === 0) {
+    return;
+  }
+
+  console.log("\nElectron unpacked bundle sizes:");
+  for (const dir of unpackedDirs) {
+    console.log(`  ${path.basename(dir)}: ${formatBytes(dirSize(dir))}`);
+  }
+}
+
 function main() {
   const argv = process.argv.slice(2);
-  const requestedIds = resolveTargetIds(argv);
   const extraArgs = electronBuilderArgs(argv);
+
+  if (extraArgs.includes("--dir")) {
+    const result = runElectronBuilder(extraArgs);
+    if ((result.status ?? 1) === 0) {
+      reportUnpackedSizes();
+    }
+    process.exit(result.status ?? 1);
+  }
+
+  const requestedIds = resolveTargetIds(argv);
   const explicitRequest = argv.some((arg) => !arg.startsWith("-"));
 
   const selected = [];
@@ -125,6 +188,9 @@ function main() {
   }
 
   const result = runElectronBuilder([...selected, ...extraArgs]);
+  if ((result.status ?? 1) === 0) {
+    reportUnpackedSizes();
+  }
   process.exit(result.status ?? 1);
 }
 

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { isElectronShell } from "@/lib/desktopShell";
 
 export function WindowControls() {
   const { t } = useTranslation();
   const [maximized, setMaximized] = useState(false);
+  const isElectron = isElectronShell();
 
   useEffect(() => {
-    if (!window.avar?.isElectron || !window.avar.isWindowMaximized) {
+    if (!isElectron || !window.avar?.isWindowMaximized) {
       return;
     }
 
@@ -28,9 +30,9 @@ export function WindowControls() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [isElectron]);
 
-  if (!window.avar?.isElectron) {
+  if (!isElectron) {
     return null;
   }
 
