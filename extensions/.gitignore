@@ -1,2 +1,12 @@
 packages/avar-chromium.zip
 packages/avar-firefox.zip
+
+# Local CMake outputs (e.g. extensions/daemon/build)
+**/build/
+**/out/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+*.ninja
+.ninja_deps
+.ninja_log

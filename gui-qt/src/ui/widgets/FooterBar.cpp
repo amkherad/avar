@@ -5,6 +5,7 @@
 
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QStyle>
 
 namespace avar::gui {
 
@@ -43,10 +44,49 @@ FooterBar::FooterBar(Translator &translator, QWidget *parent)
     }
     layout->addStretch();
 
-    auto *consoleBtn = new AvarButton(AvarButtonVariant::Secondary, this);
-    consoleBtn->setText(m_tr.tr(QStringLiteral("console.title")));
-    connect(consoleBtn, &QPushButton::clicked, this, &FooterBar::consoleToggleRequested);
-    layout->addWidget(consoleBtn);
+    m_consoleBtn = new AvarButton(AvarButtonVariant::Ghost, this);
+    m_consoleBtn->setText(m_tr.tr(QStringLiteral("console.toggle")));
+    QObject::connect(m_consoleBtn, &QPushButton::clicked, this, &FooterBar::consoleToggleRequested);
+    layout->addWidget(m_consoleBtn);
+    applyConsoleButtonStyle();
+}
+
+void FooterBar::setConsoleButtonState(bool consoleOpen, bool hasUnseenErrors)
+{
+    m_consoleOpen = consoleOpen;
+    m_hasUnseenErrors = hasUnseenErrors;
+    applyConsoleButtonStyle();
+}
+
+void FooterBar::applyConsoleButtonStyle()
+{
+    if (!m_consoleBtn) {
+        return;
+    }
+    AvarButtonVariant variant = AvarButtonVariant::Ghost;
+    if (m_consoleOpen) {
+        variant = AvarButtonVariant::Secondary;
+    } else if (m_hasUnseenErrors) {
+        variant = AvarButtonVariant::Danger;
+    }
+    QString className;
+    switch (variant) {
+    case AvarButtonVariant::Primary:
+        className = QStringLiteral("AvarButtonPrimary");
+        break;
+    case AvarButtonVariant::Secondary:
+        className = QStringLiteral("AvarButtonSecondary");
+        break;
+    case AvarButtonVariant::Ghost:
+        className = QStringLiteral("AvarButtonGhost");
+        break;
+    case AvarButtonVariant::Danger:
+        className = QStringLiteral("AvarButtonDanger");
+        break;
+    }
+    m_consoleBtn->setProperty("class", className);
+    m_consoleBtn->style()->unpolish(m_consoleBtn);
+    m_consoleBtn->style()->polish(m_consoleBtn);
 }
 
 void FooterBar::setHealth(const HealthInfo &health, bool valid)

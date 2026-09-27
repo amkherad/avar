@@ -4,10 +4,11 @@
 
 #include <QWidget>
 
-class QMenu;
+class QFrame;
+class QResizeEvent;
 class QLabel;
-class QAbstractButton;
 class QPushButton;
+class QVBoxLayout;
 
 namespace avar::gui {
 
@@ -25,16 +26,34 @@ public:
 signals:
     void refreshRequested();
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
+    void toggleMenu();
+    void closeMenu();
     void rebuildMenu();
-    void updateLabels();
+    void updateTrigger();
+    void positionMenu();
+    void setMenuOpen(bool open);
 
     Translator &m_tr;
     SessionManager &m_sessions;
-    QAbstractButton *m_trigger = nullptr;
-    QPushButton *m_refresh = nullptr;
+
+    QWidget *m_trigger = nullptr;
+    QLabel *m_dot = nullptr;
+    QLabel *m_label = nullptr;
     QLabel *m_status = nullptr;
-    QMenu *m_menu = nullptr;
+    QLabel *m_chevron = nullptr;
+    QPushButton *m_refresh = nullptr;
+
+    QFrame *m_menuPopup = nullptr;
+    QWidget *m_menuListHost = nullptr;
+    QVBoxLayout *m_menuListLayout = nullptr;
+
+    bool m_menuOpen = false;
+    bool m_refreshing = false;
     ConnectionState m_connection = ConnectionState::Disconnected;
 };
 

@@ -194,31 +194,61 @@ def build_report() -> Report:
             "",
         )
     )
-    report.add(Item("sync:websocket-sse", True, False, "SSE path; WS optional"))
-    report.add(Item("sync:snapshot-parser", True, False, "uses list RPC not stream snapshot"))
+    sync_cpp = read_text(GUI_QT / "src/sync/SyncCoordinator.cpp")
     report.add(
         Item(
-            "desktop:tray",
+            "sync:websocket-sse",
             True,
-            False,
-            "Electron tray not in Qt",
+            "EventsSseClient" in read_text(GUI_QT / "src/sync/EventsSseClient.cpp")
+            and ("QWebSocket" in sync_cpp or "AVAR_GUI_HAS_WEBSOCKETS" in sync_cpp),
+            "",
         )
     )
     report.add(
         Item(
+            "sync:snapshot-parser",
+            True,
+            "parseSnapshotPayload" in read_text(GUI_QT / "src/sync/SnapshotParser.cpp"),
+            "",
+        )
+    )
+    report.add(
+        Item(
+            "desktop:tray",
+            True,
+            "QSystemTrayIcon" in read_text(GUI_QT / "src/ui/DesktopTray.cpp"),
+            "",
+        )
+    )
+    desktop_shell = read_text(GUI_QT / "src/ui/DesktopShellWindow.cpp")
+    report.add(
+        Item(
             "desktop:window-controls",
             True,
-            "WindowTitleBar" in read_text(GUI_QT / "src/ui/DesktopShellWindow.cpp")
-            or "FramelessWindowHint" in read_text(GUI_QT / "src/ui/DesktopShellWindow.cpp"),
-            "frameless shell; full chrome optional",
+            "FramelessWindowHint" not in desktop_shell,
+            "native OS title bar (minimize/close)",
         )
+    )
+    bridge_js = read_text(GUI / "electron/extension-bridge.cjs")
+    bridge_c = read_text(ROOT / "extensions/daemon/src/bridge_handlers.c")
+    core_types = [
+        "ping",
+        "status",
+        "download.add",
+        "url.probe",
+        "queue.list",
+        "queue.start",
+        "queue.stop",
+    ]
+    bridge_ok = all(f'"{t}"' in bridge_c for t in core_types) and "avar_daemon_rpc_call" in bridge_c and bool(
+        re.search(r'type === "ping"', bridge_js)
     )
     report.add(
         Item(
             "extension:bridge-parity",
             True,
-            False,
-            "C daemon stub; not full extension-bridge.cjs",
+            bridge_ok,
+            "" if bridge_ok else "missing core v1 handlers in extensions/daemon",
         )
     )
 

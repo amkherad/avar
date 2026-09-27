@@ -22,6 +22,8 @@ QString buildApplicationStylesheet(const ThemeTokens &tokens, const QString &bas
     replace(QStringLiteral("@@WARNING@@"), tokens.warning);
     replace(QStringLiteral("@@DANGER@@"), tokens.danger);
     replace(QStringLiteral("@@RADIUS@@"), QString::number(tokens.radiusPx));
+    const int innerRadius = qMax(4, tokens.radiusPx - 2);
+    replace(QStringLiteral("@@RADIUS_INNER@@"), QString::number(innerRadius));
     replace(QStringLiteral("@@FONT@@"), tokens.fontFamily);
     return sheet;
 }

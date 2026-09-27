@@ -9,6 +9,12 @@ project(avar-gui-qt
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(AvarGuiQtOptions)
+
+if(AVAR_GUI_QT_EMBED_BACKEND AND NOT AVAR_GUI_QT_WASM)
+    set(_avar_embed_backend ON)
+else()
+    set(_avar_embed_backend OFF)
+endif()
 include(GNUInstallDirs)
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network Test)
@@ -21,6 +27,9 @@ set(AVAR_GUI_QT_SOURCES
     src/core/GuiLog.cpp
     src/core/Hosting.cpp
     src/config/LayoutPreferences.cpp
+    src/config/GuiPreferences.cpp
+    src/console/ConsoleLog.cpp
+    src/console/ConsoleStore.cpp
     src/session/SessionManager.cpp
     src/api/JsonRpc.cpp
     src/api/DaemonClient.cpp
@@ -29,12 +38,15 @@ set(AVAR_GUI_QT_SOURCES
     src/theme/ThemeManager.cpp
     src/theme/StylesheetBuilder.cpp
     src/sync/SyncCoordinator.cpp
+    src/sync/SnapshotParser.cpp
+    src/sync/EventsSseClient.cpp
     src/config/AppSettings.cpp
     src/i18n/Translator.cpp
     src/extension/ExtensionBridgeClient.cpp
     src/ui/MainWindow.cpp
     src/ui/AppShell.cpp
     src/ui/DesktopShellWindow.cpp
+    src/ui/DesktopTray.cpp
     src/ui/AvarWindow.cpp
     src/ui/widgets/AvarButton.cpp
     src/ui/widgets/SettingsSidebarNav.cpp
@@ -45,13 +57,17 @@ set(AVAR_GUI_QT_SOURCES
     src/ui/widgets/ConsoleDock.cpp
     src/ui/widgets/DownloadDetailPanelWidget.cpp
     src/ui/widgets/DownloadGridView.cpp
-    src/ui/widgets/WindowTitleBar.cpp
+    src/ui/widgets/ExtensionIntegrationButton.cpp
+    src/ui/widgets/WindowControls.cpp
+    src/ui/widgets/HeaderWindowDrag.cpp
     src/ui/pages/AddDownloadPopupPage.cpp
     src/ui/pages/BatchAddDownloadsPopupPage.cpp
     src/ui/pages/ConfirmDialogPopupPage.cpp
     src/ui/pages/DownloadDetailPopupPage.cpp
     src/ui/pages/DashboardPage.cpp
     src/ui/pages/SettingsPage.cpp
+    src/ui/settings/SettingsPanels.cpp
+    src/ui/settings/SettingsPanelsImpl.cpp
     src/ui/pages/HelpPage.cpp
     src/models/DownloadTableModel.cpp
     src/models/DownloadFilterProxyModel.cpp
@@ -91,6 +107,14 @@ if(TARGET Qt6::WebSockets)
 endif()
 
 avar_gui_qt_apply_target_options(avar-gui-qt)
+
+if(_avar_embed_backend)
+    target_sources(avar-gui-qt PRIVATE
+        src/backend/EmbeddedDaemon.cpp
+        src/backend/InMemoryRpc.cpp
+    )
+    include(EmbedAvarBackend)
+endif()
 
 if(AVAR_GUI_QT_BUILD_TESTS)
     enable_testing()

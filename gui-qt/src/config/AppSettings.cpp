@@ -84,6 +84,11 @@ int AppSettings::sidebarWidth() const
     return m_store.value(QStringLiteral("layout/sidebarWidth"), 280).toInt();
 }
 
+bool AppSettings::keepInTrayOnClose() const
+{
+    return m_store.value(QStringLiteral("desktop/keepInTrayOnClose"), true).toBool();
+}
+
 void AppSettings::setDaemonBaseUrl(const QString &url)
 {
     m_store.setValue(QStringLiteral("daemon/baseUrl"), url);
@@ -117,6 +122,12 @@ void AppSettings::setBrowserExtensionEnabled(bool enabled)
 void AppSettings::setSidebarWidth(int width)
 {
     m_store.setValue(QStringLiteral("layout/sidebarWidth"), width);
+}
+
+void AppSettings::setKeepInTrayOnClose(bool enabled)
+{
+    m_store.setValue(QStringLiteral("desktop/keepInTrayOnClose"), enabled);
+    emit desktopBehaviorChanged();
 }
 
 } // namespace avar::gui

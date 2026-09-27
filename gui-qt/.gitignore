@@ -13,8 +13,28 @@ install_manifest.txt
 .ninja_log
 _deps/
 
+# In-tree CMake / Make (e.g. cmake -S . -B . in gui-qt/)
+/Makefile
+/avar-backend/
+/generated/
+/*_autogen/
+/*.a
+/lib*.a
+
+# In-tree test build outputs
+/tests/Makefile
+/tests/*_autogen/
+/tests/test_json_rpc
+/tests/test_snapshot_parser
+/tests/test_theme_tokens
+
+# Local Qt / Emscripten / aqt (same as repo root; may be created here)
+.qt/
+.emsdk/
+.venv-aqt/
+aqtinstall.log
+
 # Qt Creator / CMake presets
-/.qt/
 *.user
 *.user.*
 CMakeUserPresets.json

@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-09-27T09:36:37.729430+00:00",
+  "generated_at": "2026-09-27T11:28:42.234002+00:00",
   "score": {
-    "done": 53,
+    "done": 57,
     "total": 57,
-    "percent": 93.0
+    "percent": 100.0
   },
   "items": [
     {
@@ -333,7 +333,7 @@
       "electron": true,
       "qt": true,
       "ok": true,
-      "notes": "electron=499 keys, qt\u224854 hardcoded"
+      "notes": "electron=499 keys, qt\u224858 hardcoded"
     },
     {
       "id": "theme:tokens",
@@ -366,50 +366,45 @@
     {
       "id": "sync:websocket-sse",
       "electron": true,
-      "qt": false,
-      "ok": false,
-      "notes": "SSE path; WS optional"
+      "qt": true,
+      "ok": true,
+      "notes": ""
     },
     {
       "id": "sync:snapshot-parser",
       "electron": true,
-      "qt": false,
-      "ok": false,
-      "notes": "uses list RPC not stream snapshot"
+      "qt": true,
+      "ok": true,
+      "notes": ""
     },
     {
       "id": "desktop:tray",
       "electron": true,
-      "qt": false,
-      "ok": false,
-      "notes": "Electron tray not in Qt"
+      "qt": true,
+      "ok": true,
+      "notes": ""
     },
     {
       "id": "desktop:window-controls",
       "electron": true,
       "qt": true,
       "ok": true,
-      "notes": "frameless shell; full chrome optional"
+      "notes": "native OS title bar (minimize/close)"
     },
     {
       "id": "extension:bridge-parity",
       "electron": true,
-      "qt": false,
-      "ok": false,
-      "notes": "C daemon stub; not full extension-bridge.cjs"
+      "qt": true,
+      "ok": true,
+      "notes": ""
     },
     {
       "id": "ui:component-surface",
       "electron": true,
       "qt": true,
       "ok": true,
-      "notes": "electron\u224863 tsx, qt\u224822 widgets"
+      "notes": "electron\u224863 tsx, qt\u224823 widgets"
     }
   ],
-  "gaps": [
-    "sync:websocket-sse",
-    "sync:snapshot-parser",
-    "desktop:tray",
-    "extension:bridge-parity"
-  ]
+  "gaps": []
 }

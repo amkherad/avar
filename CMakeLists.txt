@@ -1,11 +1,21 @@
-﻿cmake_minimum_required(VERSION 4.1)
+﻿if(DEFINED AVAR_AS_GUI_QT_SUBPROJECT)
+    cmake_minimum_required(VERSION 3.16)
+else()
+    cmake_minimum_required(VERSION 4.1)
+endif()
 project(avar C CXX)
 
-include("${CMAKE_SOURCE_DIR}/cmake/AvarCoverage.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/AvarLink.cmake")
-include("${CMAKE_SOURCE_DIR}/cmake/AvarVersion.cmake")
+if(DEFINED AVAR_REPO_ROOT)
+    set(_AVAR_ROOT "${AVAR_REPO_ROOT}")
+else()
+    set(_AVAR_ROOT "${CMAKE_SOURCE_DIR}")
+endif()
 
-set(SRC_DIR "${CMAKE_SOURCE_DIR}/src")
+include("${_AVAR_ROOT}/cmake/AvarCoverage.cmake")
+include("${_AVAR_ROOT}/cmake/AvarLink.cmake")
+include("${_AVAR_ROOT}/cmake/AvarVersion.cmake")
+
+set(SRC_DIR "${_AVAR_ROOT}/src")
 set(THIRD_PARTY_DIR "${SRC_DIR}/third_party")
 
 file(GLOB MBEDTLS_LIBRARY_SOURCES "${THIRD_PARTY_DIR}/mbedtls/library/*.c")
@@ -48,6 +58,7 @@ set(AVAR_CORE_SOURCES
         "${SRC_DIR}/daemon/daemon_transport.c"
         "${SRC_DIR}/daemon/daemon_rpc.c"
         "${SRC_DIR}/daemon/daemon_install.c"
+        "${SRC_DIR}/daemon/daemon_embed.c"
         "${SRC_DIR}/third_party/mongoose/mongoose.c"
         "${SRC_DIR}/third_party/cJSON/cJSON.c"
         "${SRC_DIR}/mongoose_log.c"
@@ -189,6 +200,10 @@ else()
     endif()
 endif()
 
+option(AVAR_BUILD_EXECUTABLE "Build the avar CLI executable" ON)
+option(AVAR_ENABLE_TESTS "Build C unit tests" ON)
+
+if(AVAR_BUILD_EXECUTABLE)
 add_executable(${PROJECT_NAME} "${SRC_DIR}/main.c")
 avar_apply_version(${PROJECT_NAME})
 if(AVAR_ENABLE_COVERAGE)
@@ -205,10 +220,13 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
         C_STANDARD_REQUIRED ON
 )
 avar_apply_coverage(${PROJECT_NAME})
+endif()
 
+if(AVAR_ENABLE_TESTS)
 enable_testing()
 
 add_subdirectory(tests)
+endif()
 
 set(DEBUG 1)
 

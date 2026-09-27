@@ -20,6 +20,7 @@ done
 cmake -S "${ROOT}" -B "${BUILD_DIR}" -G "${GENERATOR}" \
   -DCMAKE_BUILD_TYPE="${CONFIG}" \
   -DAVAR_GUI_QT_WASM=OFF \
+  -DAVAR_GUI_QT_EMBED_BACKEND=ON \
   "${EXTRA_CMAKE_ARGS[@]}"
 
 cmake --build "${BUILD_DIR}" --parallel

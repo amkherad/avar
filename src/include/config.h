@@ -1,6 +1,8 @@
 ﻿#ifndef AVAR_CONFIG_H
 #define AVAR_CONFIG_H
 
+#include <stddef.h>
+
 #include "utils.h"
 
 /* Dot-separated keys, e.g. "download.limiter.speed". */

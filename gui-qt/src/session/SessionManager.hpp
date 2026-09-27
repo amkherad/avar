@@ -28,6 +28,8 @@ public:
     void upsertSession(const SessionRecord &session);
     void removeSession(const QString &id);
 
+    [[nodiscard]] static bool isBuiltinLocalSession(const SessionRecord &session);
+
 signals:
     void sessionsChanged();
     void activeSessionChanged(const SessionRecord &session);

@@ -6,6 +6,8 @@
 #include "models/DownloadTableModel.hpp"
 #include "ui/widgets/AvarButton.hpp"
 #include "ui/widgets/DownloadGridView.hpp"
+#include "console/ConsoleStore.hpp"
+#include "sync/SyncCoordinator.hpp"
 #include "ui/widgets/ConsoleDock.hpp"
 #include "ui/widgets/DownloadDetailPanelWidget.hpp"
 #include "ui/widgets/FooterBar.hpp"
@@ -19,7 +21,6 @@
 #include <QLineEdit>
 #include <QStackedWidget>
 #include <QTableView>
-#include <QTimer>
 #include <QVBoxLayout>
 
 namespace avar::gui {
@@ -27,6 +28,7 @@ namespace avar::gui {
 DashboardPage::DashboardPage(Translator &translator,
                              LayoutPreferences &layout,
                              DaemonClient &daemon,
+                             SyncCoordinator &sync,
                              DownloadTableModel &downloads,
                              QWidget *parent)
     : QWidget(parent)
@@ -34,6 +36,7 @@ DashboardPage::DashboardPage(Translator &translator,
     , m_layout(layout)
     , m_daemon(daemon)
     , m_downloads(downloads)
+    , m_consoleStore(this)
 {
     setObjectName(QStringLiteral("AvarDashboard"));
     auto *root = new QVBoxLayout(this);
@@ -123,11 +126,21 @@ DashboardPage::DashboardPage(Translator &translator,
 
     m_footer = new FooterBar(m_tr, this);
     connect(m_footer, &FooterBar::consoleToggleRequested, this, [this] {
-        m_layout.setConsoleOpen(!m_layout.consoleOpen());
+        const bool next = !m_layout.consoleOpen();
+        m_layout.setConsoleOpen(next);
+        if (next) {
+            m_consoleStore.markErrorsSeen();
+        }
     });
+    const auto refreshConsoleFooter = [this] {
+        m_footer->setConsoleButtonState(m_layout.consoleOpen(), m_consoleStore.hasUnseenErrors());
+    };
+    connect(&m_consoleStore, &ConsoleStore::changed, this, refreshConsoleFooter);
+    connect(&m_layout, &LayoutPreferences::layoutChanged, this, refreshConsoleFooter);
+    refreshConsoleFooter();
     root->addWidget(m_footer);
 
-    m_console = new ConsoleDock(m_tr, layout, this);
+    m_console = new ConsoleDock(m_tr, layout, m_consoleStore, m_daemon, sync, this);
     m_console->setFixedHeight(layout.consoleHeight());
     connect(&layout, &LayoutPreferences::layoutChanged, this, [this] {
         m_console->setFixedHeight(m_layout.consoleHeight());
@@ -135,27 +148,7 @@ DashboardPage::DashboardPage(Translator &translator,
     });
     root->addWidget(m_console);
 
-    connect(&GuiLog::instance(), &GuiLog::lineAppended, m_console, &ConsoleDock::appendLine);
-
-    auto *logTimer = new QTimer(this);
-    logTimer->setInterval(2000);
-    connect(logTimer, &QTimer::timeout, this, [this] {
-        if (!m_layout.consoleOpen()) {
-            return;
-        }
-        m_daemon.getLogs(80, m_logOffset, [this](bool ok, const QString &logs, qint64 next) {
-            if (!ok || logs.trimmed().isEmpty()) {
-                return;
-            }
-            for (const QString &line : logs.split(QLatin1Char('\n'))) {
-                if (!line.isEmpty()) {
-                    m_console->appendLine(QStringLiteral("[daemon] %1").arg(line));
-                }
-            }
-            m_logOffset = next;
-        });
-    });
-    logTimer->start();
+    connect(&GuiLog::instance(), &GuiLog::lineAppended, &m_consoleStore, &ConsoleStore::appendGuiLogLine);
 
     m_detail->setVisible(m_layout.detailPanelOpen());
 }

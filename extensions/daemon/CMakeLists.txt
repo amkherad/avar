@@ -14,6 +14,7 @@ add_executable(avar-extension-daemon
     src/main.c
     src/extension_protocol.c
     src/http_server.c
+    src/daemon_rpc.c
     src/bridge_handlers.c
 )
 

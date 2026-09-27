@@ -11,11 +11,13 @@ ResizeHandle::ResizeHandle(ResizeAxis axis, QWidget *parent)
     setObjectName(QStringLiteral("AvarResizeHandle"));
     setProperty("axis", axis == ResizeAxis::Horizontal ? QStringLiteral("horizontal") : QStringLiteral("vertical"));
     setCursor(axis == ResizeAxis::Horizontal ? Qt::SizeHorCursor : Qt::SizeVerCursor);
-    setFixedWidth(axis == ResizeAxis::Horizontal ? 6 : -1);
-    setFixedHeight(axis == ResizeAxis::Vertical ? 6 : -1);
     if (axis == ResizeAxis::Horizontal) {
+        setMinimumWidth(6);
+        setMaximumWidth(6);
         setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
     } else {
+        setMinimumHeight(6);
+        setMaximumHeight(6);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     }
 }

@@ -18,7 +18,7 @@ SettingsSidebarNav::SettingsSidebarNav(Translator &translator, QWidget *parent)
     layout->setSpacing(4);
 
     auto *title = new QLabel(m_tr.tr(QStringLiteral("settings.title")), this);
-    title->setStyleSheet(QStringLiteral("font-weight: 700; font-size: 15px; margin-bottom: 6px;"));
+    title->setProperty("class", QStringLiteral("AvarPageTitle"));
     layout->addWidget(title);
 
     m_group = new QButtonGroup(this);

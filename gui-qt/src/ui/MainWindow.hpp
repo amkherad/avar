@@ -3,7 +3,10 @@
 #include "ui/AppShell.hpp"
 
 #include <QWidget>
+
 #include <memory>
+
+class QMainWindow;
 
 namespace avar::gui {
 
@@ -12,6 +15,7 @@ class DownloadTableModel;
 class QueueListModel;
 class Translator;
 class DesktopShellWindow;
+class DesktopTray;
 
 class MainWindow final : public QWidget {
     Q_OBJECT
@@ -22,6 +26,10 @@ public:
 
     void show();
 
+#if defined(AVAR_GUI_HOSTING_DESKTOP)
+    [[nodiscard]] QMainWindow *shellWindow() const;
+#endif
+
 private:
     void wireSync();
 
@@ -31,6 +39,7 @@ private:
     std::unique_ptr<QueueListModel> m_queues;
 #if defined(AVAR_GUI_HOSTING_DESKTOP)
     std::unique_ptr<DesktopShellWindow> m_shellWindow;
+    std::unique_ptr<DesktopTray> m_tray;
 #endif
     AppShell *m_shell = nullptr;
     class DashboardPage *m_dashboard = nullptr;

@@ -2,8 +2,11 @@
 
 #include "api/DaemonTypes.hpp"
 
+#include <QJsonObject>
 #include <QObject>
 #include <QTimer>
+
+#include <memory>
 
 #if defined(AVAR_GUI_HAS_WEBSOCKETS)
 #include <QWebSocket>
@@ -13,6 +16,8 @@ namespace avar::gui {
 
 class AppSettings;
 class DaemonClient;
+class GuiPreferences;
+class EventsSseClient;
 
 enum class ConnectionState {
     Disconnected,
@@ -24,7 +29,8 @@ class SyncCoordinator final : public QObject {
     Q_OBJECT
 
 public:
-    SyncCoordinator(DaemonClient &client, AppSettings &settings, QObject *parent = nullptr);
+    SyncCoordinator(DaemonClient &client, AppSettings &settings, GuiPreferences &guiPreferences,
+                    QObject *parent = nullptr);
     ~SyncCoordinator() override;
 
     void start();
@@ -38,12 +44,17 @@ signals:
 
 private:
     void reconnectWebSocket();
+    void startSseSync();
     void startPollFallback();
     void refreshLists();
+    void handleStreamJson(const QJsonObject &root);
     void setState(ConnectionState state);
+    void applyTimingFromPreferences();
 
     DaemonClient &m_client;
     AppSettings &m_settings;
+    GuiPreferences &m_guiPreferences;
+    std::unique_ptr<EventsSseClient> m_sse;
 #if defined(AVAR_GUI_HAS_WEBSOCKETS)
     QWebSocket m_socket;
 #endif

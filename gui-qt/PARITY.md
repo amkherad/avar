@@ -1,15 +1,11 @@
 # Electron → Qt parity
 
-Last audit: `2026-09-27T09:36:37.729430+00:00`
+Last audit: `2026-09-27T11:28:42.234002+00:00`
 
-**Score: 53/57 (93.0%)** — auto-updated by `scripts/parity_audit.py`.
+**Score: 57/57 (100.0%)** — auto-updated by `scripts/parity_audit.py`.
 
 ## Gaps (Electron yes, Qt no)
 
-- [ ] `sync:websocket-sse` — SSE path; WS optional
-- [ ] `sync:snapshot-parser` — uses list RPC not stream snapshot
-- [ ] `desktop:tray` — Electron tray not in Qt
-- [ ] `extension:bridge-parity` — C daemon stub; not full extension-bridge.cjs
 
 ## Matched
 
@@ -64,7 +60,11 @@ Last audit: `2026-09-27T09:36:37.729430+00:00`
 - [x] `layout:footer`
 - [x] `layout:console`
 - [x] `layout:session-selector`
+- [x] `sync:websocket-sse`
+- [x] `sync:snapshot-parser`
+- [x] `desktop:tray`
 - [x] `desktop:window-controls`
+- [x] `extension:bridge-parity`
 - [x] `ui:component-surface`
 
 ## Loop

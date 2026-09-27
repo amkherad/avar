@@ -22,6 +22,7 @@ public:
 
     void ensureBridgeProcess();
     void syncSettings();
+    void pingBridge();
 
     [[nodiscard]] QString bridgeBaseUrl() const;
 
@@ -29,8 +30,6 @@ signals:
     void bridgeReachableChanged(bool reachable);
 
 private:
-    void pingBridge();
-
     AppSettings &m_settings;
     QNetworkAccessManager m_network;
 #if !defined(AVAR_GUI_HOSTING_WASM)

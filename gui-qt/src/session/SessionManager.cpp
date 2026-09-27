@@ -71,6 +71,11 @@ void SessionManager::upsertSession(const SessionRecord &session)
     emit sessionsChanged();
 }
 
+bool SessionManager::isBuiltinLocalSession(const SessionRecord &session)
+{
+    return session.builtin && session.id == QStringLiteral("local");
+}
+
 void SessionManager::removeSession(const QString &id)
 {
     if (m_sessions.size() <= 1) {

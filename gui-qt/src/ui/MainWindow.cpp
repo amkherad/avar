@@ -12,11 +12,13 @@
 #include "theme/ThemeManager.hpp"
 #include "ui/AvarWindow.hpp"
 #include "ui/DesktopShellWindow.hpp"
+#include "ui/DesktopTray.hpp"
 #include "ui/pages/DashboardPage.hpp"
 #include "ui/pages/AddDownloadPopupPage.hpp"
 #include "ui/pages/BatchAddDownloadsPopupPage.hpp"
 #include "ui/pages/HelpPage.hpp"
 #include "ui/pages/SettingsPage.hpp"
+#include "ui/settings/SettingsContext.hpp"
 #include "ui/widgets/QueuePanelWidget.hpp"
 #include "ui/widgets/SessionSelector.hpp"
 #include "ui/widgets/SettingsSidebarNav.hpp"
@@ -43,14 +45,20 @@ MainWindow::MainWindow(Application &app, QWidget *parent)
 
     m_tr = std::make_unique<Translator>();
     m_tr->setLocale(app.settings().locale());
+    QObject::connect(&app.settings(), &AppSettings::localeChanged, m_tr.get(), [this] {
+        m_tr->setLocale(m_app.settings().locale());
+    });
     m_downloads = std::make_unique<DownloadTableModel>();
     m_queues = std::make_unique<QueueListModel>();
 
-    m_shell = new AppShell(*m_tr, app.themeManager(), app.layout(), app.sessions(), this);
+    m_shell = new AppShell(*m_tr, app.themeManager(), app.layout(), app.sessions(), app.extensionBridge(), this);
 
     QStackedWidget *stack = m_shell->pageStack();
-    m_dashboard = new DashboardPage(*m_tr, app.layout(), app.daemonClient(), *m_downloads, stack);
-    m_settings = new SettingsPage(*m_tr, app.settings(), app.daemonClient(), stack);
+    m_dashboard = new DashboardPage(*m_tr, app.layout(), app.daemonClient(), app.syncCoordinator(), *m_downloads,
+                                    stack);
+    const SettingsContext settingsCtx{*m_tr,          app.settings(),     app.guiPreferences(), app.daemonClient(),
+                                      app.sessions(), app.extensionBridge()};
+    m_settings = new SettingsPage(settingsCtx, stack);
     m_help = new HelpPage(*m_tr, stack);
     stack->addWidget(m_dashboard);
     stack->addWidget(m_settings);
@@ -162,7 +170,20 @@ MainWindow::MainWindow(Application &app, QWidget *parent)
     statsTimer->start();
 
     GuiLog::instance().info(QStringLiteral("Avar Qt GUI started"));
+
+#if defined(AVAR_GUI_HOSTING_DESKTOP)
+    m_tray = std::make_unique<DesktopTray>(*this, *m_tr, m_app.daemonClient(), m_app.settings());
+    m_tray->attachShellWindow(m_shellWindow.get());
+    m_tray->show();
+#endif
 }
+
+#if defined(AVAR_GUI_HOSTING_DESKTOP)
+QMainWindow *MainWindow::shellWindow() const
+{
+    return m_shellWindow.get();
+}
+#endif
 
 void MainWindow::show()
 {
@@ -191,6 +212,11 @@ void MainWindow::wireSync()
                 if (payload.hasStats) {
                     m_dashboard->setStats(payload.stats, true);
                 }
+#if defined(AVAR_GUI_HOSTING_DESKTOP)
+                if (m_tray) {
+                    m_tray->updateFromDownloads(payload.downloads);
+                }
+#endif
             });
 }
 

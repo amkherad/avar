@@ -20,6 +20,7 @@ public:
     [[nodiscard]] QString locale() const;
     [[nodiscard]] bool browserExtensionEnabled() const;
     [[nodiscard]] int sidebarWidth() const;
+    [[nodiscard]] bool keepInTrayOnClose() const;
 
     void setDaemonBaseUrl(const QString &url);
     void setAuthToken(const QString &token);
@@ -27,11 +28,13 @@ public:
     void setLocale(const QString &locale);
     void setBrowserExtensionEnabled(bool enabled);
     void setSidebarWidth(int width);
+    void setKeepInTrayOnClose(bool enabled);
 
 signals:
     void daemonConfigChanged();
     void themeSettingChanged();
     void localeChanged();
+    void desktopBehaviorChanged();
 
 private:
     QSettings m_store;

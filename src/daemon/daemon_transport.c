@@ -1316,6 +1316,8 @@ static bool ping_transport_timeout(const AvarTransportKind kind, const DaemonCon
             free(resp);
             return ok;
         }
+        case AvarTransportLocal:
+            return daemon_loop_is_running();
         default:
             return false;
     }
@@ -1398,6 +1400,8 @@ static bool rpc_transport(const AvarTransportKind kind, const DaemonConfig *cfg,
             return cfg->server.unix_socket.enabled &&
                    ipc_rpc_exchange(cfg->server.unix_socket.path, false, request_json,
                                     response_json_out, 5000U);
+        case AvarTransportLocal:
+            return daemon_rpc_handle(request_json, response_json_out);
         default:
             return false;
     }

@@ -8,9 +8,24 @@
 #include <QFile>
 #include <QGuiApplication>
 #include <QPalette>
+#include <QStyle>
+#include <QStyleFactory>
 #include <QStyleHints>
 
 namespace avar::gui {
+
+namespace {
+
+void ensureFusionStyle()
+{
+    if (qApp->style()->objectName() != QStringLiteral("Fusion")) {
+        if (QStyle *fusion = QStyleFactory::create(QStringLiteral("Fusion"))) {
+            qApp->setStyle(fusion);
+        }
+    }
+}
+
+} // namespace
 
 ThemeManager::ThemeManager(AppSettings &settings, QObject *parent)
     : QObject(parent)
@@ -33,6 +48,7 @@ void ThemeManager::refreshFromSettings()
 void ThemeManager::apply()
 {
     refreshFromSettings();
+    ensureFusionStyle();
 
     QFile templateFile(QStringLiteral(":/styles/app.qss"));
     QString base;
@@ -40,19 +56,64 @@ void ThemeManager::apply()
         base = QString::fromUtf8(templateFile.readAll());
     }
 
-    qApp->setStyleSheet(buildApplicationStylesheet(m_tokens, base));
-
     QPalette palette;
-    palette.setColor(QPalette::Window, QColor(m_tokens.bg));
-    palette.setColor(QPalette::WindowText, QColor(m_tokens.text));
-    palette.setColor(QPalette::Base, QColor(m_tokens.bgElevated));
-    palette.setColor(QPalette::AlternateBase, QColor(m_tokens.bgMuted));
-    palette.setColor(QPalette::Text, QColor(m_tokens.text));
-    palette.setColor(QPalette::Button, QColor(m_tokens.bgMuted));
-    palette.setColor(QPalette::ButtonText, QColor(m_tokens.text));
-    palette.setColor(QPalette::Highlight, QColor(m_tokens.primary));
-    palette.setColor(QPalette::HighlightedText, QColor(m_tokens.primaryText));
+    const QColor window = QColor(m_tokens.bg);
+    const QColor elevated = QColor(m_tokens.bgElevated);
+    const QColor muted = QColor(m_tokens.bgMuted);
+    const QColor border = QColor(m_tokens.border);
+    const QColor text = QColor(m_tokens.text);
+    const QColor textMuted = QColor(m_tokens.textMuted);
+    const QColor primary = QColor(m_tokens.primary);
+    const QColor primaryText = QColor(m_tokens.primaryText);
+
+    const auto applyPaletteGroup = [&](QPalette::ColorGroup group) {
+        if (group == QPalette::Disabled) {
+            palette.setColor(group, QPalette::Window, window);
+            palette.setColor(group, QPalette::WindowText, textMuted);
+            palette.setColor(group, QPalette::Base, muted);
+            palette.setColor(group, QPalette::AlternateBase, muted);
+            palette.setColor(group, QPalette::Text, textMuted);
+            palette.setColor(group, QPalette::Button, muted);
+            palette.setColor(group, QPalette::ButtonText, textMuted);
+            palette.setColor(group, QPalette::BrightText, textMuted);
+            palette.setColor(group, QPalette::PlaceholderText, textMuted);
+            palette.setColor(group, QPalette::Highlight, primary);
+            palette.setColor(group, QPalette::HighlightedText, primaryText);
+            palette.setColor(group, QPalette::Link, primary);
+            palette.setColor(group, QPalette::Mid, border);
+            palette.setColor(group, QPalette::Dark, border);
+            palette.setColor(group, QPalette::Light, muted);
+            palette.setColor(group, QPalette::Shadow, border);
+            palette.setColor(group, QPalette::ToolTipBase, elevated);
+            palette.setColor(group, QPalette::ToolTipText, text);
+            return;
+        }
+        palette.setColor(group, QPalette::Window, window);
+        palette.setColor(group, QPalette::WindowText, text);
+        palette.setColor(group, QPalette::Base, elevated);
+        palette.setColor(group, QPalette::AlternateBase, muted);
+        palette.setColor(group, QPalette::Text, text);
+        palette.setColor(group, QPalette::Button, muted);
+        palette.setColor(group, QPalette::ButtonText, text);
+        palette.setColor(group, QPalette::BrightText, text);
+        palette.setColor(group, QPalette::PlaceholderText, textMuted);
+        palette.setColor(group, QPalette::Highlight, primary);
+        palette.setColor(group, QPalette::HighlightedText, primaryText);
+        palette.setColor(group, QPalette::Link, primary);
+        palette.setColor(group, QPalette::Mid, border);
+        palette.setColor(group, QPalette::Dark, border);
+        palette.setColor(group, QPalette::Light, muted);
+        palette.setColor(group, QPalette::Shadow, border);
+        palette.setColor(group, QPalette::ToolTipBase, elevated);
+        palette.setColor(group, QPalette::ToolTipText, text);
+    };
+
+    applyPaletteGroup(QPalette::Active);
+    applyPaletteGroup(QPalette::Inactive);
+    applyPaletteGroup(QPalette::Disabled);
     qApp->setPalette(palette);
+
+    qApp->setStyleSheet(buildApplicationStylesheet(m_tokens, base));
 
     emit themeChanged(m_tokens);
 }

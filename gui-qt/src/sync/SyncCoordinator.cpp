@@ -2,6 +2,9 @@
 
 #include "api/DaemonClient.hpp"
 #include "config/AppSettings.hpp"
+#include "config/GuiPreferences.hpp"
+#include "sync/EventsSseClient.hpp"
+#include "sync/SnapshotParser.hpp"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -11,40 +14,53 @@
 
 namespace avar::gui {
 
-SyncCoordinator::SyncCoordinator(DaemonClient &client, AppSettings &settings, QObject *parent)
+SyncCoordinator::SyncCoordinator(DaemonClient &client, AppSettings &settings, GuiPreferences &guiPreferences,
+                                 QObject *parent)
     : QObject(parent)
     , m_client(client)
     , m_settings(settings)
+    , m_guiPreferences(guiPreferences)
 {
-    m_pingTimer.setInterval(5000);
+    m_sse = std::make_unique<EventsSseClient>(client, this);
+    applyTimingFromPreferences();
     connect(&m_pingTimer, &QTimer::timeout, this, [this] {
         m_client.health([this](bool ok, HealthInfo) {
             setState(ok ? ConnectionState::Connected : ConnectionState::Disconnected);
         });
     });
 
-    m_pollTimer.setInterval(3000);
     connect(&m_pollTimer, &QTimer::timeout, this, [this] { refreshLists(); });
+
+    connect(&m_guiPreferences, &GuiPreferences::preferencesChanged, this, [this] { applyTimingFromPreferences(); });
+
+    connect(m_sse.get(), &EventsSseClient::connectionOpened, this, [this] {
+        setState(ConnectionState::Connected);
+        m_pollTimer.stop();
+    });
+    connect(m_sse.get(), &EventsSseClient::connectionLost, this, [this] {
+        startPollFallback();
+    });
+    connect(m_sse.get(), &EventsSseClient::streamJsonReceived, this, &SyncCoordinator::handleStreamJson);
 
 #if defined(AVAR_GUI_HAS_WEBSOCKETS)
     connect(&m_socket, &QWebSocket::connected, this, [this] {
         setState(ConnectionState::Connected);
         m_pollTimer.stop();
+        m_sse->stop();
     });
 
     connect(&m_socket, &QWebSocket::disconnected, this, [this] {
         setState(ConnectionState::Disconnected);
         startPollFallback();
+        startSseSync();
         QTimer::singleShot(1500, this, [this] { reconnectWebSocket(); });
     });
 
     connect(&m_socket, &QWebSocket::textMessageReceived, this, [this](const QString &message) {
         const QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
-        const QJsonObject root = doc.object();
-        if (root.value(QStringLiteral("type")).toString() != QStringLiteral("snapshot")) {
-            return;
+        if (doc.isObject()) {
+            handleStreamJson(doc.object());
         }
-        refreshLists();
     });
 #endif
 
@@ -68,6 +84,12 @@ void SyncCoordinator::start()
 {
     setState(ConnectionState::Connecting);
     m_pingTimer.start();
+    if (m_client.usesInMemoryTransport()) {
+        startPollFallback();
+        setState(ConnectionState::Connected);
+        return;
+    }
+    startSseSync();
 #if defined(AVAR_GUI_HAS_WEBSOCKETS)
     reconnectWebSocket();
 #endif
@@ -78,6 +100,9 @@ void SyncCoordinator::stop()
 {
     m_pingTimer.stop();
     m_pollTimer.stop();
+    if (m_sse) {
+        m_sse->stop();
+    }
 #if defined(AVAR_GUI_HAS_WEBSOCKETS)
     if (m_socket.state() != QAbstractSocket::UnconnectedState) {
         m_socket.close();
@@ -90,13 +115,19 @@ ConnectionState SyncCoordinator::connectionState() const
     return m_state;
 }
 
+void SyncCoordinator::startSseSync()
+{
+    m_sse->setWantsSystemStats(true);
+    m_sse->start();
+}
+
 void SyncCoordinator::reconnectWebSocket()
 {
 #if defined(AVAR_GUI_HAS_WEBSOCKETS)
     if (m_socket.state() != QAbstractSocket::UnconnectedState) {
         return;
     }
-    const QUrl url = m_client.webSocketUrl(false);
+    const QUrl url = m_client.webSocketUrl(true);
     QNetworkRequest request(url);
     if (!m_client.options().authToken.isEmpty()) {
         request.setRawHeader("Authorization",
@@ -110,6 +141,33 @@ void SyncCoordinator::startPollFallback()
 {
     if (!m_pollTimer.isActive()) {
         m_pollTimer.start();
+    }
+}
+
+void SyncCoordinator::handleStreamJson(const QJsonObject &root)
+{
+    const QJsonValue raw = root;
+    if (isUnchangedStreamPayload(raw)) {
+        return;
+    }
+
+    if (const std::optional<SystemStatsInfo> stats = parseStreamStatsPayload(raw)) {
+        SnapshotPayload payload;
+        payload.stats = *stats;
+        payload.hasStats = true;
+        emit snapshotReceived(payload);
+        return;
+    }
+
+    if (const std::optional<SnapshotPayload> parsed = parseSnapshotPayload(raw)) {
+        SnapshotPayload payload = *parsed;
+        if (root.value(QStringLiteral("type")).toString() == QStringLiteral("snapshot")) {
+            emit snapshotReceived(payload);
+            return;
+        }
+        if (!payload.downloads.isEmpty() || !payload.queues.isEmpty()) {
+            emit snapshotReceived(payload);
+        }
     }
 }
 
@@ -139,6 +197,12 @@ void SyncCoordinator::setState(ConnectionState state)
     }
     m_state = state;
     emit connectionStateChanged(state);
+}
+
+void SyncCoordinator::applyTimingFromPreferences()
+{
+    m_pingTimer.setInterval(m_guiPreferences.pingIntervalMs());
+    m_pollTimer.setInterval(m_guiPreferences.refreshIntervalMs());
 }
 
 } // namespace avar::gui

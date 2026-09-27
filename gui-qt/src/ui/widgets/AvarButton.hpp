@@ -8,6 +8,7 @@ enum class AvarButtonVariant {
     Primary,
     Secondary,
     Ghost,
+    Danger,
 };
 
 class AvarButton final : public QPushButton {

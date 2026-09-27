@@ -1,5 +1,8 @@
 option(AVAR_GUI_QT_WASM "Cross-compile for Qt WebAssembly (Emscripten)" OFF)
 option(AVAR_GUI_QT_BUILD_TESTS "Build gui-qt unit tests" ON)
+option(AVAR_GUI_QT_EMBED_BACKEND
+    "Build and link the Avar daemon core into the desktop GUI (in-process Local session)"
+    ON)
 option(AVAR_GUI_QT_ENABLE_EXTENSION_SUBPROCESS
     "Launch extensions/daemon bridge as a child process on desktop"
     ON)

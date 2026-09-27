@@ -8,3 +8,4 @@ endfunction()
 
 avar_gui_qt_add_test(test_json_rpc test_json_rpc.cpp ../src/api/JsonRpc.cpp)
 avar_gui_qt_add_test(test_theme_tokens test_theme_tokens.cpp ../src/theme/ThemeTokens.cpp ../src/theme/StylesheetBuilder.cpp)
+avar_gui_qt_add_test(test_snapshot_parser test_snapshot_parser.cpp ../src/sync/SnapshotParser.cpp)

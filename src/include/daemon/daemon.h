@@ -6,6 +6,10 @@
 
 #include "avar.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* -------------------------------------------------------------------------- */
 /* Session and transport kinds (config string values in avar.h)               */
 /* -------------------------------------------------------------------------- */
@@ -122,6 +126,9 @@ bool daemon_server_fs_browse_enabled(void);
 
 int daemon_start(const DaemonConfig *cfg);
 
+/** True while an in-process daemon_start loop is running. */
+bool daemon_loop_is_running(void);
+
 /** Request a graceful shutdown of an in-process daemon loop (no-op when idle). */
 void daemon_request_shutdown(void);
 
@@ -161,5 +168,9 @@ int daemon_uninstall_windows_service(void);
 int start_daemon(void);
 int stop_daemon(void);
 int restart_daemon(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

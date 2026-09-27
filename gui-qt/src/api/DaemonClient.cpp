@@ -1,6 +1,10 @@
 #include "api/DaemonClient.hpp"
 
 #include "api/JsonRpc.hpp"
+#if defined(AVAR_GUI_QT_EMBED_BACKEND)
+#include "backend/InMemoryRpc.hpp"
+#endif
+#include "sync/SnapshotParser.hpp"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -21,27 +25,12 @@ QString trimBaseUrl(const QString &url)
 
 DownloadInfo parseDownload(const QJsonValue &value)
 {
-    DownloadInfo item;
-    const QJsonObject obj = value.toObject();
-    item.id = obj.value(QStringLiteral("id")).toString();
-    item.name = obj.value(QStringLiteral("name")).toString();
-    item.status = obj.value(QStringLiteral("status")).toString();
-    item.queueId = obj.value(QStringLiteral("queue")).toString();
-    item.totalBytes = obj.value(QStringLiteral("totalBytes")).toVariant().toLongLong();
-    item.downloadedBytes = obj.value(QStringLiteral("downloadedBytes")).toVariant().toLongLong();
-    item.progress = obj.value(QStringLiteral("progress")).toDouble();
-    return item;
+    return parseDownloadItem(value);
 }
 
 QueueInfo parseQueue(const QJsonValue &value)
 {
-    QueueInfo item;
-    const QJsonObject obj = value.toObject();
-    item.id = obj.value(QStringLiteral("id")).toString();
-    item.name = obj.value(QStringLiteral("name")).toString();
-    item.description = obj.value(QStringLiteral("description")).toString();
-    item.running = obj.value(QStringLiteral("running")).toBool();
-    return item;
+    return parseQueueRecord(value);
 }
 
 } // namespace
@@ -62,6 +51,16 @@ void DaemonClient::setOptions(const Options &options)
 DaemonClient::Options DaemonClient::options() const
 {
     return m_options;
+}
+
+void DaemonClient::setInMemoryTransport(bool enabled)
+{
+    m_inMemoryTransport = enabled;
+}
+
+bool DaemonClient::usesInMemoryTransport() const
+{
+    return m_inMemoryTransport;
 }
 
 QUrl DaemonClient::rpcUrl() const
@@ -86,6 +85,14 @@ QUrl DaemonClient::statsUrl() const
         return QUrl(QStringLiteral("/api/stats"));
     }
     return QUrl(m_options.baseUrl + QStringLiteral("/api/stats"));
+}
+
+QUrl DaemonClient::eventsUrl() const
+{
+    if (m_options.useRelativeApi) {
+        return QUrl(QStringLiteral("/api/events"));
+    }
+    return QUrl(m_options.baseUrl + QStringLiteral("/api/events"));
 }
 
 QUrl DaemonClient::webSocketUrl(bool wantsSystemStats) const
@@ -123,6 +130,27 @@ int DaemonClient::nextRequestId()
 
 void DaemonClient::health(std::function<void(bool, HealthInfo)> callback)
 {
+    if (m_inMemoryTransport) {
+#if defined(AVAR_GUI_QT_EMBED_BACKEND)
+        rpc(QStringLiteral("health"), {}, [callback](bool ok, const QJsonValue &result, const QString &) {
+            if (!ok) {
+                callback(false, {});
+                return;
+            }
+            const QJsonObject obj = result.toObject();
+            HealthInfo info;
+            info.status = obj.value(QStringLiteral("status")).toString();
+            info.queueCount = obj.value(QStringLiteral("queueCount")).toInt();
+            info.activeDownloads = obj.value(QStringLiteral("activeDownloads")).toInt();
+            info.uptimeSeconds = obj.value(QStringLiteral("uptimeSeconds")).toVariant().toLongLong();
+            callback(info.status == QStringLiteral("ok"), info);
+        });
+        return;
+#else
+        callback(false, {});
+        return;
+#endif
+    }
     QNetworkReply *reply = m_network.get(authorizedRequest(healthUrl()));
     connect(reply, &QNetworkReply::finished, this, [reply, callback] {
         reply->deleteLater();
@@ -145,6 +173,26 @@ void DaemonClient::rpc(const QString &method,
                        std::function<void(bool, QJsonValue, QString)> callback)
 {
     const QJsonObject payload = makeRpcRequest(method, params, nextRequestId());
+    if (m_inMemoryTransport) {
+#if defined(AVAR_GUI_QT_EMBED_BACKEND)
+        QByteArray response;
+        QString error;
+        if (!inMemoryRpcRequest(QJsonDocument(payload).toJson(QJsonDocument::Compact), &response, &error)) {
+            callback(false, {}, error);
+            return;
+        }
+        const JsonRpcResponse parsed = parseRpcResponse(response);
+        if (!parsed.ok) {
+            callback(false, {}, parsed.error.message);
+            return;
+        }
+        callback(true, parsed.result, {});
+        return;
+#else
+        callback(false, {}, QStringLiteral("Embedded backend not built"));
+        return;
+#endif
+    }
     QNetworkReply *reply =
         m_network.post(authorizedRequest(rpcUrl()), QJsonDocument(payload).toJson(QJsonDocument::Compact));
     connect(reply, &QNetworkReply::finished, this, [reply, callback] {
@@ -217,6 +265,34 @@ void DaemonClient::addDownload(const QString &url, const QString &queueName)
 
 void DaemonClient::systemStats(std::function<void(bool, SystemStatsInfo)> callback)
 {
+    if (m_inMemoryTransport) {
+#if defined(AVAR_GUI_QT_EMBED_BACKEND)
+        rpc(QStringLiteral("system.stats"), {}, [callback](bool ok, const QJsonValue &result, const QString &) {
+            if (!ok) {
+                callback(false, {});
+                return;
+            }
+            const QJsonObject obj = result.toObject();
+            SystemStatsInfo stats;
+            stats.status = obj.value(QStringLiteral("status")).toString(QStringLiteral("ok"));
+            stats.diskTotalBytes = obj.value(QStringLiteral("diskTotalBytes")).toVariant().toLongLong();
+            stats.diskFreeBytes = obj.value(QStringLiteral("diskFreeBytes")).toVariant().toLongLong();
+            stats.memoryTotalBytes = obj.value(QStringLiteral("memoryTotalBytes")).toVariant().toLongLong();
+            stats.memoryUsedBytes = obj.value(QStringLiteral("memoryUsedBytes")).toVariant().toLongLong();
+            stats.memoryUsedPercent = obj.value(QStringLiteral("memoryUsedPercent")).toDouble();
+            stats.cpuUsagePercent = obj.value(QStringLiteral("cpuUsagePercent")).toDouble();
+            stats.networkRxBytesPerSec =
+                obj.value(QStringLiteral("networkRxBytesPerSec")).toVariant().toLongLong();
+            stats.networkTxBytesPerSec =
+                obj.value(QStringLiteral("networkTxBytesPerSec")).toVariant().toLongLong();
+            callback(stats.status == QStringLiteral("ok"), stats);
+        });
+        return;
+#else
+        callback(false, {});
+        return;
+#endif
+    }
     QNetworkReply *reply = m_network.get(authorizedRequest(statsUrl()));
     connect(reply, &QNetworkReply::finished, this, [reply, callback] {
         reply->deleteLater();

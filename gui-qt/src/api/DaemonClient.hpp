@@ -54,9 +54,13 @@ public:
     void setOptions(const Options &options);
     [[nodiscard]] Options options() const;
 
+    void setInMemoryTransport(bool enabled);
+    [[nodiscard]] bool usesInMemoryTransport() const;
+
     [[nodiscard]] QUrl rpcUrl() const;
     [[nodiscard]] QUrl healthUrl() const;
     [[nodiscard]] QUrl statsUrl() const;
+    [[nodiscard]] QUrl eventsUrl() const;
     [[nodiscard]] QUrl webSocketUrl(bool wantsSystemStats = false) const;
 
     void health(std::function<void(bool, HealthInfo)> callback) override;
@@ -116,6 +120,7 @@ private:
     Options m_options;
     QNetworkAccessManager m_network;
     int m_requestId = 1;
+    bool m_inMemoryTransport = false;
 };
 
 } // namespace avar::gui

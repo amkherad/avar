@@ -16,6 +16,9 @@ AvarButton::AvarButton(AvarButtonVariant variant, QWidget *parent)
     case AvarButtonVariant::Ghost:
         className = QStringLiteral("AvarButtonGhost");
         break;
+    case AvarButtonVariant::Danger:
+        className = QStringLiteral("AvarButtonDanger");
+        break;
     }
     setProperty("class", className);
 }

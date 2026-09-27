@@ -15,10 +15,12 @@ class Translator;
 class ThemeManager;
 class LayoutPreferences;
 class SessionManager;
+class ExtensionBridgeClient;
 class QueuePanelWidget;
 class SessionSelector;
 class SettingsSidebarNav;
 class HelpSidebarNav;
+class HeaderWindowDrag;
 
 enum class AppPage {
     Dashboard = 0,
@@ -34,6 +36,7 @@ public:
              ThemeManager &theme,
              LayoutPreferences &layout,
              SessionManager &sessions,
+             ExtensionBridgeClient &extensionBridge,
              QWidget *parent = nullptr);
 
     [[nodiscard]] QStackedWidget *pageStack();
@@ -58,6 +61,7 @@ private:
     ThemeManager &m_theme;
     LayoutPreferences &m_layout;
     SessionManager &m_sessions;
+    ExtensionBridgeClient &m_extension;
 
     QWidget *m_header = nullptr;
     QPushButton *m_backButton = nullptr;
@@ -68,6 +72,9 @@ private:
     SettingsSidebarNav *m_settingsSidebarNav = nullptr;
     QWidget *m_helpSidebar = nullptr;
     QStackedWidget *m_stack = nullptr;
+    QPushButton *m_helpHeaderButton = nullptr;
+    QPushButton *m_settingsHeaderButton = nullptr;
+    HeaderWindowDrag *m_headerDrag = nullptr;
     AppPage m_page = AppPage::Dashboard;
 };
 

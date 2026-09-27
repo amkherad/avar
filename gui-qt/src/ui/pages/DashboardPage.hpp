@@ -2,6 +2,7 @@
 
 #include "api/DaemonClient.hpp"
 #include "config/LayoutPreferences.hpp"
+#include "console/ConsoleStore.hpp"
 
 #include <QWidget>
 
@@ -17,6 +18,7 @@ class DownloadFilterProxyModel;
 class DownloadGridView;
 class ConsoleDock;
 class FooterBar;
+class SyncCoordinator;
 class DownloadDetailPanelWidget;
 
 class DashboardPage final : public QWidget {
@@ -26,6 +28,7 @@ public:
     DashboardPage(Translator &translator,
                   LayoutPreferences &layout,
                   DaemonClient &daemon,
+                  SyncCoordinator &sync,
                   DownloadTableModel &downloads,
                   QWidget *parent = nullptr);
 
@@ -59,7 +62,7 @@ private:
     QTableView *m_table = nullptr;
     DownloadGridView *m_grid = nullptr;
     QLineEdit *m_search = nullptr;
-    qint64 m_logOffset = 0;
+    ConsoleStore m_consoleStore;
 };
 
 } // namespace avar::gui

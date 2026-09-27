@@ -32,8 +32,25 @@ coverage.xml
 /dist-all/
 /.cmake/
 /build-test/
-daemon_transport.c.gcov
 /.cmake.tar.gz
+
+# In-tree CMake at repository root (cmake -S . -B .)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+install_manifest.txt
+Testing/
+Makefile
+*.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+
+# Coverage artifacts
+*.gcov
+*.gcda
+*.gcno
 
 ###########
 
@@ -63,12 +80,12 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Local Qt / Emscripten toolchain (gui-qt dev; not vendored in repo) #
-#####################################################################
-/.emsdk/
-/.qt/
-/.venv-aqt/
-/aqtinstall.log
+# Local Qt / Emscripten / aqt (repo root or subprojects; never commit) #
+########################################################################
+.qt/
+.emsdk/
+.venv-aqt/
+aqtinstall.log
 
 # Node.js #
 ###########

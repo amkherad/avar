@@ -13,7 +13,9 @@ DownloadDetailPopupPage::DownloadDetailPopupPage(Translator &translator, QWidget
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(16, 16, 16, 16);
-    layout->addWidget(new QLabel(m_tr.tr(QStringLiteral("download.detailsTitle")), this));
+    auto *title = new QLabel(m_tr.tr(QStringLiteral("download.detailsTitle")), this);
+    title->setProperty("class", QStringLiteral("AvarPopupTitle"));
+    layout->addWidget(title);
 }
 
 void DownloadDetailPopupPage::setDownload(const DownloadInfo &info)

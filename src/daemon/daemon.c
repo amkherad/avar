@@ -216,8 +216,8 @@ int daemon_write_pid_file(const char *path) {
 }
 
 static int daemon_acquire_pid_file(const char *path) {
-    if (path == NULL) {
-        return -1;
+    if (path == NULL || path[0] == '\0') {
+        return 0;
     }
 
     (void)daemon_cleanup_stale_pid_file(path);
@@ -673,6 +673,10 @@ int daemon_reload_config(DaemonConfig *cfg) {
     memcpy(&_runtime.cfg, cfg, sizeof _runtime.cfg);
     LOG_INFO("Daemon configuration reloaded");
     return EXIT_SUCCESS;
+}
+
+bool daemon_loop_is_running(void) {
+    return _daemon_loop_active;
 }
 
 void daemon_request_shutdown(void) {
