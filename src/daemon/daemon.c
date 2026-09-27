@@ -1,4 +1,5 @@
 ﻿#include <daemon/daemon.h>
+#include <daemon/daemon_embed.h>
 #include <daemon/daemon_rpc.h>
 #include <daemon/daemon_transport.h>
 #include <download.h>
@@ -112,6 +113,7 @@ static int remove_ctrl_c_handler(void) {
 static void handle_ctrl_c(void) {
     LOG_INFO("Daemon shutdown requested");
     _runtime.running = false;
+    daemon_embed_on_ctrl_c();
 }
 
 bool daemon_cleanup_stale_pid_file(const char *path) {

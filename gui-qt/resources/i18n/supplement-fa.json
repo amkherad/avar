@@ -1,0 +1,16 @@
+{
+  "nav": {
+    "themeToggle": "تغییر روشن/تیره"
+  },
+  "parity": {
+    "panelPending": "این بخش هنوز پیاده‌سازی نشده؛ gui-qt/PARITY.md را ببینید."
+  },
+  "queue": {
+    "nameLabel": "نام صف"
+  },
+  "settings": {
+    "general": {
+      "locale": "زبان"
+    }
+  }
+}

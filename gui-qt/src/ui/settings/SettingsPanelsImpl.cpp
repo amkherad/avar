@@ -1,5 +1,7 @@
 #include "ui/settings/SettingsPanelsImpl.hpp"
 
+#include "ui/settings/SettingsLayout.hpp"
+
 #include "api/DaemonClient.hpp"
 #include "api/DaemonTypes.hpp"
 #include "config/AppSettings.hpp"
@@ -46,15 +48,6 @@
 namespace avar::gui {
 
 namespace {
-
-QWidget *wrapScroll(QWidget *content)
-{
-    auto *scroll = new QScrollArea();
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(content);
-    return scroll;
-}
 
 QLabel *sectionTitle(const QString &text, QWidget *parent)
 {
@@ -390,7 +383,7 @@ QWidget *buildDownloadSettingsPanel(const SettingsContext &ctx, QWidget *parent)
         });
     });
 
-    return wrapScroll(panel);
+    return wrapSettingsPage(panel);
 }
 
 QWidget *buildQueuesSettingsPanel(const SettingsContext &ctx, QWidget *parent)
@@ -460,7 +453,7 @@ QWidget *buildQueuesSettingsPanel(const SettingsContext &ctx, QWidget *parent)
         ctx.daemon.addQueue(params, [refresh](bool, const QString &, const QString &) { refresh(); });
     });
 
-    return wrapScroll(panel);
+    return wrapSettingsPage(panel, kSettingsWideFormMaxWidth);
 }
 
 QWidget *buildDaemonSettingsPanel(const SettingsContext &ctx, QWidget *parent)
@@ -551,7 +544,7 @@ QWidget *buildDaemonSettingsPanel(const SettingsContext &ctx, QWidget *parent)
         });
     });
 
-    return wrapScroll(panel);
+    return wrapSettingsPage(panel);
 }
 
 QWidget *buildBrowserSettingsPanel(const SettingsContext &ctx, QWidget *parent)
@@ -647,7 +640,7 @@ QWidget *buildBrowserSettingsPanel(const SettingsContext &ctx, QWidget *parent)
     layout->addStretch();
 
     ctx.extension.pingBridge();
-    return wrapScroll(panel);
+    return wrapSettingsPage(panel);
 }
 
 QWidget *buildShortcutsSettingsPanel(const SettingsContext &ctx, QWidget *parent)
@@ -716,7 +709,7 @@ QWidget *buildShortcutsSettingsPanel(const SettingsContext &ctx, QWidget *parent
     });
     layout->addWidget(resetBtn);
 
-    return wrapScroll(panel);
+    return wrapSettingsPage(panel, kSettingsWideFormMaxWidth);
 }
 
 QWidget *buildAboutSettingsPanel(const SettingsContext &ctx, QWidget *parent)
@@ -783,7 +776,7 @@ QWidget *buildAboutSettingsPanel(const SettingsContext &ctx, QWidget *parent)
                    QStringLiteral("settings.about.reportBugButton"), repo + QStringLiteral("/issues/new"), false);
 
     layout->addStretch();
-    return wrapScroll(panel);
+    return wrapSettingsPage(panel);
 }
 
 } // namespace avar::gui

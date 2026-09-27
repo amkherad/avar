@@ -15,12 +15,38 @@
 #include <QPushButton>
 #include <QStyle>
 #include <QVBoxLayout>
+#include <QPainter>
+#include <QTransform>
 
 #include <functional>
 
 namespace avar::gui {
 
 namespace {
+
+class SessionListItemFrame final : public QFrame {
+public:
+    explicit SessionListItemFrame(QWidget *parent = nullptr)
+        : QFrame(parent)
+    {
+        setProperty("class", QStringLiteral("AvarSessionListItem"));
+        setCursor(Qt::PointingHandCursor);
+        setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
+    }
+
+    std::function<void()> onActivated;
+
+protected:
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton && onActivated) {
+            onActivated();
+            event->accept();
+            return;
+        }
+        QFrame::mouseReleaseEvent(event);
+    }
+};
 
 class SessionTriggerWidget final : public QWidget {
 public:
@@ -64,6 +90,34 @@ QString elidedLabelText(const QLabel &label, const QString &text)
     }
     const QFontMetrics metrics(label.fontMetrics());
     return metrics.elidedText(text, Qt::ElideRight, width);
+}
+
+QPixmap dropdownChevronPixmap(const QColor &color, int size, bool open)
+{
+    QPixmap pixmap(size, size);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    if (open) {
+        QTransform transform;
+        transform.translate(size / 2.0, size / 2.0);
+        transform.rotate(180);
+        transform.translate(-size / 2.0, -size / 2.0);
+        painter.setTransform(transform);
+    }
+    QPen pen(color, 1.6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    const qreal inset = size * 0.28;
+    const qreal midY = size * 0.62;
+    const qreal topY = size * 0.38;
+    const QPointF points[] = {
+        QPointF(inset, topY),
+        QPointF(size / 2.0, midY),
+        QPointF(size - inset, topY),
+    };
+    painter.drawPolyline(points, 3);
+    return pixmap;
 }
 
 } // namespace
@@ -117,9 +171,10 @@ SessionSelector::SessionSelector(Translator &translator, SessionManager &session
     m_status->setProperty("class", QStringLiteral("AvarSessionStatus"));
     m_status->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
 
-    m_chevron = new QLabel(QStringLiteral("▾"), trigger);
+    m_chevron = new QLabel(trigger);
     m_chevron->setProperty("class", QStringLiteral("AvarSessionChevron"));
     m_chevron->setAlignment(Qt::AlignCenter);
+    m_chevron->setFixedSize(16, 16);
 
     grid->addWidget(m_dot, 0, 0, Qt::AlignHCenter | Qt::AlignVCenter);
     grid->addWidget(m_refresh, 1, 0, Qt::AlignHCenter | Qt::AlignVCenter);
@@ -143,13 +198,16 @@ SessionSelector::SessionSelector(Translator &translator, SessionManager &session
     m_menuListLayout->setContentsMargins(0, 0, 0, 0);
     m_menuListLayout->setSpacing(6);
 
-    auto *menuScroll = new QScrollArea(m_menuPopup);
-    menuScroll->setWidgetResizable(true);
-    menuScroll->setFrameShape(QFrame::NoFrame);
-    menuScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    menuScroll->setMaximumHeight(320);
-    menuScroll->setWidget(m_menuListHost);
-    menuOuter->addWidget(menuScroll, 1);
+    m_menuScroll = new QScrollArea(m_menuPopup);
+    m_menuScroll->setObjectName(QStringLiteral("AvarSessionMenuScroll"));
+    m_menuScroll->setWidgetResizable(true);
+    m_menuScroll->setFrameShape(QFrame::NoFrame);
+    m_menuScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_menuScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_menuScroll->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    m_menuScroll->setMaximumHeight(320);
+    m_menuScroll->setWidget(m_menuListHost);
+    menuOuter->addWidget(m_menuScroll);
 
     auto *addBtn = new AvarButton(AvarButtonVariant::Secondary, m_menuPopup);
     addBtn->setProperty("class", QStringLiteral("AvarSessionAdd"));
@@ -157,6 +215,7 @@ SessionSelector::SessionSelector(Translator &translator, SessionManager &session
     addBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     QObject::connect(addBtn, &QPushButton::clicked, this, [this] {
         closeMenu();
+        emit addSessionRequested();
     });
     menuOuter->addWidget(addBtn);
 
@@ -168,11 +227,23 @@ SessionSelector::SessionSelector(Translator &translator, SessionManager &session
 
     rebuildMenu();
     updateTrigger();
+    updateChevronIcon();
 }
 
 void SessionSelector::setConnectionState(ConnectionState state)
 {
     m_connection = state;
+    updateTrigger();
+}
+
+void SessionSelector::retranslateUi()
+{
+    if (m_refresh != nullptr) {
+        m_refresh->setToolTip(m_tr.tr(QStringLiteral("session.refresh")));
+    }
+    if (m_menuPopup != nullptr) {
+        rebuildMenu();
+    }
     updateTrigger();
 }
 
@@ -188,6 +259,15 @@ void SessionSelector::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     updateTrigger();
+}
+
+void SessionSelector::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ApplicationPaletteChange
+        || event->type() == QEvent::ThemeChange) {
+        updateChevronIcon();
+    }
 }
 
 void SessionSelector::toggleMenu()
@@ -216,17 +296,46 @@ void SessionSelector::setMenuOpen(bool open)
         return;
     }
     m_menuOpen = open;
-    m_chevron->setText(open ? QStringLiteral("▴") : QStringLiteral("▾"));
     m_chevron->setProperty("open", open);
-    m_chevron->style()->unpolish(m_chevron);
-    m_chevron->style()->polish(m_chevron);
+    updateChevronIcon();
+}
+
+void SessionSelector::updateChevronIcon()
+{
+    if (m_chevron == nullptr) {
+        return;
+    }
+    const QColor color = palette().color(QPalette::PlaceholderText);
+    m_chevron->setPixmap(dropdownChevronPixmap(color, 16, m_menuOpen));
+}
+
+void SessionSelector::updateMenuScrollHeight()
+{
+    if (m_menuScroll == nullptr || m_menuListHost == nullptr) {
+        return;
+    }
+
+    const int width = m_trigger != nullptr ? m_trigger->width() - 20 : m_menuPopup->width();
+    if (width > 0) {
+        m_menuListHost->setMinimumWidth(qMax(0, width - 8));
+    }
+
+    m_menuListHost->adjustSize();
+    const int contentHeight = m_menuListHost->sizeHint().height();
+    const int maxHeight = 320;
+    const int scrollHeight = contentHeight > 0 ? qMin(contentHeight, maxHeight) : 0;
+    m_menuScroll->setMinimumHeight(scrollHeight);
+    m_menuScroll->setMaximumHeight(maxHeight);
+    if (scrollHeight > 0) {
+        m_menuScroll->setFixedHeight(scrollHeight);
+    }
 }
 
 void SessionSelector::positionMenu()
 {
-    m_menuPopup->adjustSize();
     const int width = m_trigger->width();
     m_menuPopup->setFixedWidth(width);
+    updateMenuScrollHeight();
     m_menuPopup->adjustSize();
 
     const QPoint topLeft = m_trigger->mapToGlobal(QPoint(0, 0));
@@ -246,34 +355,38 @@ void SessionSelector::rebuildMenu()
     const QString activeId = m_sessions.activeSessionId();
     for (const SessionRecord &session : m_sessions.sessions()) {
         const bool active = session.id == activeId;
-        auto *item = new QPushButton(m_menuListHost);
-        item->setProperty("class", QStringLiteral("AvarSessionListItem"));
+        auto *item = new SessionListItemFrame(m_menuListHost);
         item->setProperty("active", active);
-        item->setFlat(true);
-        item->setCursor(Qt::PointingHandCursor);
+        item->style()->unpolish(item);
+        item->style()->polish(item);
 
         auto *itemLayout = new QVBoxLayout(item);
         itemLayout->setContentsMargins(10, 8, 10, 8);
-        itemLayout->setSpacing(2);
+        itemLayout->setSpacing(4);
 
         auto *title = new QLabel(session.label, item);
         title->setProperty("class", QStringLiteral("AvarSessionListTitle"));
         title->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        title->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
 
-        auto *meta = new QLabel(session.baseUrl, item);
+        auto *meta = new QLabel(item);
         meta->setProperty("class", QStringLiteral("AvarSessionListMeta"));
         meta->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        meta->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Minimum);
+        meta->setText(elidedLabelText(*meta, session.baseUrl));
 
         itemLayout->addWidget(title);
         itemLayout->addWidget(meta);
 
-        QObject::connect(item, &QPushButton::clicked, this, [this, id = session.id] {
+        item->onActivated = [this, id = session.id] {
             m_sessions.setActiveSessionId(id);
             closeMenu();
-        });
+        };
 
         m_menuListLayout->addWidget(item);
     }
+
+    updateMenuScrollHeight();
 }
 
 void SessionSelector::updateTrigger()

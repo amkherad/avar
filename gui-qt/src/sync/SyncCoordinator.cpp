@@ -23,11 +23,7 @@ SyncCoordinator::SyncCoordinator(DaemonClient &client, AppSettings &settings, Gu
 {
     m_sse = std::make_unique<EventsSseClient>(client, this);
     applyTimingFromPreferences();
-    connect(&m_pingTimer, &QTimer::timeout, this, [this] {
-        m_client.health([this](bool ok, HealthInfo) {
-            setState(ok ? ConnectionState::Connected : ConnectionState::Disconnected);
-        });
-    });
+    connect(&m_pingTimer, &QTimer::timeout, this, [this] { runReachabilityCheck(); });
 
     connect(&m_pollTimer, &QTimer::timeout, this, [this] { refreshLists(); });
 
@@ -40,7 +36,10 @@ SyncCoordinator::SyncCoordinator(DaemonClient &client, AppSettings &settings, Gu
     connect(m_sse.get(), &EventsSseClient::connectionLost, this, [this] {
         startPollFallback();
     });
-    connect(m_sse.get(), &EventsSseClient::streamJsonReceived, this, &SyncCoordinator::handleStreamJson);
+    connect(m_sse.get(), &EventsSseClient::streamJsonReceived, this, [this](const QJsonObject &obj) {
+        setState(ConnectionState::Connected);
+        handleStreamJson(obj);
+    });
 
 #if defined(AVAR_GUI_HAS_WEBSOCKETS)
     connect(&m_socket, &QWebSocket::connected, this, [this] {
@@ -50,9 +49,9 @@ SyncCoordinator::SyncCoordinator(DaemonClient &client, AppSettings &settings, Gu
     });
 
     connect(&m_socket, &QWebSocket::disconnected, this, [this] {
-        setState(ConnectionState::Disconnected);
         startPollFallback();
         startSseSync();
+        runReachabilityCheck();
         QTimer::singleShot(1500, this, [this] { reconnectWebSocket(); });
     });
 
@@ -84,6 +83,7 @@ void SyncCoordinator::start()
 {
     setState(ConnectionState::Connecting);
     m_pingTimer.start();
+    runReachabilityCheck();
     if (m_client.usesInMemoryTransport()) {
         startPollFallback();
         setState(ConnectionState::Connected);
@@ -171,19 +171,44 @@ void SyncCoordinator::handleStreamJson(const QJsonObject &root)
     }
 }
 
+void SyncCoordinator::runReachabilityCheck()
+{
+    m_client.health([this](bool okHealth, HealthInfo) {
+        if (okHealth) {
+            setState(ConnectionState::Connected);
+            return;
+        }
+        m_client.listDownloads([this](bool okDownloads, QVector<DownloadInfo>, QString) {
+            if (okDownloads) {
+                setState(ConnectionState::Connected);
+                return;
+            }
+            if (m_state == ConnectionState::Connected) {
+                setState(ConnectionState::Disconnected);
+            }
+        });
+    });
+}
+
 void SyncCoordinator::refreshLists()
 {
-    if (m_state != ConnectionState::Connected && m_state != ConnectionState::Connecting) {
-        return;
-    }
     m_client.listDownloads([this](bool okDownloads, QVector<DownloadInfo> downloads, QString) {
+        if (okDownloads) {
+            setState(ConnectionState::Connected);
+        } else if (m_state == ConnectionState::Connected) {
+            setState(ConnectionState::Disconnected);
+        }
+
         SnapshotPayload payload;
         if (okDownloads) {
             payload.downloads = std::move(downloads);
         }
         m_client.listQueues([this, payload](bool okQueues, QVector<QueueInfo> queues, QString) mutable {
             if (okQueues) {
+                setState(ConnectionState::Connected);
                 payload.queues = std::move(queues);
+            } else if (m_state == ConnectionState::Connected && payload.downloads.isEmpty()) {
+                setState(ConnectionState::Disconnected);
             }
             emit snapshotReceived(payload);
         });

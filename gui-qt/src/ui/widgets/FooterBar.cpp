@@ -5,6 +5,7 @@
 
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QSizePolicy>
 #include <QStyle>
 
 namespace avar::gui {
@@ -30,8 +31,11 @@ FooterBar::FooterBar(Translator &translator, QWidget *parent)
     , m_tr(translator)
 {
     setObjectName(QStringLiteral("AvarFooter"));
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    setFixedHeight(28);
     auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(12, 6, 12, 6);
+    layout->setContentsMargins(10, 0, 10, 0);
+    layout->setSpacing(10);
 
     m_uptime = new QLabel(QStringLiteral("—"), this);
     m_cpu = new QLabel(QStringLiteral("—"), this);
@@ -45,9 +49,19 @@ FooterBar::FooterBar(Translator &translator, QWidget *parent)
     layout->addStretch();
 
     m_consoleBtn = new AvarButton(AvarButtonVariant::Ghost, this);
+    m_consoleBtn->setProperty("class", QStringLiteral("AvarFooterConsoleBtn"));
+    m_consoleBtn->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
     m_consoleBtn->setText(m_tr.tr(QStringLiteral("console.toggle")));
     QObject::connect(m_consoleBtn, &QPushButton::clicked, this, &FooterBar::consoleToggleRequested);
     layout->addWidget(m_consoleBtn);
+    applyConsoleButtonStyle();
+}
+
+void FooterBar::retranslateUi()
+{
+    if (m_consoleBtn != nullptr) {
+        m_consoleBtn->setText(m_tr.tr(QStringLiteral("console.toggle")));
+    }
     applyConsoleButtonStyle();
 }
 
@@ -63,30 +77,12 @@ void FooterBar::applyConsoleButtonStyle()
     if (!m_consoleBtn) {
         return;
     }
-    AvarButtonVariant variant = AvarButtonVariant::Ghost;
-    if (m_consoleOpen) {
-        variant = AvarButtonVariant::Secondary;
-    } else if (m_hasUnseenErrors) {
-        variant = AvarButtonVariant::Danger;
-    }
-    QString className;
-    switch (variant) {
-    case AvarButtonVariant::Primary:
-        className = QStringLiteral("AvarButtonPrimary");
-        break;
-    case AvarButtonVariant::Secondary:
-        className = QStringLiteral("AvarButtonSecondary");
-        break;
-    case AvarButtonVariant::Ghost:
-        className = QStringLiteral("AvarButtonGhost");
-        break;
-    case AvarButtonVariant::Danger:
-        className = QStringLiteral("AvarButtonDanger");
-        break;
-    }
-    m_consoleBtn->setProperty("class", className);
+    m_consoleBtn->setProperty("footerConsoleOpen", m_consoleOpen);
+    m_consoleBtn->setProperty("footerConsoleAlert", !m_consoleOpen && m_hasUnseenErrors);
     m_consoleBtn->style()->unpolish(m_consoleBtn);
     m_consoleBtn->style()->polish(m_consoleBtn);
+    m_consoleBtn->adjustSize();
+    m_consoleBtn->updateGeometry();
 }
 
 void FooterBar::setHealth(const HealthInfo &health, bool valid)

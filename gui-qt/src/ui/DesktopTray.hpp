@@ -37,12 +37,14 @@ public:
     void attachShellWindow(QMainWindow *shellWindow);
     void setActiveDownloads(const QVector<TrayDownloadItem> &items);
     void updateFromDownloads(const QVector<DownloadInfo> &downloads);
+    void retranslateUi();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void rebuildMenu();
+    void showContextMenu();
     void updateTooltip();
     void showMainWindow();
     void runBulkAction(const QString &kind);

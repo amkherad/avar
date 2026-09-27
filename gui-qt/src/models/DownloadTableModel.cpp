@@ -1,10 +1,18 @@
 #include "models/DownloadTableModel.hpp"
 
+#include "i18n/Translator.hpp"
+
 namespace avar::gui {
 
-DownloadTableModel::DownloadTableModel(QObject *parent)
+DownloadTableModel::DownloadTableModel(Translator &translator, QObject *parent)
     : QAbstractTableModel(parent)
+    , m_tr(translator)
 {
+}
+
+void DownloadTableModel::retranslateUi()
+{
+    emit headerDataChanged(Qt::Horizontal, 0, columnCount() - 1);
 }
 
 void DownloadTableModel::setDownloads(const QVector<DownloadInfo> &downloads)
@@ -59,13 +67,13 @@ QVariant DownloadTableModel::headerData(int section, Qt::Orientation orientation
     }
     switch (section) {
     case 0:
-        return QStringLiteral("Name");
+        return m_tr.tr(QStringLiteral("download.filename"));
     case 1:
-        return QStringLiteral("Status");
+        return m_tr.tr(QStringLiteral("download.status"));
     case 2:
-        return QStringLiteral("Progress");
+        return m_tr.tr(QStringLiteral("download.progress"));
     case 3:
-        return QStringLiteral("ID");
+        return m_tr.tr(QStringLiteral("download.id"));
     default:
         return {};
     }

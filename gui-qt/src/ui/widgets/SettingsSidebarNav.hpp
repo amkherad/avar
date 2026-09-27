@@ -17,6 +17,7 @@ public:
     explicit SettingsSidebarNav(Translator &translator, QWidget *parent = nullptr);
 
     void setCategory(SettingsCategory category);
+    void retranslateUi();
 
 signals:
     void categoryChanged(SettingsCategory category);

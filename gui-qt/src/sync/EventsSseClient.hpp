@@ -31,6 +31,7 @@ private:
     void openStream();
     void scheduleReconnect();
     void consumeBuffer();
+    void signalOpenedOnce();
 
     DaemonClient &m_client;
     ::QNetworkAccessManager m_network;
@@ -38,6 +39,7 @@ private:
     ::QByteArray m_buffer;
     bool m_wantsStats = false;
     bool m_stopping = false;
+    bool m_openSignaled = false;
 };
 
 } // namespace avar::gui

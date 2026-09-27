@@ -18,9 +18,6 @@ AddDownloadPopupPage::AddDownloadPopupPage(Translator &translator, DaemonClient 
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(16, 16, 16, 16);
-    auto *title = new QLabel(m_tr.tr(QStringLiteral("download.add")), this);
-    title->setProperty("class", QStringLiteral("AvarPopupTitle"));
-    layout->addWidget(title);
 
     auto *form = new QFormLayout();
     m_url = new QLineEdit(this);

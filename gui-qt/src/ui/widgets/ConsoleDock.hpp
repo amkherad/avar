@@ -31,6 +31,7 @@ public:
                 QWidget *parent = nullptr);
 
     void setOpen(bool open);
+    void retranslateUi();
 
 private:
     void rebuildOutput();
@@ -55,6 +56,9 @@ private:
     QLabel *m_guiSeverityLabel = nullptr;
     QLabel *m_daemonSeverityLabel = nullptr;
     QLabel *m_emptyLabel = nullptr;
+    QLabel *m_title = nullptr;
+    class AvarButton *m_clearBtn = nullptr;
+    class AvarButton *m_closeBtn = nullptr;
     QScrollArea *m_scroll = nullptr;
     QWidget *m_linesHost = nullptr;
     QVBoxLayout *m_linesLayout = nullptr;

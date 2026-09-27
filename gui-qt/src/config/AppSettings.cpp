@@ -1,6 +1,7 @@
 #include "config/AppSettings.hpp"
 
 #include "core/Hosting.hpp"
+#include "i18n/LocaleCatalog.hpp"
 
 namespace avar::gui {
 
@@ -15,6 +16,9 @@ ThemeSetting readThemeSetting(const QSettings &store)
     if (raw == QStringLiteral("light-bright")) {
         return ThemeSetting::LightBright;
     }
+    if (raw == QStringLiteral("queen-mode")) {
+        return ThemeSetting::QueenMode;
+    }
     if (raw == QStringLiteral("light")) {
         return ThemeSetting::LightSoft;
     }
@@ -28,6 +32,8 @@ QString writeThemeSetting(ThemeSetting setting)
         return QStringLiteral("dark");
     case ThemeSetting::LightBright:
         return QStringLiteral("light-bright");
+    case ThemeSetting::QueenMode:
+        return QStringLiteral("queen-mode");
     case ThemeSetting::LightSoft:
         return QStringLiteral("light");
     case ThemeSetting::System:
@@ -71,7 +77,8 @@ ThemeSetting AppSettings::themeSetting() const
 
 QString AppSettings::locale() const
 {
-    return m_store.value(QStringLiteral("locale"), QStringLiteral("en")).toString();
+    return LocaleCatalog::normalizeLocaleId(
+        m_store.value(QStringLiteral("locale"), QStringLiteral("en")).toString());
 }
 
 bool AppSettings::browserExtensionEnabled() const
@@ -109,7 +116,13 @@ void AppSettings::setThemeSetting(ThemeSetting setting)
 
 void AppSettings::setLocale(const QString &locale)
 {
-    m_store.setValue(QStringLiteral("locale"), locale);
+    const QString normalized = LocaleCatalog::normalizeLocaleId(locale);
+    const QString current = LocaleCatalog::normalizeLocaleId(
+        m_store.value(QStringLiteral("locale"), QStringLiteral("en")).toString());
+    if (current == normalized) {
+        return;
+    }
+    m_store.setValue(QStringLiteral("locale"), normalized);
     emit localeChanged();
 }
 

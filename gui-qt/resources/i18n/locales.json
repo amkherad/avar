@@ -1,0 +1,12 @@
+[
+  {
+    "id": "en",
+    "nameNative": "English",
+    "rtl": false
+  },
+  {
+    "id": "fa",
+    "nameNative": "فارسی",
+    "rtl": true
+  }
+]

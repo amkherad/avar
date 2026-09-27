@@ -13,7 +13,6 @@ namespace avar::gui {
 class Application;
 class DownloadTableModel;
 class QueueListModel;
-class Translator;
 class DesktopShellWindow;
 class DesktopTray;
 
@@ -32,9 +31,9 @@ public:
 
 private:
     void wireSync();
+    void applyLocalizedUi();
 
     Application &m_app;
-    std::unique_ptr<Translator> m_tr;
     std::unique_ptr<DownloadTableModel> m_downloads;
     std::unique_ptr<QueueListModel> m_queues;
 #if defined(AVAR_GUI_HOSTING_DESKTOP)

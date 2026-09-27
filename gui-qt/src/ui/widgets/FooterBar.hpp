@@ -20,6 +20,7 @@ public:
     void setHealth(const HealthInfo &health, bool valid);
     void setStats(const SystemStatsInfo &stats, bool valid);
     void setConsoleButtonState(bool consoleOpen, bool hasUnseenErrors);
+    void retranslateUi();
 
 signals:
     void consoleToggleRequested();

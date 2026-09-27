@@ -3,6 +3,18 @@
 
 #include <string.h>
 
+static DaemonEmbedCtrlCNotify _ctrl_c_notify = NULL;
+
+void daemon_embed_set_ctrl_c_notify(DaemonEmbedCtrlCNotify notify) {
+    _ctrl_c_notify = notify;
+}
+
+void daemon_embed_on_ctrl_c(void) {
+    if (_ctrl_c_notify != NULL) {
+        _ctrl_c_notify();
+    }
+}
+
 void daemon_embed_apply_gui_defaults(DaemonConfig *cfg, const char *pid_file_path) {
     if (cfg == NULL) {
         return;

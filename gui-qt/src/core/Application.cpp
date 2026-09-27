@@ -7,8 +7,10 @@
 #include "session/SessionManager.hpp"
 #include "core/CrashHandler.hpp"
 #include "core/Hosting.hpp"
+#include "core/UnixSignalQuit.hpp"
 #include "extension/ExtensionBridgeClient.hpp"
 #include "sync/SyncCoordinator.hpp"
+#include "i18n/Translator.hpp"
 #include "theme/ThemeManager.hpp"
 
 #if defined(AVAR_GUI_QT_EMBED_BACKEND)
@@ -26,7 +28,16 @@ Application::Application(int &argc, char **argv)
 
     installCrashHandler();
 
+#if defined(AVAR_GUI_HOSTING_DESKTOP)
+    m_signalQuit = std::make_unique<UnixSignalQuit>(*this);
+#endif
+
     m_settings = std::make_unique<AppSettings>();
+    m_translator = std::make_unique<Translator>();
+    m_translator->setLocale(m_settings->locale());
+    connect(m_settings.get(), &AppSettings::localeChanged, this, [this] {
+        m_translator->setLocale(m_settings->locale());
+    });
     m_guiPreferences = std::make_unique<GuiPreferences>();
     m_layout = std::make_unique<LayoutPreferences>();
     m_sessions = std::make_unique<SessionManager>();
@@ -66,7 +77,7 @@ Application::Application(int &argc, char **argv)
     applySession();
     connect(m_sessions.get(), &SessionManager::activeSessionChanged, this, applySession);
 
-    m_extension = std::make_unique<ExtensionBridgeClient>(*m_settings);
+    m_extension = std::make_unique<ExtensionBridgeClient>(*m_settings, *m_guiPreferences);
 
     if (hostingSupportsExtensionSubprocess(detectHostingMode())) {
         m_extension->ensureBridgeProcess();
@@ -124,6 +135,11 @@ LayoutPreferences &Application::layout() const
 GuiPreferences &Application::guiPreferences() const
 {
     return *m_guiPreferences;
+}
+
+Translator &Application::translator() const
+{
+    return *m_translator;
 }
 
 } // namespace avar::gui

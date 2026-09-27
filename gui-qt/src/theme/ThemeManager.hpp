@@ -15,6 +15,8 @@ public:
     explicit ThemeManager(AppSettings &settings, QObject *parent = nullptr);
 
     void apply();
+    /** Rebuild QSS after layout direction changes (locale RTL) without reloading theme tokens. */
+    void syncStylesheet();
     [[nodiscard]] ThemeTokens currentTokens() const;
 
     void setSetting(ThemeSetting setting);

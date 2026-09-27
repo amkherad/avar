@@ -48,6 +48,7 @@ private:
     void startPollFallback();
     void refreshLists();
     void handleStreamJson(const QJsonObject &root);
+    void runReachabilityCheck();
     void setState(ConnectionState state);
     void applyTimingFromPreferences();
 

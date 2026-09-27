@@ -6,6 +6,8 @@
 
 #include <QWidget>
 
+class QLabel;
+class QPushButton;
 class QLineEdit;
 class QStackedWidget;
 class QTableView;
@@ -38,6 +40,8 @@ public:
 
     [[nodiscard]] ConsoleDock *consoleDock() const;
 
+    void retranslateUi();
+
 signals:
     void addDownloadRequested();
     void batchAddRequested();
@@ -62,6 +66,9 @@ private:
     QTableView *m_table = nullptr;
     DownloadGridView *m_grid = nullptr;
     QLineEdit *m_search = nullptr;
+    QLabel *m_titleLabel = nullptr;
+    QPushButton *m_batchBtn = nullptr;
+    QPushButton *m_addBtn = nullptr;
     ConsoleStore m_consoleStore;
 };
 

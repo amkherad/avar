@@ -19,9 +19,6 @@ BatchAddDownloadsPopupPage::BatchAddDownloadsPopupPage(Translator &translator,
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(16, 16, 16, 16);
-    auto *title = new QLabel(m_tr.tr(QStringLiteral("download.batchAdd.button")), this);
-    title->setProperty("class", QStringLiteral("AvarPopupTitle"));
-    layout->addWidget(title);
 
     m_urls = new QTextEdit(this);
     m_urls->setPlaceholderText(m_tr.tr(QStringLiteral("download.batchAdd.placeholder")));

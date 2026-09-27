@@ -25,13 +25,32 @@ DownloadDetailPanelWidget::DownloadDetailPanelWidget(Translator &translator, QWi
 
 void DownloadDetailPanelWidget::setDownload(const DownloadInfo &download, bool valid)
 {
-    if (!valid) {
+    m_download = download;
+    m_downloadValid = valid;
+    refreshBodyText();
+}
+
+void DownloadDetailPanelWidget::retranslateUi()
+{
+    if (m_title != nullptr) {
+        m_title->setText(m_tr.tr(QStringLiteral("download.detailsTitle")));
+    }
+    refreshBodyText();
+}
+
+void DownloadDetailPanelWidget::refreshBodyText()
+{
+    if (m_body == nullptr) {
+        return;
+    }
+    if (!m_downloadValid) {
         m_body->setText(m_tr.tr(QStringLiteral("download.selectHint")));
         return;
     }
     m_body->setText(QStringLiteral("%1\n\n%2\n%3\n%4")
-                        .arg(download.name, download.status, download.id)
-                        .arg(QStringLiteral("Progress: %1%").arg(download.progress * 100.0, 0, 'f', 1)));
+                        .arg(m_download.name, m_download.status, m_download.id)
+                        .arg(m_tr.tr(QStringLiteral("download.progress"))
+                             + QStringLiteral(": %1%").arg(m_download.progress * 100.0, 0, 'f', 1)));
 }
 
 } // namespace avar::gui

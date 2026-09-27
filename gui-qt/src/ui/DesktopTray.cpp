@@ -6,6 +6,7 @@
 #include "ui/MainWindow.hpp"
 
 #include <QApplication>
+#include <QCursor>
 #include <QEvent>
 #include <QIcon>
 #include <QMainWindow>
@@ -54,9 +55,15 @@ DesktopTray::DesktopTray(MainWindow &window,
 
     m_menu = new QMenu();
     connect(m_menu, &QMenu::aboutToShow, this, &DesktopTray::rebuildMenu);
+#if !defined(Q_OS_LINUX)
     m_tray->setContextMenu(m_menu);
+#endif
 
     connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Context) {
+            showContextMenu();
+            return;
+        }
         if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick
             || reason == QSystemTrayIcon::MiddleClick) {
             showMainWindow();
@@ -152,6 +159,20 @@ void DesktopTray::applyQuitOnLastWindowClosed()
 {
     const bool keepTray = m_settings.keepInTrayOnClose() && m_tray != nullptr;
     QApplication::setQuitOnLastWindowClosed(!keepTray);
+}
+
+void DesktopTray::showContextMenu()
+{
+    if (!m_menu || !m_tray) {
+        return;
+    }
+    m_menu->popup(QCursor::pos());
+}
+
+void DesktopTray::retranslateUi()
+{
+    updateTooltip();
+    rebuildMenu();
 }
 
 void DesktopTray::rebuildMenu()

@@ -23,7 +23,19 @@ SettingsPage::SettingsPage(const SettingsContext &context, QWidget *parent)
 
 void SettingsPage::setCategory(SettingsCategory category)
 {
+    m_category = category;
     showSettingsCategory(m_stack, category);
+}
+
+void SettingsPage::reloadLocalizedContent()
+{
+    while (m_stack->count() > 0) {
+        QWidget *widget = m_stack->widget(0);
+        m_stack->removeWidget(widget);
+        widget->deleteLater();
+    }
+    populateSettingsStack(m_stack, m_context, this);
+    setCategory(m_category);
 }
 
 } // namespace avar::gui

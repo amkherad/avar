@@ -35,6 +35,7 @@ void EventsSseClient::start()
 void EventsSseClient::stop()
 {
     m_stopping = true;
+    m_openSignaled = false;
     if (m_reply) {
         m_reply->abort();
         m_reply->deleteLater();
@@ -48,6 +49,7 @@ void EventsSseClient::openStream()
     if (m_stopping || m_reply) {
         return;
     }
+    m_openSignaled = false;
 
     QUrl url = m_client.eventsUrl();
     if (m_wantsStats) {
@@ -82,10 +84,15 @@ void EventsSseClient::openStream()
             emit connectionLost();
         }
     });
+}
 
-    if (m_reply->isOpen()) {
-        emit connectionOpened();
+void EventsSseClient::signalOpenedOnce()
+{
+    if (m_openSignaled) {
+        return;
     }
+    m_openSignaled = true;
+    emit connectionOpened();
 }
 
 void EventsSseClient::scheduleReconnect()
@@ -100,6 +107,9 @@ void EventsSseClient::consumeBuffer()
 {
     if (!m_reply) {
         return;
+    }
+    if (m_reply->bytesAvailable() > 0) {
+        signalOpenedOnce();
     }
     m_buffer.append(m_reply->readAll());
 

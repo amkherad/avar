@@ -1,5 +1,7 @@
 #include "backend/EmbeddedDaemon.hpp"
 
+#include "core/UnixSignalQuit.hpp"
+
 #include <daemon/daemon.h>
 #include <daemon/daemon_embed.h>
 
@@ -45,6 +47,7 @@ void EmbeddedDaemon::start()
     QDir().mkpath(cacheDir);
     const QString pidPath = cacheDir + QStringLiteral("/embedded-daemon.pid");
     daemon_embed_apply_gui_defaults(m_config, pidPath.toUtf8().constData());
+    daemon_embed_set_ctrl_c_notify(&UnixSignalQuit::notifyFromSignal);
 
     m_thread = std::thread([this] { runDaemonLoop(); });
     for (int i = 0; i < 200 && !daemon_loop_is_running(); ++i) {
@@ -61,6 +64,7 @@ void EmbeddedDaemon::stop()
     }
 
     m_stopRequested.store(true);
+    daemon_embed_set_ctrl_c_notify(nullptr);
     daemon_request_shutdown();
     m_thread.join();
     delete m_config;

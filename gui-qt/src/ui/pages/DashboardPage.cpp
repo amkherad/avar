@@ -41,12 +41,12 @@ DashboardPage::DashboardPage(Translator &translator,
     setObjectName(QStringLiteral("AvarDashboard"));
     auto *root = new QVBoxLayout(this);
     root->setContentsMargins(12, 12, 12, 0);
-    root->setSpacing(8);
+    root->setSpacing(6);
 
     auto *cardHeader = new QHBoxLayout();
-    auto *title = new QLabel(m_tr.tr(QStringLiteral("download.title")), this);
-    title->setProperty("class", QStringLiteral("AvarCardTitle"));
-    cardHeader->addWidget(title);
+    m_titleLabel = new QLabel(m_tr.tr(QStringLiteral("download.title")), this);
+    m_titleLabel->setProperty("class", QStringLiteral("AvarCardTitle"));
+    cardHeader->addWidget(m_titleLabel);
     cardHeader->addStretch();
 
     auto *gridBtn = new AvarButton(AvarButtonVariant::Ghost, this);
@@ -65,18 +65,18 @@ DashboardPage::DashboardPage(Translator &translator,
     });
     connect(&m_layout, &LayoutPreferences::layoutChanged, this, &DashboardPage::applyViewMode);
 
-    auto *batchBtn = new AvarButton(AvarButtonVariant::Secondary, this);
-    batchBtn->setText(m_tr.tr(QStringLiteral("download.batchAdd.button")));
-    connect(batchBtn, &QPushButton::clicked, this, &DashboardPage::batchAddRequested);
+    m_batchBtn = new AvarButton(AvarButtonVariant::Secondary, this);
+    m_batchBtn->setText(m_tr.tr(QStringLiteral("download.batchAdd.button")));
+    connect(m_batchBtn, &QPushButton::clicked, this, &DashboardPage::batchAddRequested);
 
-    auto *addBtn = new AvarButton(AvarButtonVariant::Primary, this);
-    addBtn->setText(m_tr.tr(QStringLiteral("download.add")));
-    connect(addBtn, &QPushButton::clicked, this, &DashboardPage::addDownloadRequested);
+    m_addBtn = new AvarButton(AvarButtonVariant::Primary, this);
+    m_addBtn->setText(m_tr.tr(QStringLiteral("download.add")));
+    connect(m_addBtn, &QPushButton::clicked, this, &DashboardPage::addDownloadRequested);
 
     cardHeader->addWidget(gridBtn);
     cardHeader->addWidget(listBtn);
-    cardHeader->addWidget(batchBtn);
-    cardHeader->addWidget(addBtn);
+    cardHeader->addWidget(m_batchBtn);
+    cardHeader->addWidget(m_addBtn);
     root->addLayout(cardHeader);
 
     m_search = new QLineEdit(this);
@@ -230,6 +230,31 @@ void DashboardPage::onSelectionChanged()
     const int sourceRow = m_proxy->mapToSource(m_proxy->index(proxyRow, 0)).row();
     const DownloadInfo info = m_downloads.downloadAt(sourceRow);
     m_detail->setDownload(info, true);
+}
+
+void DashboardPage::retranslateUi()
+{
+    if (m_titleLabel != nullptr) {
+        m_titleLabel->setText(m_tr.tr(QStringLiteral("download.title")));
+    }
+    if (m_batchBtn != nullptr) {
+        m_batchBtn->setText(m_tr.tr(QStringLiteral("download.batchAdd.button")));
+    }
+    if (m_addBtn != nullptr) {
+        m_addBtn->setText(m_tr.tr(QStringLiteral("download.add")));
+    }
+    if (m_search != nullptr) {
+        m_search->setPlaceholderText(m_tr.tr(QStringLiteral("download.searchPlaceholder")));
+    }
+    if (m_footer != nullptr) {
+        m_footer->retranslateUi();
+    }
+    if (m_console != nullptr) {
+        m_console->retranslateUi();
+    }
+    if (m_detail != nullptr) {
+        m_detail->retranslateUi();
+    }
 }
 
 } // namespace avar::gui

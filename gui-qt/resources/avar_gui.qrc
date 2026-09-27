@@ -2,5 +2,28 @@
     <qresource prefix="/">
         <file>styles/app.qss</file>
         <file>icon.svg</file>
+        <file alias="fa/solid/arrow-left.svg">../third_party/fontawesome-free/svgs/solid/arrow-left.svg</file>
+        <file alias="fa/solid/moon.svg">../third_party/fontawesome-free/svgs/solid/moon.svg</file>
+        <file alias="fa/solid/lightbulb.svg">../third_party/fontawesome-free/svgs/solid/lightbulb.svg</file>
+        <file alias="fa/solid/circle-question.svg">../third_party/fontawesome-free/svgs/solid/circle-question.svg</file>
+        <file alias="fa/solid/gear.svg">../third_party/fontawesome-free/svgs/solid/gear.svg</file>
+        <file alias="fa/solid/puzzle-piece.svg">../third_party/fontawesome-free/svgs/solid/puzzle-piece.svg</file>
+        <file alias="i18n/locales.json">i18n/locales.json</file>
+        <file alias="i18n/en.json">../../gui/src/i18n/locales/en.json</file>
+        <file alias="i18n/fa.json">../../gui/src/i18n/locales/fa.json</file>
+        <file alias="i18n/supplement-en.json">i18n/supplement-en.json</file>
+        <file alias="i18n/supplement-fa.json">i18n/supplement-fa.json</file>
+        <file alias="help/en/index.md">../../gui/docs/en/index.md</file>
+        <file alias="help/en/downloads.md">../../gui/docs/en/downloads.md</file>
+        <file alias="help/en/queues.md">../../gui/docs/en/queues.md</file>
+        <file alias="help/en/bookmarks.md">../../gui/docs/en/bookmarks.md</file>
+        <file alias="help/en/sessions.md">../../gui/docs/en/sessions.md</file>
+        <file alias="help/en/settings.md">../../gui/docs/en/settings.md</file>
+        <file alias="help/en/shortcuts.md">../../gui/docs/en/shortcuts.md</file>
+        <file alias="help/en/console.md">../../gui/docs/en/console.md</file>
+        <file alias="help/en/layout.md">../../gui/docs/en/layout.md</file>
+        <file alias="help/fa/index.md">../../gui/docs/fa/index.md</file>
+        <file alias="help/fa/queues.md">../../gui/docs/fa/queues.md</file>
+        <file alias="help/fa/bookmarks.md">../../gui/docs/fa/bookmarks.md</file>
     </qresource>
 </RCC>

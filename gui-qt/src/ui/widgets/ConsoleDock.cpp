@@ -72,12 +72,13 @@ ConsoleDock::ConsoleDock(Translator &translator,
     outer->setSpacing(0);
 
     auto *resize = new ResizeHandle(ResizeAxis::Vertical, this);
+    resize->setObjectName(QStringLiteral("AvarConsoleResize"));
     resize->setToolTip(m_tr.tr(QStringLiteral("console.resize")));
     QObject::connect(resize, &ResizeHandle::resizeDelta, &layout, &LayoutPreferences::adjustConsoleHeight);
 
     auto *header = new QHBoxLayout();
-    auto *title = new QLabel(m_tr.tr(QStringLiteral("console.title")), this);
-    title->setProperty("class", QStringLiteral("AvarConsoleTitle"));
+    m_title = new QLabel(m_tr.tr(QStringLiteral("console.title")), this);
+    m_title->setProperty("class", QStringLiteral("AvarConsoleTitle"));
 
     m_autoScroll = new QCheckBox(m_tr.tr(QStringLiteral("console.autoScroll")), this);
     m_autoScroll->setChecked(m_store.settings().autoScroll);
@@ -107,16 +108,16 @@ ConsoleDock::ConsoleDock(Translator &translator,
         m_store.setDaemonMinLevel(levelFromCombo(m_daemonLevel));
     });
 
-    auto *clearBtn = new AvarButton(AvarButtonVariant::Ghost, this);
-    clearBtn->setText(m_tr.tr(QStringLiteral("console.clear")));
-    QObject::connect(clearBtn, &QPushButton::clicked, this, &ConsoleDock::handleClear);
+    m_clearBtn = new AvarButton(AvarButtonVariant::Ghost, this);
+    m_clearBtn->setText(m_tr.tr(QStringLiteral("console.clear")));
+    QObject::connect(m_clearBtn, &QPushButton::clicked, this, &ConsoleDock::handleClear);
 
-    auto *closeBtn = new AvarButton(AvarButtonVariant::Ghost, this);
-    closeBtn->setText(QStringLiteral("×"));
-    closeBtn->setToolTip(m_tr.tr(QStringLiteral("console.close")));
-    QObject::connect(closeBtn, &QPushButton::clicked, this, [this, &layout] { layout.setConsoleOpen(false); });
+    m_closeBtn = new AvarButton(AvarButtonVariant::Ghost, this);
+    m_closeBtn->setText(QStringLiteral("×"));
+    m_closeBtn->setToolTip(m_tr.tr(QStringLiteral("console.close")));
+    QObject::connect(m_closeBtn, &QPushButton::clicked, this, [this, &layout] { layout.setConsoleOpen(false); });
 
-    header->addWidget(title);
+    header->addWidget(m_title);
     header->addSpacing(12);
     header->addWidget(m_autoScroll);
     header->addWidget(m_showGui);
@@ -126,8 +127,8 @@ ConsoleDock::ConsoleDock(Translator &translator,
     header->addWidget(m_daemonSeverityLabel);
     header->addWidget(m_daemonLevel);
     header->addStretch();
-    header->addWidget(clearBtn);
-    header->addWidget(closeBtn);
+    header->addWidget(m_clearBtn);
+    header->addWidget(m_closeBtn);
 
     m_emptyLabel = new QLabel(m_tr.tr(QStringLiteral("console.empty")), this);
     m_emptyLabel->setProperty("class", QStringLiteral("AvarConsoleEmpty"));
@@ -164,6 +165,46 @@ ConsoleDock::ConsoleDock(Translator &translator,
     setOpen(layout.consoleOpen());
     rebuildOutput();
     syncPollTimer();
+}
+
+void ConsoleDock::retranslateUi()
+{
+    if (m_title != nullptr) {
+        m_title->setText(m_tr.tr(QStringLiteral("console.title")));
+    }
+    if (m_autoScroll != nullptr) {
+        m_autoScroll->setText(m_tr.tr(QStringLiteral("console.autoScroll")));
+    }
+    if (m_showGui != nullptr) {
+        m_showGui->setText(m_tr.tr(QStringLiteral("console.showGui")));
+    }
+    if (m_showDaemon != nullptr) {
+        m_showDaemon->setText(m_tr.tr(QStringLiteral("console.showDaemon")));
+    }
+    if (m_guiSeverityLabel != nullptr) {
+        m_guiSeverityLabel->setText(m_tr.tr(QStringLiteral("console.guiSeverity")));
+    }
+    if (m_daemonSeverityLabel != nullptr) {
+        m_daemonSeverityLabel->setText(m_tr.tr(QStringLiteral("console.daemonSeverity")));
+    }
+    if (m_emptyLabel != nullptr) {
+        m_emptyLabel->setText(m_tr.tr(QStringLiteral("console.empty")));
+    }
+    if (m_clearBtn != nullptr) {
+        m_clearBtn->setText(m_tr.tr(QStringLiteral("console.clear")));
+    }
+    if (m_closeBtn != nullptr) {
+        m_closeBtn->setToolTip(m_tr.tr(QStringLiteral("console.close")));
+    }
+    if (auto *resize = findChild<ResizeHandle *>(QStringLiteral("AvarConsoleResize"))) {
+        resize->setToolTip(m_tr.tr(QStringLiteral("console.resize")));
+    }
+    if (m_guiLevel != nullptr) {
+        populateLevelCombo(m_guiLevel, levelFromCombo(m_guiLevel));
+    }
+    if (m_daemonLevel != nullptr) {
+        populateLevelCombo(m_daemonLevel, levelFromCombo(m_daemonLevel));
+    }
 }
 
 void ConsoleDock::setOpen(bool open)

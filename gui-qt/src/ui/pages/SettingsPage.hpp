@@ -16,10 +16,12 @@ public:
     SettingsPage(const SettingsContext &context, QWidget *parent = nullptr);
 
     void setCategory(SettingsCategory category);
+    void reloadLocalizedContent();
 
 private:
     SettingsContext m_context;
     QStackedWidget *m_stack = nullptr;
+    SettingsCategory m_category = SettingsCategory::General;
 };
 
 } // namespace avar::gui

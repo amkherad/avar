@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-09-27T11:28:42.234002+00:00",
+  "generated_at": "2026-09-27T14:37:38.034064+00:00",
   "score": {
-    "done": 57,
-    "total": 57,
-    "percent": 100.0
+    "done": 48,
+    "total": 61,
+    "percent": 78.7
   },
   "items": [
     {
@@ -58,50 +58,57 @@
     {
       "id": "settings:about",
       "electron": true,
-      "qt": true,
-      "ok": true,
-      "notes": ""
+      "qt": false,
+      "ok": false,
+      "notes": "nav only"
     },
     {
       "id": "settings:browser",
       "electron": true,
-      "qt": true,
-      "ok": true,
-      "notes": ""
+      "qt": false,
+      "ok": false,
+      "notes": "nav only"
     },
     {
       "id": "settings:daemon",
       "electron": true,
-      "qt": true,
-      "ok": true,
-      "notes": ""
+      "qt": false,
+      "ok": false,
+      "notes": "nav only"
     },
     {
       "id": "settings:downloads",
       "electron": true,
-      "qt": true,
-      "ok": true,
-      "notes": ""
+      "qt": false,
+      "ok": false,
+      "notes": "nav only"
     },
     {
       "id": "settings:general",
       "electron": true,
-      "qt": true,
-      "ok": true,
-      "notes": ""
+      "qt": false,
+      "ok": false,
+      "notes": "nav only"
     },
     {
       "id": "settings:queues",
       "electron": true,
-      "qt": true,
-      "ok": true,
-      "notes": ""
+      "qt": false,
+      "ok": false,
+      "notes": "nav only"
     },
     {
       "id": "settings:shortcuts",
       "electron": true,
-      "qt": true,
-      "ok": true,
+      "qt": false,
+      "ok": false,
+      "notes": "nav only"
+    },
+    {
+      "id": "daemon:addBookmark",
+      "electron": true,
+      "qt": false,
+      "ok": false,
       "notes": ""
     },
     {
@@ -175,10 +182,24 @@
       "notes": ""
     },
     {
+      "id": "daemon:hasBookmark",
+      "electron": true,
+      "qt": false,
+      "ok": false,
+      "notes": ""
+    },
+    {
       "id": "daemon:health",
       "electron": true,
       "qt": true,
       "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:listBookmarks",
+      "electron": true,
+      "qt": false,
+      "ok": false,
       "notes": ""
     },
     {
@@ -214,6 +235,13 @@
       "electron": true,
       "qt": true,
       "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:removeBookmark",
+      "electron": true,
+      "qt": false,
+      "ok": false,
       "notes": ""
     },
     {
@@ -331,9 +359,9 @@
     {
       "id": "i18n:locale-en",
       "electron": true,
-      "qt": true,
-      "ok": true,
-      "notes": "electron=499 keys, qt\u224858 hardcoded"
+      "qt": false,
+      "ok": false,
+      "notes": "electron=550 keys, qt\u22480 hardcoded"
     },
     {
       "id": "theme:tokens",
@@ -387,8 +415,8 @@
     {
       "id": "desktop:window-controls",
       "electron": true,
-      "qt": true,
-      "ok": true,
+      "qt": false,
+      "ok": false,
       "notes": "native OS title bar (minimize/close)"
     },
     {
@@ -403,8 +431,22 @@
       "electron": true,
       "qt": true,
       "ok": true,
-      "notes": "electron\u224863 tsx, qt\u224823 widgets"
+      "notes": "electron\u224868 tsx, qt\u224831 widgets"
     }
   ],
-  "gaps": []
+  "gaps": [
+    "settings:about",
+    "settings:browser",
+    "settings:daemon",
+    "settings:downloads",
+    "settings:general",
+    "settings:queues",
+    "settings:shortcuts",
+    "daemon:addBookmark",
+    "daemon:hasBookmark",
+    "daemon:listBookmarks",
+    "daemon:removeBookmark",
+    "i18n:locale-en",
+    "desktop:window-controls"
+  ]
 }

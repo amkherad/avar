@@ -1,11 +1,24 @@
 # Electron → Qt parity
 
-Last audit: `2026-09-27T11:28:42.234002+00:00`
+Last audit: `2026-09-27T14:37:38.034064+00:00`
 
-**Score: 57/57 (100.0%)** — auto-updated by `scripts/parity_audit.py`.
+**Score: 48/61 (78.7%)** — auto-updated by `scripts/parity_audit.py`.
 
 ## Gaps (Electron yes, Qt no)
 
+- [ ] `settings:about` — nav only
+- [ ] `settings:browser` — nav only
+- [ ] `settings:daemon` — nav only
+- [ ] `settings:downloads` — nav only
+- [ ] `settings:general` — nav only
+- [ ] `settings:queues` — nav only
+- [ ] `settings:shortcuts` — nav only
+- [ ] `daemon:addBookmark`
+- [ ] `daemon:hasBookmark`
+- [ ] `daemon:listBookmarks`
+- [ ] `daemon:removeBookmark`
+- [ ] `i18n:locale-en` — electron=550 keys, qt≈0 hardcoded
+- [ ] `desktop:window-controls` — native OS title bar (minimize/close)
 
 ## Matched
 
@@ -16,13 +29,6 @@ Last audit: `2026-09-27T11:28:42.234002+00:00`
 - [x] `page:DownloadDetailPopupPage`
 - [x] `page:HelpPage`
 - [x] `page:SettingsPage`
-- [x] `settings:about`
-- [x] `settings:browser`
-- [x] `settings:daemon`
-- [x] `settings:downloads`
-- [x] `settings:general`
-- [x] `settings:queues`
-- [x] `settings:shortcuts`
 - [x] `daemon:addDownload`
 - [x] `daemon:addQueue`
 - [x] `daemon:browseDirectory`
@@ -55,7 +61,6 @@ Last audit: `2026-09-27T11:28:42.234002+00:00`
 - [x] `daemon:systemStats`
 - [x] `daemon:unwatchDownloadProgress`
 - [x] `daemon:watchDownloadProgress`
-- [x] `i18n:locale-en`
 - [x] `theme:tokens`
 - [x] `layout:footer`
 - [x] `layout:console`
@@ -63,7 +68,6 @@ Last audit: `2026-09-27T11:28:42.234002+00:00`
 - [x] `sync:websocket-sse`
 - [x] `sync:snapshot-parser`
 - [x] `desktop:tray`
-- [x] `desktop:window-controls`
 - [x] `extension:bridge-parity`
 - [x] `ui:component-surface`
 

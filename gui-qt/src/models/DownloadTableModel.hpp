@@ -6,13 +6,16 @@
 
 namespace avar::gui {
 
+class Translator;
+
 class DownloadTableModel final : public QAbstractTableModel {
     Q_OBJECT
 
 public:
-    explicit DownloadTableModel(QObject *parent = nullptr);
+    explicit DownloadTableModel(Translator &translator, QObject *parent = nullptr);
 
     void setDownloads(const QVector<DownloadInfo> &downloads);
+    void retranslateUi();
     [[nodiscard]] DownloadInfo downloadAt(int row) const;
 
     int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -21,6 +24,7 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
 
 private:
+    Translator &m_tr;
     QVector<DownloadInfo> m_rows;
 };
 

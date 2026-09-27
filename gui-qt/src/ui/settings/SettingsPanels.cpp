@@ -1,5 +1,8 @@
 #include "ui/settings/SettingsPanels.hpp"
 
+#include "i18n/LocaleCatalog.hpp"
+
+#include "ui/settings/SettingsLayout.hpp"
 #include "ui/settings/SettingsPanelsImpl.hpp"
 
 #include "api/DaemonClient.hpp"
@@ -15,6 +18,7 @@
 #include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
+#include <QSignalBlocker>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -24,7 +28,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QSpinBox>
 #include <QStackedWidget>
 #include <QTableWidget>
@@ -38,15 +41,6 @@
 namespace avar::gui {
 
 namespace {
-
-QWidget *wrapScroll(QWidget *content)
-{
-    auto *scroll = new QScrollArea();
-    scroll->setWidgetResizable(true);
-    scroll->setFrameShape(QFrame::NoFrame);
-    scroll->setWidget(content);
-    return scroll;
-}
 
 QLabel *sectionTitle(const QString &text, QWidget *parent)
 {
@@ -101,6 +95,8 @@ QWidget *buildGeneralPanel(const SettingsContext &ctx, QWidget *parent)
     theme->addItem(ctx.translator.tr(QStringLiteral("settings.themeLight")), static_cast<int>(ThemeSetting::LightSoft));
     theme->addItem(ctx.translator.tr(QStringLiteral("settings.themeLightBright")),
                    static_cast<int>(ThemeSetting::LightBright));
+    theme->addItem(ctx.translator.tr(QStringLiteral("settings.themeQueenMode")),
+                   static_cast<int>(ThemeSetting::QueenMode));
     theme->addItem(ctx.translator.tr(QStringLiteral("settings.themeDark")), static_cast<int>(ThemeSetting::Dark));
     theme->addItem(ctx.translator.tr(QStringLiteral("settings.themeSystem")), static_cast<int>(ThemeSetting::System));
     for (int i = 0; i < theme->count(); ++i) {
@@ -116,12 +112,21 @@ QWidget *buildGeneralPanel(const SettingsContext &ctx, QWidget *parent)
     layout->addWidget(theme);
 
     auto *locale = new QComboBox(panel);
-    locale->addItem(QStringLiteral("English"), QStringLiteral("en"));
-    locale->addItem(QStringLiteral("فارسی"), QStringLiteral("fa"));
+    for (const LocaleDescriptor &entry : LocaleCatalog::availableLocales()) {
+        locale->addItem(entry.nameNative, entry.id);
+    }
     const int localeIndex = locale->findData(ctx.appSettings.locale());
-    locale->setCurrentIndex(localeIndex >= 0 ? localeIndex : 0);
-    QObject::connect(locale, &QComboBox::currentIndexChanged, panel, [&ctx, locale] {
-        ctx.appSettings.setLocale(locale->currentData().toString());
+    {
+        QSignalBlocker blocker(locale);
+        locale->setCurrentIndex(localeIndex >= 0 ? localeIndex : 0);
+    }
+    QObject::connect(locale, &QComboBox::currentIndexChanged, panel, [&ctx, locale](int index) {
+        if (index < 0) {
+            return;
+        }
+        const QString localeId = locale->itemData(index).toString();
+        ctx.appSettings.setLocale(localeId);
+        ctx.translator.setLocale(localeId);
     });
     layout->addWidget(new QLabel(ctx.translator.tr(QStringLiteral("settings.language")), panel));
     layout->addWidget(locale);
@@ -267,7 +272,7 @@ QWidget *buildGeneralPanel(const SettingsContext &ctx, QWidget *parent)
 #endif
 
     layout->addStretch();
-    return wrapScroll(panel);
+    return wrapSettingsPage(panel);
 }
 
 } // namespace

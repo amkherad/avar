@@ -7,6 +7,7 @@ namespace avar::gui {
 enum class ThemeSetting {
     LightSoft,
     LightBright,
+    QueenMode,
     Dark,
     System,
 };
@@ -17,6 +18,10 @@ struct ThemeTokens {
     QString bgElevated;
     QString bgMuted;
     QString border;
+    /** Lower-contrast border on elevated surfaces (e.g. cards). */
+    QString borderSubtle;
+    /** Lower-contrast window chrome on main background. */
+    QString borderChrome;
     QString text;
     QString textMuted;
     QString primary;
@@ -32,6 +37,7 @@ struct ThemeTokens {
 
 ThemeTokens softLightTheme();
 ThemeTokens brightLightTheme();
+ThemeTokens queenModeTheme();
 ThemeTokens darkTheme();
 
 ThemeTokens resolveThemeTokens(ThemeSetting setting, bool systemPrefersDark);

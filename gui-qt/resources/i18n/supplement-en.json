@@ -1,0 +1,16 @@
+{
+  "nav": {
+    "themeToggle": "Toggle light/dark"
+  },
+  "parity": {
+    "panelPending": "This section is not ported yet; see gui-qt/PARITY.md."
+  },
+  "queue": {
+    "nameLabel": "Queue name"
+  },
+  "settings": {
+    "general": {
+      "locale": "Language"
+    }
+  }
+}

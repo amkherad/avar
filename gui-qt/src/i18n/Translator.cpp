@@ -1,271 +1,49 @@
 #include "i18n/Translator.hpp"
 
-#include <QHash>
+#include "i18n/LocaleCatalog.hpp"
+#include "i18n/TranslationLoader.hpp"
 
 namespace avar::gui {
 
 Translator::Translator(QObject *parent)
     : QObject(parent)
 {
+    reloadStrings();
 }
 
 void Translator::setLocale(const QString &locale)
 {
-    m_locale = locale;
+    const QString normalized = LocaleCatalog::normalizeLocaleId(locale);
+    if (m_locale == normalized) {
+        return;
+    }
+    m_locale = normalized;
+    reloadStrings();
+    emit translationsChanged();
+}
+
+QString Translator::locale() const
+{
+    return m_locale;
 }
 
 bool Translator::isRtl() const
 {
-    return m_locale == QStringLiteral("fa");
+    return LocaleCatalog::isRtlLocale(m_locale);
+}
+
+void Translator::reloadStrings()
+{
+    m_strings = TranslationLoader::loadMerged(m_locale);
 }
 
 QString Translator::tr(const QString &key) const
 {
-    static const QHash<QString, QHash<QString, QString>> table = {
-        {QStringLiteral("en"),
-         {
-             {QStringLiteral("app.title"), QStringLiteral("Avar")},
-             {QStringLiteral("app.subtitle"), QStringLiteral("Download Manager")},
-             {QStringLiteral("nav.dashboard"), QStringLiteral("Dashboard")},
-             {QStringLiteral("nav.settings"), QStringLiteral("Settings")},
-             {QStringLiteral("nav.help"), QStringLiteral("Help")},
-             {QStringLiteral("nav.back"), QStringLiteral("Back to dashboard")},
-             {QStringLiteral("session.connected"), QStringLiteral("Connected")},
-             {QStringLiteral("session.disconnected"), QStringLiteral("Disconnected")},
-             {QStringLiteral("session.connecting"), QStringLiteral("Connecting…")},
-             {QStringLiteral("session.add"), QStringLiteral("Add session")},
-             {QStringLiteral("session.refresh"), QStringLiteral("Refresh session")},
-             {QStringLiteral("session.title"), QStringLiteral("Sessions")},
-             {QStringLiteral("download.title"), QStringLiteral("Downloads")},
-             {QStringLiteral("download.add"), QStringLiteral("Add download")},
-             {QStringLiteral("download.batchAdd.button"), QStringLiteral("Batch add")},
-             {QStringLiteral("download.urlLabel"), QStringLiteral("URL")},
-             {QStringLiteral("download.searchPlaceholder"), QStringLiteral("Search downloads…")},
-             {QStringLiteral("download.selectHint"), QStringLiteral("Select a download to view details.")},
-             {QStringLiteral("download.detailsTitle"), QStringLiteral("Download details")},
-             {QStringLiteral("console.title"), QStringLiteral("Console")},
-             {QStringLiteral("console.toggle"), QStringLiteral("Console")},
-             {QStringLiteral("console.close"), QStringLiteral("Close console")},
-             {QStringLiteral("console.clear"), QStringLiteral("Clear")},
-             {QStringLiteral("console.empty"), QStringLiteral("No log entries yet")},
-             {QStringLiteral("console.autoScroll"), QStringLiteral("Auto-scroll")},
-             {QStringLiteral("console.showGui"), QStringLiteral("GUI logs")},
-             {QStringLiteral("console.showDaemon"), QStringLiteral("Daemon logs")},
-             {QStringLiteral("console.guiSeverity"), QStringLiteral("GUI log level")},
-             {QStringLiteral("console.daemonSeverity"), QStringLiteral("Daemon log level")},
-             {QStringLiteral("console.daemonFetchFailed"), QStringLiteral("Failed to fetch daemon logs")},
-             {QStringLiteral("console.resize"), QStringLiteral("Resize console")},
-             {QStringLiteral("console.level.debug"), QStringLiteral("Debug")},
-             {QStringLiteral("console.level.info"), QStringLiteral("Info")},
-             {QStringLiteral("console.level.warn"), QStringLiteral("Warning")},
-             {QStringLiteral("console.level.error"), QStringLiteral("Error")},
-             {QStringLiteral("health.uptime"), QStringLiteral("Uptime")},
-             {QStringLiteral("downloads.empty"), QStringLiteral("No downloads in this queue")},
-             {QStringLiteral("settings.general"), QStringLiteral("General")},
-             {QStringLiteral("settings.title"), QStringLiteral("Settings")},
-             {QStringLiteral("settings.categories.general"), QStringLiteral("🌐 General")},
-             {QStringLiteral("settings.categories.downloads"), QStringLiteral("📥 Downloads")},
-             {QStringLiteral("settings.categories.queues"), QStringLiteral("📋 Queues")},
-             {QStringLiteral("settings.categories.daemon"), QStringLiteral("🖥️ Daemon")},
-             {QStringLiteral("settings.categories.browser"), QStringLiteral("🧩 Browser integration")},
-             {QStringLiteral("settings.categories.shortcuts"), QStringLiteral("⌨️ Shortcuts")},
-             {QStringLiteral("settings.categories.about"), QStringLiteral("✨ About")},
-             {QStringLiteral("queue.title"), QStringLiteral("Queues")},
-             {QStringLiteral("queue.add"), QStringLiteral("Add queue")},
-             {QStringLiteral("queue.nameLabel"), QStringLiteral("Queue name")},
-             {QStringLiteral("dialog.cancel"), QStringLiteral("Cancel")},
-             {QStringLiteral("dialog.add"), QStringLiteral("Add")},
-             {QStringLiteral("dialog.confirm"), QStringLiteral("Confirm")},
-             {QStringLiteral("download.batchAdd.placeholder"), QStringLiteral("One URL per line")},
-             {QStringLiteral("theme.lightSoft"), QStringLiteral("Soft light")},
-             {QStringLiteral("theme.lightBright"), QStringLiteral("Bright light")},
-             {QStringLiteral("theme.dark"), QStringLiteral("Dark")},
-             {QStringLiteral("theme.system"), QStringLiteral("System")},
-             {QStringLiteral("theme.toggle"), QStringLiteral("Toggle light/dark")},
-             {QStringLiteral("settings.general.locale"), QStringLiteral("Language code")},
-             {QStringLiteral("settings.downloads.hint"), QStringLiteral("Default download folder is read from daemon config.")},
-             {QStringLiteral("settings.downloads.defaultPath"), QStringLiteral("Default path")},
-             {QStringLiteral("settings.queues.hint"), QStringLiteral("Queue defaults are managed in the daemon config.")},
-             {QStringLiteral("settings.browser.enableExtension"), QStringLiteral("Enable browser extension bridge")},
-             {QStringLiteral("settings.shortcuts.hint"), QStringLiteral("Global shortcuts require desktop integration (planned).")},
-             {QStringLiteral("settings.about.backendLoading"), QStringLiteral("Loading backend version…")},
-             {QStringLiteral("settings.about.backendUnknown"), QStringLiteral("Unknown")},
-             {QStringLiteral("extensionPanel.aria"), QStringLiteral("Browser extension")},
-             {QStringLiteral("extensionPanel.checking"), QStringLiteral("Checking…")},
-             {QStringLiteral("extensionPanel.connected"), QStringLiteral("Extension connected")},
-             {QStringLiteral("extensionPanel.disconnected"), QStringLiteral("Extension offline")},
-             {QStringLiteral("settings.desktop.keepInTrayOnClose"),
-              QStringLiteral("Keep in system tray when closing the window")},
-             {QStringLiteral("tray.show"), QStringLiteral("Show Avar")},
-             {QStringLiteral("tray.exit"), QStringLiteral("Exit Avar")},
-             {QStringLiteral("tray.startAll"), QStringLiteral("Start All")},
-             {QStringLiteral("tray.pauseAll"), QStringLiteral("Pause All")},
-             {QStringLiteral("tray.resumeAll"), QStringLiteral("Resume All")},
-             {QStringLiteral("tray.stopAll"), QStringLiteral("Stop All")},
-             {QStringLiteral("tray.activeDownloads"), QStringLiteral("Active downloads")},
-             {QStringLiteral("session.baseUrl"), QStringLiteral("Server URL")},
-             {QStringLiteral("session.authToken"), QStringLiteral("Auth token (optional)")},
-             {QStringLiteral("parity.panelPending"), QStringLiteral("This section is not ported yet; see gui-qt/PARITY.md.")},
-             {QStringLiteral("help.welcome"), QStringLiteral("Help documentation will mirror gui/docs here.")},
-             {QStringLiteral("common.save"), QStringLiteral("Save")},
-             {QStringLiteral("common.browse"), QStringLiteral("Browse")},
-             {QStringLiteral("common.refresh"), QStringLiteral("Refresh")},
-             {QStringLiteral("common.error"), QStringLiteral("Something went wrong.")},
-             {QStringLiteral("settings.saved"), QStringLiteral("Settings saved.")},
-             {QStringLiteral("settings.theme"), QStringLiteral("Theme")},
-             {QStringLiteral("settings.themeLight"), QStringLiteral("Soft light")},
-             {QStringLiteral("settings.themeLightBright"), QStringLiteral("Bright light")},
-             {QStringLiteral("settings.themeDark"), QStringLiteral("Dark")},
-             {QStringLiteral("settings.themeSystem"), QStringLiteral("System")},
-             {QStringLiteral("settings.language"), QStringLiteral("Language")},
-             {QStringLiteral("settings.syncChannel"), QStringLiteral("Sync channel")},
-             {QStringLiteral("settings.syncPoll"), QStringLiteral("Polling")},
-             {QStringLiteral("settings.syncSse"), QStringLiteral("Server-Sent Events")},
-             {QStringLiteral("settings.syncWebSocket"), QStringLiteral("WebSocket")},
-             {QStringLiteral("settings.refresh"), QStringLiteral("Refresh interval (seconds)")},
-             {QStringLiteral("settings.pingInterval"), QStringLiteral("Health ping interval (seconds)")},
-             {QStringLiteral("settings.downloadDoubleClick"), QStringLiteral("Double-click download row")},
-             {QStringLiteral("settings.downloadDoubleClickOpenDetails"), QStringLiteral("Open details")},
-             {QStringLiteral("settings.downloadDoubleClickOpenFile"), QStringLiteral("Open file")},
-             {QStringLiteral("settings.byteDisplayUnit"), QStringLiteral("Byte display unit")},
-             {QStringLiteral("settings.byteDisplayUnitBinary"), QStringLiteral("Binary (KiB, MiB)")},
-             {QStringLiteral("settings.byteDisplayUnitDecimal"), QStringLiteral("Decimal (KB, MB)")},
-             {QStringLiteral("settings.transferRateDisplayUnit"), QStringLiteral("Transfer rate unit")},
-             {QStringLiteral("settings.transferRateDisplayUnitBinaryBytes"), QStringLiteral("Bytes per second")},
-             {QStringLiteral("settings.transferRateDisplayUnitBinaryBits"), QStringLiteral("Bits per second")},
-             {QStringLiteral("settings.remoteCopy.title"), QStringLiteral("Remote copy")},
-             {QStringLiteral("settings.remoteCopy.hint"),
-              QStringLiteral("When the daemon runs on another machine, set where files are stored locally.")},
-             {QStringLiteral("settings.remoteCopy.localDownloadPath"), QStringLiteral("Local download folder")},
-             {QStringLiteral("settings.footerMonitors"), QStringLiteral("Footer monitors")},
-             {QStringLiteral("settings.footerMonitorsHint"), QStringLiteral("Choose which system stats appear in the footer.")},
-             {QStringLiteral("settings.footerMonitorDisplay"), QStringLiteral("Display style")},
-             {QStringLiteral("settings.footerMonitorDisplayText"), QStringLiteral("Text")},
-             {QStringLiteral("settings.footerMonitorDisplayHistogram"), QStringLiteral("Histogram")},
-             {QStringLiteral("settings.footerMonitor.disk"), QStringLiteral("Disk")},
-             {QStringLiteral("settings.footerMonitor.memory"), QStringLiteral("Memory")},
-             {QStringLiteral("settings.footerMonitor.cpu"), QStringLiteral("CPU")},
-             {QStringLiteral("settings.footerMonitor.network"), QStringLiteral("Network")},
-             {QStringLiteral("settings.notifications.title"), QStringLiteral("Notifications")},
-             {QStringLiteral("settings.notifications.hint"), QStringLiteral("Show desktop notifications for download events.")},
-             {QStringLiteral("settings.notifications.enabled"), QStringLiteral("Enable notifications")},
-             {QStringLiteral("settings.desktop.title"), QStringLiteral("Desktop")},
-             {QStringLiteral("settings.desktop.hint"), QStringLiteral("Behavior when running the native desktop app.")},
-             {QStringLiteral("settings.download.tempPath"), QStringLiteral("Temporary folder")},
-             {QStringLiteral("settings.download.downloadPath"), QStringLiteral("Default download folder")},
-             {QStringLiteral("settings.download.segmentation"), QStringLiteral("Segmentation")},
-             {QStringLiteral("settings.download.segmentationEnabled"), QStringLiteral("Enable segmented downloads")},
-             {QStringLiteral("settings.download.segmentationStrategy"), QStringLiteral("Strategy")},
-             {QStringLiteral("settings.download.strategyBalanced"), QStringLiteral("Balanced")},
-             {QStringLiteral("settings.download.strategyLeftHeavy"), QStringLiteral("Left-heavy")},
-             {QStringLiteral("settings.download.concurrency"), QStringLiteral("Concurrency")},
-             {QStringLiteral("settings.download.chunkSize"), QStringLiteral("Chunk size (bytes)")},
-             {QStringLiteral("settings.download.minFileSize"), QStringLiteral("Minimum file size (bytes)")},
-             {QStringLiteral("settings.download.progress"), QStringLiteral("Progress display")},
-             {QStringLiteral("settings.download.sizeUnit"), QStringLiteral("Size unit")},
-             {QStringLiteral("settings.download.speedUnit"), QStringLiteral("Speed unit")},
-             {QStringLiteral("settings.download.progressStyle"), QStringLiteral("Progress style")},
-             {QStringLiteral("settings.download.progressSegmented"), QStringLiteral("Per-segment")},
-             {QStringLiteral("settings.download.progressAggregate"), QStringLiteral("Aggregate")},
-             {QStringLiteral("proxy.title"), QStringLiteral("Proxy")},
-             {QStringLiteral("proxy.enabled"), QStringLiteral("Use proxy")},
-             {QStringLiteral("proxy.type"), QStringLiteral("Type")},
-             {QStringLiteral("proxy.types.http"), QStringLiteral("HTTP")},
-             {QStringLiteral("proxy.types.https"), QStringLiteral("HTTPS")},
-             {QStringLiteral("proxy.types.socks5"), QStringLiteral("SOCKS5")},
-             {QStringLiteral("proxy.host"), QStringLiteral("Host")},
-             {QStringLiteral("proxy.port"), QStringLiteral("Port")},
-             {QStringLiteral("proxy.username"), QStringLiteral("Username")},
-             {QStringLiteral("proxy.password"), QStringLiteral("Password")},
-             {QStringLiteral("proxy.noProxy"), QStringLiteral("No proxy for")},
-             {QStringLiteral("settings.daemon.autoShutdown"), QStringLiteral("Auto shutdown")},
-             {QStringLiteral("settings.daemon.autoShutdownNever"), QStringLiteral("Never")},
-             {QStringLiteral("settings.daemon.autoShutdownWhenIdle"), QStringLiteral("When idle")},
-             {QStringLiteral("settings.daemon.autoShutdownIdleSeconds"), QStringLiteral("Idle timeout (seconds)")},
-             {QStringLiteral("settings.daemon.fileLogging"), QStringLiteral("File logging")},
-             {QStringLiteral("settings.daemon.logEnabled"), QStringLiteral("Write logs to file")},
-             {QStringLiteral("settings.daemon.logPath"), QStringLiteral("Log file path")},
-             {QStringLiteral("settings.daemon.fsBrowse"), QStringLiteral("Filesystem browser")},
-             {QStringLiteral("settings.daemon.fsBrowseHint"), QStringLiteral("Allow the GUI to browse paths on the daemon host.")},
-             {QStringLiteral("settings.daemon.fsBrowseEnabled"), QStringLiteral("Enable filesystem browser")},
-             {QStringLiteral("settings.daemon.remoteFileDownload"), QStringLiteral("Remote file download")},
-             {QStringLiteral("settings.daemon.remoteFileDownloadHint"),
-              QStringLiteral("Allow downloading files from the daemon machine through the API.")},
-             {QStringLiteral("settings.daemon.fileDownloadEnabled"), QStringLiteral("Enable remote file download")},
-             {QStringLiteral("settings.browser.title"), QStringLiteral("Browser extension")},
-             {QStringLiteral("settings.browser.hint"), QStringLiteral("Capture downloads from your web browser.")},
-             {QStringLiteral("settings.browser.enableListener"), QStringLiteral("Enable extension bridge")},
-             {QStringLiteral("settings.browser.suspendExtension"), QStringLiteral("Suspend extension")},
-             {QStringLiteral("settings.browser.resumeExtension"), QStringLiteral("Resume extension")},
-             {QStringLiteral("settings.browser.extensionDisabled"), QStringLiteral("Extension bridge disabled")},
-             {QStringLiteral("settings.browser.extensionSuspended"), QStringLiteral("Extension bridge suspended")},
-             {QStringLiteral("settings.browser.extensionChecking"), QStringLiteral("Checking extension…")},
-             {QStringLiteral("settings.browser.extensionConnected"), QStringLiteral("Extension connected")},
-             {QStringLiteral("settings.browser.extensionDisconnected"), QStringLiteral("Extension not connected")},
-             {QStringLiteral("settings.browser.guiUrl"), QStringLiteral("Extension GUI URL")},
-             {QStringLiteral("settings.browser.daemonUrl"), QStringLiteral("Daemon URL")},
-             {QStringLiteral("settings.browser.copyGuiUrl"), QStringLiteral("Copy URL")},
-             {QStringLiteral("settings.browser.guiUrlCopied"), QStringLiteral("URL copied to clipboard.")},
-             {QStringLiteral("settings.pwa.notificationsTitle"), QStringLiteral("Notifications")},
-             {QStringLiteral("settings.pwa.notificationsHint"), QStringLiteral("Request permission for web notifications.")},
-             {QStringLiteral("settings.pwa.enableNotifications"), QStringLiteral("Enable notifications")},
-             {QStringLiteral("settings.pwa.notificationsUnsupported"), QStringLiteral("Not supported on this platform.")},
-             {QStringLiteral("shortcuts.hint"), QStringLiteral("Click a shortcut to rebind. Press Esc to cancel.")},
-             {QStringLiteral("shortcuts.columnAction"), QStringLiteral("Action")},
-             {QStringLiteral("shortcuts.columnKeys"), QStringLiteral("Keys")},
-             {QStringLiteral("shortcuts.resetAll"), QStringLiteral("Reset all to defaults")},
-             {QStringLiteral("shortcuts.pressKeys"), QStringLiteral("Press keys…")},
-             {QStringLiteral("shortcuts.category.downloads"), QStringLiteral("Downloads")},
-             {QStringLiteral("shortcuts.category.navigation"), QStringLiteral("Navigation")},
-             {QStringLiteral("shortcuts.category.view"), QStringLiteral("View")},
-             {QStringLiteral("shortcuts.actions.downloadAdd"), QStringLiteral("Add download")},
-             {QStringLiteral("shortcuts.actions.downloadSearch"), QStringLiteral("Search downloads")},
-             {QStringLiteral("shortcuts.actions.downloadPause"), QStringLiteral("Pause")},
-             {QStringLiteral("shortcuts.actions.downloadStart"), QStringLiteral("Start")},
-             {QStringLiteral("shortcuts.actions.downloadStop"), QStringLiteral("Stop")},
-             {QStringLiteral("shortcuts.actions.downloadDelete"), QStringLiteral("Delete")},
-             {QStringLiteral("shortcuts.actions.navDashboard"), QStringLiteral("Go to dashboard")},
-             {QStringLiteral("shortcuts.actions.navSettings"), QStringLiteral("Open settings")},
-             {QStringLiteral("shortcuts.actions.navHelp"), QStringLiteral("Open help")},
-             {QStringLiteral("shortcuts.actions.consoleToggle"), QStringLiteral("Toggle console")},
-             {QStringLiteral("shortcuts.actions.detailPanelToggle"), QStringLiteral("Toggle detail panel")},
-             {QStringLiteral("settings.about.intro"), QStringLiteral("Avar is an open-source download manager.")},
-             {QStringLiteral("settings.about.versionTitle"), QStringLiteral("Version")},
-             {QStringLiteral("settings.about.frontendVersion"), QStringLiteral("GUI version")},
-             {QStringLiteral("settings.about.backendVersion"), QStringLiteral("Backend version")},
-             {QStringLiteral("settings.about.authorTitle"), QStringLiteral("Author")},
-             {QStringLiteral("settings.about.authorText"), QStringLiteral("Created and maintained by the Avar team.")},
-             {QStringLiteral("settings.about.authorButton"), QStringLiteral("View profile")},
-             {QStringLiteral("settings.about.licenseTitle"), QStringLiteral("License")},
-             {QStringLiteral("settings.about.licenseText"), QStringLiteral("Avar is released under an open-source license.")},
-             {QStringLiteral("settings.about.licenseButton"), QStringLiteral("View license")},
-             {QStringLiteral("settings.about.sponsorsTitle"), QStringLiteral("Sponsors")},
-             {QStringLiteral("settings.about.sponsorsText"), QStringLiteral("Support development through GitHub Sponsors.")},
-             {QStringLiteral("settings.about.sponsorsButton"), QStringLiteral("Become a sponsor")},
-             {QStringLiteral("settings.about.reportBugTitle"), QStringLiteral("Report a bug")},
-             {QStringLiteral("settings.about.reportBugText"), QStringLiteral("Found an issue? Let us know on GitHub.")},
-             {QStringLiteral("settings.about.reportBugButton"), QStringLiteral("Open issue tracker")},
-             {QStringLiteral("queue.start"), QStringLiteral("Start queue")},
-             {QStringLiteral("queue.stop"), QStringLiteral("Stop queue")},
-         }},
-        {QStringLiteral("fa"),
-         {
-             {QStringLiteral("app.title"), QStringLiteral("آوار")},
-             {QStringLiteral("app.subtitle"), QStringLiteral("مدیر دانلود")},
-             {QStringLiteral("nav.dashboard"), QStringLiteral("داشبورد")},
-             {QStringLiteral("nav.settings"), QStringLiteral("تنظیمات")},
-             {QStringLiteral("nav.help"), QStringLiteral("راهنما")},
-             {QStringLiteral("nav.back"), QStringLiteral("بازگشت به داشبورد")},
-             {QStringLiteral("session.connected"), QStringLiteral("متصل")},
-             {QStringLiteral("session.disconnected"), QStringLiteral("قطع")},
-             {QStringLiteral("downloads.empty"), QStringLiteral("دانلودی در این صف نیست")},
-             {QStringLiteral("settings.general"), QStringLiteral("عمومی")},
-             {QStringLiteral("help.welcome"), QStringLiteral("مستندات راهنما از gui/docs هم‌تراز خواهد شد.")},
-         }},
-    };
-
-    const auto localeTable = table.value(m_locale, table.value(QStringLiteral("en")));
-    return localeTable.value(key, key);
+    const QString value = m_strings.value(key);
+    if (!value.isEmpty()) {
+        return value;
+    }
+    return key;
 }
 
 } // namespace avar::gui

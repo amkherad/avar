@@ -10,6 +10,8 @@ class ThemeTokensTest final : public QObject {
 
 private slots:
     void darkThemeMatchesElectronPalette();
+    void queenModeThemeMatchesElectronPalette();
+    void resolveQueenModeSetting();
     void stylesheetReplacesTokens();
 };
 
@@ -18,6 +20,19 @@ void ThemeTokensTest::darkThemeMatchesElectronPalette()
     const ThemeTokens tokens = darkTheme();
     QCOMPARE(tokens.bg, QStringLiteral("#0f1419"));
     QCOMPARE(tokens.primary, QStringLiteral("#3b82f6"));
+}
+
+void ThemeTokensTest::queenModeThemeMatchesElectronPalette()
+{
+    const ThemeTokens tokens = queenModeTheme();
+    QCOMPARE(tokens.id, QStringLiteral("queen-mode"));
+    QCOMPARE(tokens.primary, QStringLiteral("#d946a0"));
+}
+
+void ThemeTokensTest::resolveQueenModeSetting()
+{
+    const ThemeTokens tokens = resolveThemeTokens(ThemeSetting::QueenMode, false);
+    QCOMPARE(tokens.id, QStringLiteral("queen-mode"));
 }
 
 void ThemeTokensTest::stylesheetReplacesTokens()

@@ -52,6 +52,7 @@ QLabel[class="AvarPageTitle"] {
     font-size: 15px;
     margin-bottom: 6px;
     color: @@TEXT@@;
+    max-height: 2em;
 }
 
 QLabel[class="AvarPopupTitle"] {
@@ -74,32 +75,150 @@ QLabel[class="AvarDownloadPanelTitle"] {
     padding: 8px 12px;
 }
 
-QLabel#AvarExtensionStatus {
-    color: @@TEXT_MUTED@@;
-    font-size: 12px;
+QWidget#AvarExtensionPanel {
+    position: relative;
 }
 
-QMainWindow#AvarMainWindow {
+QWidget[class="AvarExtensionTrigger"] {
     background: transparent;
 }
 
+QWidget#AvarHeaderActions QPushButton[class="AvarButtonGhost"] {
+    padding: 4px;
+    min-width: 28px;
+    max-width: 28px;
+    min-height: 28px;
+    max-height: 28px;
+    font-size: 14px;
+}
+
+QWidget[class="AvarExtensionTrigger"] QPushButton[class="AvarButtonGhost"] {
+    color: @@TEXT_MUTED@@;
+}
+
+QWidget[class="AvarExtensionTrigger"] QPushButton[class="AvarButtonGhost"]:hover:enabled {
+    color: @@TEXT@@;
+}
+
+QLabel[class="AvarExtensionDot"] {
+    background-color: @@TEXT_MUTED@@;
+    border: 1px solid @@BG_ELEVATED@@;
+    border-radius: 4px;
+    min-width: 7px;
+    max-width: 7px;
+    min-height: 7px;
+    max-height: 7px;
+    margin-top: 1px;
+    margin-right: 1px;
+}
+
+QLabel[class="AvarExtensionDot"][state="ok"] {
+    background-color: @@SUCCESS@@;
+}
+
+QLabel[class="AvarExtensionDot"][state="error"] {
+    background-color: @@DANGER@@;
+}
+
+QFrame#AvarExtensionMenu {
+    background-color: @@BG_ELEVATED@@;
+    border: 1px solid @@BORDER_SUBTLE@@;
+    border-radius: @@RADIUS@@px;
+}
+
+QLabel[class="AvarExtensionHeading"] {
+    font-size: 14px;
+    font-weight: 600;
+    color: @@TEXT@@;
+    margin-bottom: 8px;
+}
+
+QLabel[class="AvarExtensionStatusText"] {
+    font-size: 13px;
+    color: @@TEXT@@;
+    margin-bottom: 10px;
+}
+
+QCheckBox[class="AvarExtensionListen"] {
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+
+QLabel[class="AvarExtensionSuspendHint"] {
+    font-size: 12px;
+    color: @@TEXT_MUTED@@;
+    margin-bottom: 10px;
+}
+
+QLabel[class="AvarExtensionFieldLabel"] {
+    font-size: 12px;
+    color: @@TEXT_MUTED@@;
+    margin-top: 4px;
+}
+
+QLabel[class="AvarExtensionCode"] {
+    font-size: 12px;
+    color: @@TEXT@@;
+    margin-bottom: 6px;
+}
+
+QLabel[class="AvarExtensionMetaKey"] {
+    font-size: 12px;
+    font-weight: 600;
+    color: @@TEXT_MUTED@@;
+}
+
+QLabel[class="AvarExtensionMetaValue"] {
+    font-size: 12px;
+    color: @@TEXT@@;
+    margin-bottom: 4px;
+}
+
+QLabel[class="AvarExtensionUpdate"] {
+    font-size: 12px;
+    color: @@WARNING@@;
+    margin-top: 10px;
+}
+
+QMainWindow#AvarMainWindow,
+QMainWindow#AvarSecondaryWindow {
+    background: transparent;
+}
+
+QMainWindow#AvarMainWindow[maximized="true"],
+QMainWindow#AvarSecondaryWindow[maximized="true"] {
+    background: @@BG@@;
+}
+
+/* Outer: transparent inset for shadow gap (see kWindowedOuterMargin); no border here */
 QWidget#AvarDesktopOuter {
     background: transparent;
-}
-
-QWidget#AvarDesktopOuter[maximized="true"] {
-    background-color: @@BG@@;
+    border: none;
 }
 
 QWidget#AvarDesktopFrame {
     background-color: @@BG@@;
-    border: 1px solid @@BORDER@@;
+    border: 1px solid @@BORDER_CHROME@@;
     border-radius: @@RADIUS@@px;
 }
 
 QWidget#AvarDesktopFrame[maximized="true"] {
     border-radius: 0;
     border: none;
+}
+
+/* Popup / secondary windows (AvarWindow) — stronger edge so they read above the main shell */
+QWidget#AvarDesktopFrame[secondary="true"] {
+    border: 1px solid @@BORDER@@;
+}
+
+QWidget#AvarDesktopFrame[secondary="true"][maximized="true"] {
+    border-radius: 0;
+    border: none;
+}
+
+QWidget#AvarRoot[maximized="true"] QWidget#AvarSidebar {
+    border-bottom-left-radius: 0;
 }
 
 /* Header (.avar-header) */
@@ -117,6 +236,16 @@ QWidget#AvarHeader[desktop="true"] {
 }
 
 QWidget#AvarHeader[maximized="true"] {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+QWidget#AvarHeader[secondary="true"] {
+    border-top-left-radius: @@RADIUS@@px;
+    border-top-right-radius: @@RADIUS@@px;
+}
+
+QWidget#AvarHeader[secondary="true"][maximized="true"] {
     border-top-left-radius: 0;
     border-top-right-radius: 0;
 }
@@ -177,10 +306,20 @@ QPushButton#AvarHeaderSettings[active="true"] {
     color: @@PRIMARY@@;
 }
 
+QPushButton#AvarHeaderTheme::menu-indicator {
+    image: none;
+    width: 0;
+    height: 0;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
 /* Shell sidebar (.avar-shell__sidebar) */
 QWidget#AvarSidebar {
     background-color: @@BG_ELEVATED@@;
     border-right: 1px solid @@BORDER@@;
+    border-bottom-left-radius: @@RADIUS@@px;
 }
 
 /* Sidebar nav (.avar-sidebar-nav__item) */
@@ -202,6 +341,31 @@ QPushButton[class="AvarSidebarNavItem"][active="true"] {
     background-color: @@BG_MUTED@@;
     color: @@PRIMARY@@;
     font-weight: 600;
+}
+
+QPushButton[class="AvarSidebarNavItem"][stripedIndex="0"],
+QPushButton[class="AvarSidebarNavItem"][stripedIndex="2"],
+QPushButton[class="AvarSidebarNavItem"][stripedIndex="4"],
+QPushButton[class="AvarSidebarNavItem"][stripedIndex="6"],
+QPushButton[class="AvarSidebarNavItem"][stripedIndex="8"] {
+    background-color: @@BG@@;
+}
+
+QWidget#AvarHelpPage {
+    background-color: @@BG@@;
+}
+
+QTextBrowser#AvarHelpMarkdown {
+    background: transparent;
+    color: @@TEXT@@;
+    border: none;
+    font-size: 15px;
+    line-height: 1.6;
+    max-width: 832px;
+}
+
+QTextBrowser#AvarHelpMarkdown a {
+    color: @@PRIMARY@@;
 }
 
 /* Buttons (.avar-btn) */
@@ -310,13 +474,11 @@ QComboBox::drop-down {
 }
 
 QComboBox::down-arrow {
-    width: 10px;
-    height: 10px;
-    image: none;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 5px solid @@TEXT_MUTED@@;
-    margin-right: 6px;
+    width: 12px;
+    height: 12px;
+    image: url(@@DROPDOWN_CHEVRON@@);
+    border: none;
+    margin-right: 5px;
 }
 
 QComboBox QAbstractItemView {
@@ -349,8 +511,8 @@ QDoubleSpinBox::down-button:hover {
 
 QSpinBox::up-arrow,
 QDoubleSpinBox::up-arrow {
-    width: 8px;
-    height: 8px;
+    width: 0;
+    height: 0;
     image: none;
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
@@ -359,8 +521,8 @@ QDoubleSpinBox::up-arrow {
 
 QSpinBox::down-arrow,
 QDoubleSpinBox::down-arrow {
-    width: 8px;
-    height: 8px;
+    width: 0;
+    height: 0;
     image: none;
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
@@ -416,6 +578,32 @@ QLabel[class="AvarSettingsHint"] {
     font-size: 12px;
 }
 
+QWidget#AvarSettingsForm {
+    max-width: 420px;
+}
+
+QWidget#AvarSettingsForm[wide="true"] {
+    max-width: 640px;
+}
+
+QWidget#AvarSettingsForm QLineEdit,
+QWidget#AvarSettingsForm QComboBox,
+QWidget#AvarSettingsForm QSpinBox,
+QWidget#AvarSettingsForm QDoubleSpinBox,
+QWidget#AvarSettingsForm QTextEdit,
+QWidget#AvarSettingsForm QPlainTextEdit {
+    max-width: 420px;
+}
+
+QWidget#AvarSettingsForm[wide="true"] QLineEdit,
+QWidget#AvarSettingsForm[wide="true"] QComboBox,
+QWidget#AvarSettingsForm[wide="true"] QSpinBox,
+QWidget#AvarSettingsForm[wide="true"] QDoubleSpinBox,
+QWidget#AvarSettingsForm[wide="true"] QTextEdit,
+QWidget#AvarSettingsForm[wide="true"] QPlainTextEdit {
+    max-width: 640px;
+}
+
 QScrollArea {
     background: transparent;
     border: none;
@@ -444,6 +632,31 @@ QListWidget::item:selected {
 
 QListWidget::item:hover:!selected {
     background-color: @@BG_MUTED@@;
+}
+
+/* Download card grid — clip viewport in code; per-item cards like gui download-list--cards */
+QListWidget#AvarDownloadGrid {
+    padding: 6px;
+    border-color: @@BORDER_SUBTLE@@;
+}
+
+QListWidget#AvarDownloadGrid::item {
+    background-color: @@BG@@;
+    border: 1px solid @@BORDER_SUBTLE@@;
+    border-radius: @@RADIUS_INNER@@px;
+    padding: 8px;
+    color: @@TEXT@@;
+}
+
+QListWidget#AvarDownloadGrid::item:selected {
+    background-color: @@BG_MUTED@@;
+    border-color: @@PRIMARY@@;
+    color: @@TEXT@@;
+}
+
+QListWidget#AvarDownloadGrid::item:hover:!selected {
+    background-color: @@BG_MUTED@@;
+    color: @@TEXT@@;
 }
 
 /* Table */
@@ -492,19 +705,50 @@ QLabel#ConnectionBadge[connected="false"] {
     color: @@DANGER@@;
 }
 
-QWidget#AvarDesktopFrame {
-    background-color: @@BG@@;
-}
-
 QWidget#AvarFooter {
     background-color: @@BG_ELEVATED@@;
-    border-top: 1px solid @@BORDER@@;
+    border-top: 1px solid @@BORDER_SUBTLE@@;
+    min-height: 28px;
+    max-height: 28px;
 }
 
 QLabel[class="AvarFooterStat"] {
     color: @@TEXT_MUTED@@;
-    font-size: 12px;
-    padding-right: 12px;
+    font-size: 11px;
+    padding: 0;
+    margin: 0;
+}
+
+QPushButton[class="AvarFooterConsoleBtn"] {
+    background: transparent;
+    color: @@TEXT_MUTED@@;
+    border: 1px solid transparent;
+    border-radius: @@RADIUS@@px;
+    padding: 2px 8px;
+    font-size: 11px;
+    min-height: 0;
+    max-height: 24px;
+}
+
+QPushButton[class="AvarFooterConsoleBtn"]:hover:enabled {
+    background-color: @@BG_MUTED@@;
+    color: @@TEXT@@;
+}
+
+QPushButton[class="AvarFooterConsoleBtn"][footerConsoleOpen="true"] {
+    background-color: @@BG_MUTED@@;
+    color: @@TEXT@@;
+    border-color: @@BORDER@@;
+}
+
+QPushButton[class="AvarFooterConsoleBtn"][footerConsoleAlert="true"] {
+    background-color: @@DANGER@@;
+    color: #ffffff;
+    border: none;
+}
+
+QPushButton[class="AvarFooterConsoleBtn"][footerConsoleAlert="true"]:hover:enabled {
+    opacity: 0.9;
 }
 
 QWidget#AvarConsole {
@@ -628,21 +872,30 @@ QFrame[class="AvarSessionMenu"] {
     border-radius: @@RADIUS@@px;
 }
 
-QPushButton[class="AvarSessionListItem"] {
+QWidget[class="AvarSessionListItem"] {
     border: 1px solid @@BORDER@@;
     border-radius: @@RADIUS_INNER@@px;
     background: @@BG@@;
     color: @@TEXT@@;
-    text-align: left;
+    min-height: 52px;
 }
 
-QPushButton[class="AvarSessionListItem"]:hover {
+QWidget[class="AvarSessionListItem"]:hover {
     border-color: @@PRIMARY@@;
 }
 
-QPushButton[class="AvarSessionListItem"][active="true"] {
+QWidget[class="AvarSessionListItem"][active="true"] {
     border-color: @@PRIMARY@@;
     background-color: @@BG_MUTED@@;
+}
+
+QScrollArea#AvarSessionMenuScroll {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea#AvarSessionMenuScroll > QWidget > QWidget {
+    background: transparent;
 }
 
 QLabel[class="AvarSessionListTitle"] {

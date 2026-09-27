@@ -25,6 +25,20 @@ void ensureFusionStyle()
     }
 }
 
+QString loadStylesheetTemplate()
+{
+    QFile templateFile(QStringLiteral(":/styles/app.qss"));
+    if (!templateFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return {};
+    }
+    return QString::fromUtf8(templateFile.readAll());
+}
+
+void installApplicationStylesheet(const ThemeTokens &tokens)
+{
+    qApp->setStyleSheet(buildApplicationStylesheet(tokens, loadStylesheetTemplate()));
+}
+
 } // namespace
 
 ThemeManager::ThemeManager(AppSettings &settings, QObject *parent)
@@ -49,12 +63,6 @@ void ThemeManager::apply()
 {
     refreshFromSettings();
     ensureFusionStyle();
-
-    QFile templateFile(QStringLiteral(":/styles/app.qss"));
-    QString base;
-    if (templateFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        base = QString::fromUtf8(templateFile.readAll());
-    }
 
     QPalette palette;
     const QColor window = QColor(m_tokens.bg);
@@ -113,9 +121,14 @@ void ThemeManager::apply()
     applyPaletteGroup(QPalette::Disabled);
     qApp->setPalette(palette);
 
-    qApp->setStyleSheet(buildApplicationStylesheet(m_tokens, base));
+    installApplicationStylesheet(m_tokens);
 
     emit themeChanged(m_tokens);
+}
+
+void ThemeManager::syncStylesheet()
+{
+    installApplicationStylesheet(m_tokens);
 }
 
 ThemeTokens ThemeManager::currentTokens() const
@@ -141,6 +154,9 @@ void ThemeManager::cycleTheme()
         m_settings.setThemeSetting(ThemeSetting::LightBright);
         break;
     case ThemeSetting::LightBright:
+        m_settings.setThemeSetting(ThemeSetting::QueenMode);
+        break;
+    case ThemeSetting::QueenMode:
         m_settings.setThemeSetting(ThemeSetting::Dark);
         break;
     case ThemeSetting::Dark:

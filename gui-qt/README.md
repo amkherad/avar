@@ -7,7 +7,8 @@ Native Qt 6 replacement for the Electron desktop shell. Talks to the Avar **daem
 | Path | Role |
 |------|------|
 | `src/api/` | JSON-RPC daemon client |
-| `src/theme/` | Theme tokens aligned with `gui/src/theme/themes.ts` |
+| `src/theme/` | Theme tokens aligned with `gui/src/theme/themes.ts`; `FaIcon` loads Font Awesome SVGs |
+| `third_party/fontawesome-free/` | Font Awesome Free solid SVGs (subset; see README there) |
 | `src/sync/` | WebSocket / poll sync with the daemon |
 | `src/extension/` | Client for the C extension bridge (`extensions/daemon`) |
 | `src/ui/` | Widgets and pages mirroring the React shell |
@@ -16,7 +17,7 @@ Browser extension HTTP bridge logic lives in **`extensions/daemon`** (C only) so
 
 ## Requirements
 
-- Qt **6.4+** with modules: Core, Gui, Widgets, Network (WebSockets and Svg optional; poll fallback and text logo used when missing)
+- Qt **6.4+** with modules: Core, Gui, Widgets, Network (WebSockets and **Svg** recommended for Font Awesome icons; poll fallback when WebSockets missing)
 - CMake **3.16+** and Ninja (recommended)
 - C++23 compiler
 
@@ -53,7 +54,7 @@ Settings are stored with `QSettings` (organization `Avar`, application `gui-qt`)
 
 - `daemon/baseUrl` — default `http://127.0.0.1:8000` (desktop) or empty for relative API (wasm)
 - `daemon/authToken` — optional bearer token
-- `theme` — `light`, `light-bright`, `dark`, or `system`
+- `theme` — `light`, `light-bright`, `queen-mode`, `dark`, or `system`
 - `locale` — `en` or `fa` (RTL supported)
 
 ## Tests

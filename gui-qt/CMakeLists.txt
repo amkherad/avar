@@ -17,13 +17,14 @@ else()
 endif()
 include(GNUInstallDirs)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network Test)
-find_package(Qt6 ${Qt6_VERSION} QUIET COMPONENTS WebSockets Svg)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Network Test Svg)
+find_package(Qt6 ${Qt6_VERSION} QUIET COMPONENTS WebSockets)
 
 set(AVAR_GUI_QT_SOURCES
     src/main.cpp
     src/core/Application.cpp
     src/core/CrashHandler.cpp
+    src/core/UnixSignalQuit.cpp
     src/core/GuiLog.cpp
     src/core/Hosting.cpp
     src/config/LayoutPreferences.cpp
@@ -37,15 +38,20 @@ set(AVAR_GUI_QT_SOURCES
     src/theme/ThemeTokens.cpp
     src/theme/ThemeManager.cpp
     src/theme/StylesheetBuilder.cpp
+    src/theme/FaIcon.cpp
     src/sync/SyncCoordinator.cpp
     src/sync/SnapshotParser.cpp
     src/sync/EventsSseClient.cpp
     src/config/AppSettings.cpp
+    src/i18n/AppLocale.cpp
+    src/i18n/LocaleCatalog.cpp
+    src/i18n/TranslationLoader.cpp
     src/i18n/Translator.cpp
     src/extension/ExtensionBridgeClient.cpp
     src/ui/MainWindow.cpp
     src/ui/AppShell.cpp
     src/ui/DesktopShellWindow.cpp
+    src/ui/FramelessShellChrome.cpp
     src/ui/DesktopTray.cpp
     src/ui/AvarWindow.cpp
     src/ui/widgets/AvarButton.cpp
@@ -61,14 +67,18 @@ set(AVAR_GUI_QT_SOURCES
     src/ui/widgets/WindowControls.cpp
     src/ui/widgets/HeaderWindowDrag.cpp
     src/ui/pages/AddDownloadPopupPage.cpp
+    src/ui/pages/SessionEditorPopupPage.cpp
     src/ui/pages/BatchAddDownloadsPopupPage.cpp
     src/ui/pages/ConfirmDialogPopupPage.cpp
     src/ui/pages/DownloadDetailPopupPage.cpp
     src/ui/pages/DashboardPage.cpp
     src/ui/pages/SettingsPage.cpp
+    src/ui/settings/SettingsLayout.cpp
     src/ui/settings/SettingsPanels.cpp
     src/ui/settings/SettingsPanelsImpl.cpp
+    src/help/HelpDocs.cpp
     src/ui/pages/HelpPage.cpp
+    src/ui/widgets/HelpSidebarNav.cpp
     src/models/DownloadTableModel.cpp
     src/models/DownloadFilterProxyModel.cpp
     src/models/QueueListModel.cpp
@@ -94,12 +104,10 @@ target_link_libraries(avar-gui-qt
         Qt6::Gui
         Qt6::Widgets
         Qt6::Network
+        Qt6::Svg
 )
 
-if(TARGET Qt6::Svg)
-    target_link_libraries(avar-gui-qt PRIVATE Qt6::Svg)
-    target_compile_definitions(avar-gui-qt PRIVATE AVAR_GUI_HAS_QT_SVG=1)
-endif()
+target_compile_definitions(avar-gui-qt PRIVATE AVAR_GUI_HAS_QT_SVG=1)
 
 if(TARGET Qt6::WebSockets)
     target_link_libraries(avar-gui-qt PRIVATE Qt6::WebSockets)

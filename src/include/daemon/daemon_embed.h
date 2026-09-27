@@ -25,6 +25,13 @@ bool daemon_loop_is_running(void);
  */
 bool daemon_embed_rpc(const char *request_json, char **response_json_out);
 
+/** Optional async-signal-safe hook invoked from the daemon SIGINT handler (GUI quit). */
+typedef void (*DaemonEmbedCtrlCNotify)(void);
+
+void daemon_embed_set_ctrl_c_notify(DaemonEmbedCtrlCNotify notify);
+
+void daemon_embed_on_ctrl_c(void);
+
 #ifdef __cplusplus
 }
 #endif

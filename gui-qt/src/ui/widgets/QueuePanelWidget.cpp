@@ -1,6 +1,8 @@
 #include "ui/widgets/QueuePanelWidget.hpp"
 
 #include "i18n/Translator.hpp"
+#include "theme/FaIcon.hpp"
+#include "theme/ThemeManager.hpp"
 #include "ui/widgets/AvarButton.hpp"
 
 #include <QHBoxLayout>
@@ -11,9 +13,10 @@
 
 namespace avar::gui {
 
-QueuePanelWidget::QueuePanelWidget(Translator &translator, QWidget *parent)
+QueuePanelWidget::QueuePanelWidget(Translator &translator, ThemeManager &theme, QWidget *parent)
     : QWidget(parent)
     , m_tr(translator)
+    , m_theme(theme)
 {
     setObjectName(QStringLiteral("AvarQueuePanel"));
     auto *layout = new QVBoxLayout(this);
@@ -22,16 +25,20 @@ QueuePanelWidget::QueuePanelWidget(Translator &translator, QWidget *parent)
     auto *header = new QHBoxLayout();
     auto *title = new QLabel(m_tr.tr(QStringLiteral("queue.title")), this);
     title->setProperty("class", QStringLiteral("AvarSidebarNavTitle"));
+    title->setObjectName(QStringLiteral("AvarQueuePanelTitle"));
     header->addWidget(title);
     header->addStretch();
 
     auto *addBtn = new AvarButton(AvarButtonVariant::Ghost, this);
     addBtn->setText(QStringLiteral("+"));
+    addBtn->setObjectName(QStringLiteral("AvarQueueAddBtn"));
     addBtn->setToolTip(m_tr.tr(QStringLiteral("queue.add")));
     connect(addBtn, &QPushButton::clicked, this, &QueuePanelWidget::addQueueRequested);
 
     auto *settingsBtn = new AvarButton(AvarButtonVariant::Ghost, this);
-    settingsBtn->setText(QStringLiteral("⚙"));
+    settingsBtn->setObjectName(QStringLiteral("AvarQueueSettingsBtn"));
+    settingsBtn->setIcon(FaIcon::solid(QStringLiteral("gear"), 14, QColor(m_theme.currentTokens().textMuted)));
+    settingsBtn->setIconSize(QSize(14, 14));
     settingsBtn->setToolTip(m_tr.tr(QStringLiteral("nav.settings")));
     connect(settingsBtn, &QPushButton::clicked, this, &QueuePanelWidget::openQueueSettingsRequested);
 
@@ -49,6 +56,8 @@ QueuePanelWidget::QueuePanelWidget(Translator &translator, QWidget *parent)
         emit queueSelected(id);
     });
     layout->addWidget(m_list, 1);
+
+    connect(&m_theme, &ThemeManager::themeChanged, this, [this] { refreshIcons(); });
 }
 
 void QueuePanelWidget::setQueues(const QVector<QueueInfo> &queues)
@@ -79,6 +88,28 @@ QString QueuePanelWidget::selectedQueueId() const
         return {};
     }
     return m_list->currentItem()->data(Qt::UserRole).toString();
+}
+
+void QueuePanelWidget::retranslateUi()
+{
+    if (auto *title = findChild<QLabel *>(QStringLiteral("AvarQueuePanelTitle"))) {
+        title->setText(m_tr.tr(QStringLiteral("queue.title")));
+    }
+    if (auto *addBtn = findChild<QPushButton *>(QStringLiteral("AvarQueueAddBtn"))) {
+        addBtn->setToolTip(m_tr.tr(QStringLiteral("queue.add")));
+    }
+    if (auto *settingsBtn = findChild<QPushButton *>(QStringLiteral("AvarQueueSettingsBtn"))) {
+        settingsBtn->setToolTip(m_tr.tr(QStringLiteral("nav.settings")));
+    }
+    refreshIcons();
+}
+
+void QueuePanelWidget::refreshIcons()
+{
+    if (auto *settingsBtn = findChild<QPushButton *>(QStringLiteral("AvarQueueSettingsBtn"))) {
+        settingsBtn->setIcon(
+            FaIcon::solid(QStringLiteral("gear"), 14, QColor(m_theme.currentTokens().textMuted)));
+    }
 }
 
 } // namespace avar::gui
