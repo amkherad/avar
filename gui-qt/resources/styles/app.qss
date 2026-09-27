@@ -1,0 +1,206 @@
+/* Token placeholders mirror gui/src/theme — replaced at runtime by StylesheetBuilder */
+
+QWidget#AvarRoot {
+    background-color: @@BG@@;
+    color: @@TEXT@@;
+    font-family: "@@FONT@@", system-ui, sans-serif;
+}
+
+QMainWindow {
+    background-color: @@BG@@;
+}
+
+/* Header (.avar-header) */
+QWidget#AvarHeader {
+    background-color: @@BG_ELEVATED@@;
+    border-bottom: 1px solid @@BORDER@@;
+    min-height: 44px;
+}
+
+QLabel#AvarHeaderTitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: @@TEXT@@;
+}
+
+QLabel#AvarHeaderSubtitle {
+    font-size: 12px;
+    font-weight: 400;
+    color: @@TEXT_MUTED@@;
+    margin-left: 8px;
+}
+
+/* Shell sidebar (.avar-shell__sidebar) */
+QWidget#AvarSidebar {
+    background-color: @@BG_ELEVATED@@;
+    border-right: 1px solid @@BORDER@@;
+}
+
+/* Sidebar nav (.avar-sidebar-nav__item) */
+QPushButton[class="AvarSidebarNavItem"] {
+    text-align: left;
+    padding: 8px 10px;
+    border: none;
+    border-radius: @@RADIUS@@px;
+    background: transparent;
+    color: @@TEXT@@;
+    font-size: 14px;
+}
+
+QPushButton[class="AvarSidebarNavItem"]:hover {
+    background-color: @@BG_MUTED@@;
+}
+
+QPushButton[class="AvarSidebarNavItem"][active="true"] {
+    background-color: @@BG_MUTED@@;
+    color: @@PRIMARY@@;
+    font-weight: 600;
+}
+
+/* Buttons (.avar-btn) */
+QPushButton[class="AvarButtonPrimary"] {
+    background-color: @@PRIMARY@@;
+    color: @@PRIMARY_TEXT@@;
+    border: 1px solid transparent;
+    border-radius: @@RADIUS@@px;
+    padding: 8px 14px;
+}
+
+QPushButton.AvarButtonPrimary:hover:enabled {
+    background-color: @@PRIMARY_HOVER@@;
+}
+
+QPushButton[class="AvarButtonSecondary"] {
+    background-color: @@BG_MUTED@@;
+    color: @@TEXT@@;
+    border: 1px solid @@BORDER@@;
+    border-radius: @@RADIUS@@px;
+    padding: 8px 14px;
+}
+
+QPushButton[class="AvarButtonGhost"] {
+    background: transparent;
+    color: @@TEXT_MUTED@@;
+    border: none;
+    border-radius: @@RADIUS@@px;
+    padding: 6px 10px;
+}
+
+QPushButton.AvarButtonGhost:hover:enabled {
+    background-color: @@BG_MUTED@@;
+    color: @@TEXT@@;
+}
+
+/* Table */
+QTableView {
+    background-color: @@BG_ELEVATED@@;
+    alternate-background-color: @@BG_MUTED@@;
+    gridline-color: @@BORDER@@;
+    border: 1px solid @@BORDER@@;
+    border-radius: @@RADIUS@@px;
+    selection-background-color: @@PRIMARY@@;
+    selection-color: @@PRIMARY_TEXT@@;
+}
+
+QHeaderView::section {
+    background-color: @@BG_MUTED@@;
+    color: @@TEXT_MUTED@@;
+    padding: 6px 8px;
+    border: none;
+    border-bottom: 1px solid @@BORDER@@;
+    font-weight: 600;
+}
+
+QScrollBar:vertical {
+    background: @@BG_MUTED@@;
+    width: 10px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: @@BORDER@@;
+    border-radius: 5px;
+    min-height: 24px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: @@TEXT_MUTED@@;
+}
+
+QLabel#ConnectionBadge[connected="true"] {
+    color: @@SUCCESS@@;
+}
+
+QLabel#ConnectionBadge[connected="false"] {
+    color: @@DANGER@@;
+}
+
+QWidget#AvarDesktopFrame {
+    background-color: @@BG@@;
+    border: 1px solid @@BORDER@@;
+    border-radius: @@RADIUS@@px;
+}
+
+QWidget#AvarFooter {
+    background-color: @@BG_ELEVATED@@;
+    border-top: 1px solid @@BORDER@@;
+}
+
+QLabel[class="AvarFooterStat"] {
+    color: @@TEXT_MUTED@@;
+    font-size: 12px;
+    padding-right: 12px;
+}
+
+QWidget#AvarConsole {
+    background-color: @@BG_ELEVATED@@;
+    border-top: 1px solid @@BORDER@@;
+}
+
+QTextEdit#AvarConsoleOutput {
+    background-color: @@BG_MUTED@@;
+    color: @@TEXT@@;
+    border: none;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+QWidget#AvarSessionSelector QToolButton[class="AvarSessionTrigger"],
+QPushButton[class="AvarSessionTrigger"] {
+    text-align: left;
+    padding: 8px 10px;
+    border: 1px solid @@BORDER@@;
+    border-radius: @@RADIUS@@px;
+    background: @@BG_ELEVATED@@;
+}
+
+QLabel[class="AvarSessionStatus"] {
+    color: @@TEXT_MUTED@@;
+    font-size: 11px;
+}
+
+QPushButton[class="AvarSessionRefresh"] {
+    border: none;
+    background: transparent;
+    color: @@TEXT_MUTED@@;
+}
+
+QLabel[class="AvarCardTitle"] {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QWidget#AvarDownloadPanel {
+    background-color: @@BG_ELEVATED@@;
+    border-left: 1px solid @@BORDER@@;
+}
+
+QWidget#AvarResizeHandle[axis="horizontal"] {
+    background: @@BG_MUTED@@;
+    max-width: 6px;
+}
+
+QWidget#AvarResizeHandle[axis="vertical"] {
+    background: @@BG_MUTED@@;
+    max-height: 6px;
+}

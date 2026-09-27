@@ -1,0 +1,415 @@
+{
+  "generated_at": "2026-09-27T09:36:37.729430+00:00",
+  "score": {
+    "done": 53,
+    "total": 57,
+    "percent": 93.0
+  },
+  "items": [
+    {
+      "id": "page:AddDownloadPopupPage",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "page:BatchAddDownloadsPopupPage",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "page:ConfirmDialogPopupPage",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "page:DashboardPage",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "page:DownloadDetailPopupPage",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "page:HelpPage",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "page:SettingsPage",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "settings:about",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "settings:browser",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "settings:daemon",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "settings:downloads",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "settings:general",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "settings:queues",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "settings:shortcuts",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:addDownload",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:addQueue",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:browseDirectory",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:cliExec",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:computeDownloadChecksum",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:dismissResumePrompt",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:editQueue",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:getConfig",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:getDownloadDetails",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:getLogs",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:health",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:listDownloads",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:listQueues",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:pauseDownload",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:ping",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:probeDownloadUrl",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:removeDownload",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:removeQueue",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:resolveDownloadPath",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:restartDownload",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:resumeDownload",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:setConfig",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:setDownloadSource",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:setDownloadUrl",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:skipLogCursor",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:startDownload",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:startQueue",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:stopDownload",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:stopQueue",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:systemStats",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:unwatchDownloadProgress",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "daemon:watchDownloadProgress",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "i18n:locale-en",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": "electron=499 keys, qt\u224854 hardcoded"
+    },
+    {
+      "id": "theme:tokens",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": "colors from themes.ts"
+    },
+    {
+      "id": "layout:footer",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "layout:console",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "layout:session-selector",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": ""
+    },
+    {
+      "id": "sync:websocket-sse",
+      "electron": true,
+      "qt": false,
+      "ok": false,
+      "notes": "SSE path; WS optional"
+    },
+    {
+      "id": "sync:snapshot-parser",
+      "electron": true,
+      "qt": false,
+      "ok": false,
+      "notes": "uses list RPC not stream snapshot"
+    },
+    {
+      "id": "desktop:tray",
+      "electron": true,
+      "qt": false,
+      "ok": false,
+      "notes": "Electron tray not in Qt"
+    },
+    {
+      "id": "desktop:window-controls",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": "frameless shell; full chrome optional"
+    },
+    {
+      "id": "extension:bridge-parity",
+      "electron": true,
+      "qt": false,
+      "ok": false,
+      "notes": "C daemon stub; not full extension-bridge.cjs"
+    },
+    {
+      "id": "ui:component-surface",
+      "electron": true,
+      "qt": true,
+      "ok": true,
+      "notes": "electron\u224863 tsx, qt\u224822 widgets"
+    }
+  ],
+  "gaps": [
+    "sync:websocket-sse",
+    "sync:snapshot-parser",
+    "desktop:tray",
+    "extension:bridge-parity"
+  ]
+}

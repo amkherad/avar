@@ -17,6 +17,7 @@ Browser extensions that detect media on web pages and open Avar download dialogs
 | `shared/` | **Source of truth** — edit here first |
 | `chromium/` | Chrome, Edge, Opera (Manifest V3) |
 | `firefox/` | Firefox (Manifest V2) |
+| `daemon/` | Standalone C HTTP bridge (for `gui-qt`; may merge into main daemon later) |
 | `packages/` | Built ZIPs (`avar-chromium.zip`, `avar-firefox.zip`) |
 
 Synced from `shared/` (see `gui/vite-extensions.ts`): `media.js`, `protocol.js`, `capture.js`, `hls.js`, `context-menu.js`, `download-intercept.js`, `popup.js`, `popup.html`, `page-response-hook.js`, `media-hook.js`, `content.js`.
@@ -35,7 +36,7 @@ Browser-specific: `background.js`, `manifest.json`, icons.
 
 - URL: `http://127.0.0.1:18766` (Electron only)
 - Client: `shared/protocol.js`
-- Server: `gui/electron/extension-bridge.cjs`
+- Server: `gui/electron/extension-bridge.cjs` (Electron) or `extensions/daemon/` (Qt desktop)
 - Protocol: v1 envelope on `POST /v1`, health on `GET /v1/ping`
 
 The extension opens **Add download** / **Add downloads** review dialogs — it does not queue silently (except optional browser-download intercept).

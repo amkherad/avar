@@ -1,0 +1,10 @@
+function(avar_gui_qt_add_test name)
+    qt_add_executable(${name} ${ARGN})
+    avar_gui_qt_apply_target_options(${name})
+    target_link_libraries(${name} PRIVATE Qt6::Test Qt6::Core Qt6::Network)
+    target_include_directories(${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+    add_test(NAME ${name} COMMAND ${name})
+endfunction()
+
+avar_gui_qt_add_test(test_json_rpc test_json_rpc.cpp ../src/api/JsonRpc.cpp)
+avar_gui_qt_add_test(test_theme_tokens test_theme_tokens.cpp ../src/theme/ThemeTokens.cpp ../src/theme/StylesheetBuilder.cpp)

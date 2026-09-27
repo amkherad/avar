@@ -1,0 +1,197 @@
+#include "ui/MainWindow.hpp"
+
+#include "api/DaemonTypes.hpp"
+#include "config/AppSettings.hpp"
+#include "core/Application.hpp"
+#include "core/GuiLog.hpp"
+#include "i18n/Translator.hpp"
+#include "models/DownloadTableModel.hpp"
+#include "models/QueueListModel.hpp"
+#include "settings/SettingsCategory.hpp"
+#include "sync/SyncCoordinator.hpp"
+#include "theme/ThemeManager.hpp"
+#include "ui/AvarWindow.hpp"
+#include "ui/DesktopShellWindow.hpp"
+#include "ui/pages/DashboardPage.hpp"
+#include "ui/pages/AddDownloadPopupPage.hpp"
+#include "ui/pages/BatchAddDownloadsPopupPage.hpp"
+#include "ui/pages/HelpPage.hpp"
+#include "ui/pages/SettingsPage.hpp"
+#include "ui/widgets/QueuePanelWidget.hpp"
+#include "ui/widgets/SessionSelector.hpp"
+#include "ui/widgets/SettingsSidebarNav.hpp"
+
+#include <QJsonObject>
+#include <QInputDialog>
+#include <QLabel>
+#include <QVBoxLayout>
+#include <QStackedWidget>
+#include <QTimer>
+#include <memory>
+
+namespace avar::gui {
+
+MainWindow::~MainWindow() = default;
+
+MainWindow::MainWindow(Application &app, QWidget *parent)
+    : QWidget(parent)
+    , m_app(app)
+{
+#if defined(AVAR_GUI_HOSTING_DESKTOP)
+    m_shellWindow = std::make_unique<DesktopShellWindow>();
+#endif
+
+    m_tr = std::make_unique<Translator>();
+    m_tr->setLocale(app.settings().locale());
+    m_downloads = std::make_unique<DownloadTableModel>();
+    m_queues = std::make_unique<QueueListModel>();
+
+    m_shell = new AppShell(*m_tr, app.themeManager(), app.layout(), app.sessions(), this);
+
+    QStackedWidget *stack = m_shell->pageStack();
+    m_dashboard = new DashboardPage(*m_tr, app.layout(), app.daemonClient(), *m_downloads, stack);
+    m_settings = new SettingsPage(*m_tr, app.settings(), app.daemonClient(), stack);
+    m_help = new HelpPage(*m_tr, stack);
+    stack->addWidget(m_dashboard);
+    stack->addWidget(m_settings);
+    stack->addWidget(m_help);
+
+    auto layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(m_shell);
+
+#if defined(AVAR_GUI_HOSTING_DESKTOP)
+    m_shellWindow->setShellWidget(this);
+    m_shellWindow->resize(1150, 760);
+    m_shellWindow->setWindowTitle(QStringLiteral("Avar"));
+#else
+    setWindowTitle(QStringLiteral("Avar"));
+    resize(1150, 760);
+#endif
+
+    connect(m_shell, &AppShell::pageChanged, stack, [stack](AppPage page) {
+        stack->setCurrentIndex(static_cast<int>(page));
+    });
+
+    connect(m_shell, &AppShell::openSettingsCategory, this, [this](SettingsCategory category) {
+        m_shell->setPage(AppPage::Settings);
+        m_settings->setCategory(category);
+        m_shell->setSettingsCategory(category);
+    });
+
+    if (SettingsSidebarNav *nav = m_shell->settingsSidebarNav()) {
+        connect(nav, &SettingsSidebarNav::categoryChanged, m_settings, &SettingsPage::setCategory);
+    }
+
+    connect(m_shell, &AppShell::themeToggleRequested, &app.themeManager(), &ThemeManager::toggleResolvedTheme);
+    connect(m_shell, &AppShell::themeSettingRequested, &app.themeManager(), &ThemeManager::setSetting);
+
+    connect(m_shell->queuePanel(), &QueuePanelWidget::queueSelected, m_dashboard,
+            &DashboardPage::setQueueFilterId);
+
+    connect(m_shell->queuePanel(), &QueuePanelWidget::openQueueSettingsRequested, this, [this] {
+        m_shell->setPage(AppPage::Settings);
+        m_settings->setCategory(SettingsCategory::Queues);
+        m_shell->setSettingsCategory(SettingsCategory::Queues);
+    });
+
+    connect(m_shell->queuePanel(), &QueuePanelWidget::addQueueRequested, this, [this] {
+        const QString name =
+            QInputDialog::getText(this, m_tr->tr(QStringLiteral("queue.add")), m_tr->tr(QStringLiteral("queue.nameLabel")));
+        if (name.isEmpty()) {
+            return;
+        }
+        QJsonObject params;
+        params.insert(QStringLiteral("name"), name);
+        m_app.daemonClient().addQueue(params, [](bool, const QString &, const QString &) {});
+    });
+
+    connect(m_dashboard, &DashboardPage::addDownloadRequested, this, [this] {
+        auto *dialog = new AvarWindow(this);
+        dialog->setWindowTitle(m_tr->tr(QStringLiteral("download.add")));
+        auto *page = new AddDownloadPopupPage(*m_tr, m_app.daemonClient(), dialog);
+        page->setDefaultQueue(m_shell->queuePanel()->selectedQueueId());
+        dialog->setContentWidget(page);
+        dialog->resize(480, 200);
+        connect(page, &AddDownloadPopupPage::accepted, dialog, [dialog, this](const QString &url) {
+            GuiLog::instance().info(QStringLiteral("Queued download %1").arg(url));
+            dialog->close();
+            dialog->deleteLater();
+        });
+        connect(page, &AddDownloadPopupPage::cancelled, dialog, [dialog] {
+            dialog->close();
+            dialog->deleteLater();
+        });
+        dialog->show();
+    });
+
+    connect(m_dashboard, &DashboardPage::batchAddRequested, this, [this] {
+        auto *dialog = new AvarWindow(this);
+        dialog->setWindowTitle(m_tr->tr(QStringLiteral("download.batchAdd.button")));
+        auto *page = new BatchAddDownloadsPopupPage(*m_tr, m_app.daemonClient(), dialog);
+        page->setDefaultQueue(m_shell->queuePanel()->selectedQueueId());
+        dialog->setContentWidget(page);
+        dialog->resize(520, 360);
+        connect(page, &BatchAddDownloadsPopupPage::accepted, dialog, [dialog](int count) {
+            GuiLog::instance().info(QStringLiteral("Batch queued %1 downloads").arg(count));
+            dialog->close();
+            dialog->deleteLater();
+        });
+        connect(page, &BatchAddDownloadsPopupPage::cancelled, dialog, [dialog] {
+            dialog->close();
+            dialog->deleteLater();
+        });
+        dialog->show();
+    });
+
+    connect(m_shell->sessionSelector(), &SessionSelector::refreshRequested, &app.syncCoordinator(),
+            [this] { m_app.syncCoordinator().start(); });
+
+    wireSync();
+
+    auto *statsTimer = new QTimer(this);
+    statsTimer->setInterval(3000);
+    connect(statsTimer, &QTimer::timeout, this, [this] {
+        m_app.daemonClient().systemStats([this](bool ok, const SystemStatsInfo &stats) {
+            m_dashboard->setStats(stats, ok);
+        });
+        m_app.daemonClient().health([this](bool ok, const HealthInfo &health) {
+            m_dashboard->setHealth(health, ok);
+        });
+    });
+    statsTimer->start();
+
+    GuiLog::instance().info(QStringLiteral("Avar Qt GUI started"));
+}
+
+void MainWindow::show()
+{
+#if defined(AVAR_GUI_HOSTING_DESKTOP)
+    if (m_shellWindow) {
+        m_shellWindow->show();
+        return;
+    }
+#endif
+    QWidget::show();
+}
+
+void MainWindow::wireSync()
+{
+    connect(&m_app.syncCoordinator(), &SyncCoordinator::connectionStateChanged, m_shell,
+            [this](ConnectionState state) { m_shell->setConnectionState(state); });
+
+    connect(&m_app.syncCoordinator(), &SyncCoordinator::snapshotReceived, this,
+            [this](const SnapshotPayload &payload) {
+                m_downloads->setDownloads(payload.downloads);
+                m_queues->setQueues(payload.queues);
+                m_shell->queuePanel()->setQueues(payload.queues);
+                if (payload.hasHealth) {
+                    m_dashboard->setHealth(payload.health, true);
+                }
+                if (payload.hasStats) {
+                    m_dashboard->setStats(payload.stats, true);
+                }
+            });
+}
+
+} // namespace avar::gui

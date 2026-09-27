@@ -63,6 +63,13 @@ __pycache__/
 *.pyc
 *.pyo
 
+# Local Qt / Emscripten toolchain (gui-qt dev; not vendored in repo) #
+#####################################################################
+/.emsdk/
+/.qt/
+/.venv-aqt/
+/aqtinstall.log
+
 # Node.js #
 ###########
 node_modules/

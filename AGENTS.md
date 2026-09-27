@@ -28,6 +28,19 @@ When modifying C code:
 - Keep headers in `include/`.
 - Keep implementations in `src/`.
 
+### Qt GUI (`gui-qt/`) and extension bridge (`extensions/daemon/`)
+
+- qt-gui-development
+
+When modifying the native Qt UI or the C extension HTTP bridge:
+
+- Apply **qt-gui-development**.
+- Standalone CMake in `gui-qt/` (C++23, Qt 6). **No JavaScript** in `gui-qt/`.
+- Talk to the Avar **daemon only over HTTP** JSON-RPC — do not link `gui-qt` against `src/` or the main CMake target.
+- Browser extension bridge logic lives in **`extensions/daemon/`** (C only), not in the main daemon until explicitly integrated.
+- Use **`gui/`** (React/Electron) as the visual and behavioral reference; run `gui-qt/scripts/parity_audit.py` when checking parity.
+- Do **not** apply **gui-code-style** or **react-development** to `gui-qt/` C++ sources.
+
 ### React GUI (`gui/`)
 
 - react-development
@@ -66,6 +79,8 @@ Project layout:
 - include/ -> public headers (`include/daemon/` for daemon APIs)
 - src/ -> implementation files (`src/daemon/` for daemon module)
 - gui/ -> React SPA + Electron desktop shell
+- gui-qt/ -> Native Qt 6 GUI (desktop + WebAssembly)
+- extensions/daemon/ -> C HTTP bridge for browser extensions (used by Qt desktop)
 - scripts/ -> automation scripts
 - third_party/ -> vendored dependencies
 
